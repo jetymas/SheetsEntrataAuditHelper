@@ -965,6 +965,13 @@ function normalizeValue(value) {
   return value.toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
+// Install global error listener to ignore cross-origin iframe load errors
+window.addEventListener('error', (e) => {
+  if (e.message && e.message.includes('Could not load iframe')) {
+    e.preventDefault();
+  }
+});
+
 // Log the content script initialization for debugging
 console.log('===== CONTENT SCRIPT INITIALIZED =====');
 console.log('URL:', window.location.href);

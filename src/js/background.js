@@ -1,3 +1,19 @@
+import { getCookie, setCookie } from './cookieHelper.js';
+
+// Example: Read and set Entrata sessionId cookie
+getCookie('https://www.entrata.com', 'sessionId')
+  .then(val => console.log('sessionId cookie:', val))
+  .catch(err => console.error('Error reading sessionId cookie:', err));
+
+setCookie({
+  url: 'https://www.entrata.com',
+  name: 'sessionId',
+  value: 'exampleValue',
+  expirationDate: Math.floor(Date.now()/1000) + 3600
+})
+  .then(cookie => console.log('Cookie set:', cookie))
+  .catch(err => console.error('Error setting cookie:', err));
+
 // Import audit types - try with both relative and root-relative paths
 let LeaseAudit, RenewalAudit;
 
