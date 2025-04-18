@@ -1,7 +1,7 @@
 {
   "name": "Entrata Lease Audit Assistant",
   "description": "Streamlines lease audits for Entrata property management system",
-  "version": "0.2",
+  "version": "0.3",
   "manifest_version": 3,
   "permissions": [
     "scripting",

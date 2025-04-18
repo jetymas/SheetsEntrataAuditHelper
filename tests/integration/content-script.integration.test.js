@@ -3,7 +3,7 @@ const path = require('path');
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
-const { JSDOM, VirtualConsole } = require('jsdom');
+const { JSDOM, VirtualConsole, ResourceLoader } = require('jsdom');
 
 describe('Content Script Integration', () => {
   let dom, window, document;
@@ -17,9 +17,12 @@ describe('Content Script Integration', () => {
 
     const htmlPath = path.resolve(__dirname, '../../reference/webpages/Entrata page 1 - start page/Entrata Start Page.html');
     const html = fs.readFileSync(htmlPath, 'utf8');
+    const resourceLoader = new ResourceLoader({
+      fetch: () => Promise.resolve(Buffer.alloc(0)) // disables all external fetches
+    });
     dom = new JSDOM(html, {
       runScripts: 'outside-only',
-      resources: 'skip',
+      resources: resourceLoader,
       virtualConsole
     });
     window = dom.window;
@@ -52,5 +55,10 @@ describe('Content Script Integration', () => {
     expect(resp).toBeDefined();
     expect(resp.debug).toHaveProperty('url');
     expect(resp.debug).toHaveProperty('timestamp');
+  });
+
+  afterAll(() => {
+    // Close JSDOM window to prevent resource loading after tests
+    dom.window.close();
   });
 });
