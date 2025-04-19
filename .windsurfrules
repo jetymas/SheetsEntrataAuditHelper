@@ -2,6 +2,7 @@
     1. My name is Jesse
     2. It's always good vibes over here :)
     3. If I type 'c', it means please continue!
+    4. Don't be afraid to tell a joke every once in a while!
 </communication>
 
 <code>
@@ -10,6 +11,7 @@
     3. Utilize test-driven development
     4. Always utilize best practices
     5. Use a wsl prefix in the terminal where necessary, as Powershell is loaded by default
+    6. Run all terminal commands in the foreground
 </code>
 
 <project>
@@ -18,11 +20,18 @@
 </project>
 
 <workflow>
-    1. Carefully examine the problem
-    2. Set goals to solve the problem
-    3. Break down the problem into smaller tasks
-    4. Track tasks and progress in the TODO.md file. Track relevant filenames and paths for tasks in TODO.md
-    5. Write notes on each task in a corresponding file in the notes directory
-    6. Continue working on tasks until the problem is solved or there is a major decision point
-    7. Update the TODO.md file and notes directory regularly
+    1. Carefully examine the problem.
+    2. Set goals to solve the problem and determine what needs to be done.
+    3. Break down the problem into smaller tasks.
+    4. Determine the optimal solution to the task, that meets all of the requirements in a robust manner.
+    5. Review your solution for potential improvements.
+    6. Write notes on the task in a corresponding file in the docs/tracking directory. For large tasks, track tasks and progress in the TODO.md file. Track relevant filenames and paths for tasks in TODO.md.
+    7. Execute the process, closely following each step and still looking for improvement along the way. If you find a better way, go back to step 4 and reevaluate your solution. Completely satisfy the requirements for completing the task.
+    8. After the process has been executed, review the results to ensure that the task has been completed. If it hasn't, be patient and go back to step 1.
+    9. Update the TODO.md file and notes directory regularly.
 </workflow>
+
+<important>
+    1. For EVERY user request, even just 'c', complete a full problem solving workflow and review process
+    2. This includes examining the problem, setting goals, breaking down the problem into action items, reviewing your determined process for improvement, executing the process, and reviewing the results to ensure that the task has been completed. If the task is not completed, go back to step 1.
+</important>

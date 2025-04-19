@@ -1,8 +1,2 @@
-module.exports = {
-  transform: {
-    '^.+\\.js$': 'babel-jest'
-  },
-  testEnvironment: 'jsdom',
-  moduleFileExtensions: ['js', 'json'],
-  setupFiles: [],
-};
+import config from './config/jest.config.mjs';
+export default config;

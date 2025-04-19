@@ -12,7 +12,23 @@
 - [ ] **Review and refactor helpers/modules**: Ensure DRYness, clarity, and JSDoc coverage. Update or add tests as needed.
 - [x] **Add E2E tests with Puppeteer**: Validate user flows in the extension. Track Puppeteer test files and coverage here. (e.g., `tests/e2e/audit.e2e.test.js` passing)
 - [ ] **Write E2E tests for content script & background flows**: Cover scenarios in content.js and background.js via Puppeteer.
-- [ ] **Update project documentation**: Keep notes and TODOs current. Add/expand documentation for new helpers/modules.
+- [x] **Update project documentation**: Keep notes and TODOs current. Add/expand documentation for new helpers/modules.
+- [x] **Documentation Migration and Repo Cleanup**
+- [x] Migrate all documentation from `notes/` and `reference/` to `docs/`
+- [x] Replace all stubs and placeholders in `docs/` with full content
+- [x] Archive obsolete/historical files in `archive/`
+- [x] Move images and supporting reference material to `docs/images/`
+- [x] Final review and polish
+
+### 2025-04-19: Migration & Archival Complete
+- All documentation, guides, trackers, and images have been migrated to `docs/`.
+- All stubs and placeholders have been replaced with full original content.
+- The following have been archived in `archive/` for historical reference:
+  - Entire `notes/` directory (all implementation notes, refactors, module notes)
+  - Entire `reference/` directory (old requirements, persistent, error logs, images, webpages)
+  - All legacy/historical files and migration notes
+- Directory structure has been reviewed and is clean.
+- No further stubs or placeholders remain in the repo.
 - [ ] **Complete codebase refactor**: Finish refactoring tests and source files, extract helpers, streamline setup/teardown, and enforce consistent coding patterns across the project. Create a refactor document in the notes/refactors directory for each file, and then check off items in the refactor-checklist.md file once they have been completed.
 
 ## Completed Tasks

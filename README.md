@@ -11,6 +11,17 @@ A Chrome extension to streamline lease audits for properties using the Entrata p
 - Supports both New Lease and Renewal audits
 - Automatically updates audit spreadsheet with verification results
 
+## Project Structure & Documentation
+
+- All documentation, guides, trackers, and images are now in the `docs/` folder:
+  - `docs/guides/` — How-to guides, process docs, and integration notes
+  - `docs/tracking/` — Implementation trackers, test plans, and checklists
+  - `docs/images/` — Screenshots and diagrams
+  - `docs/design/` — UI/UX and architecture notes
+  - `docs/error-logs/` — Error logs (if any)
+- Obsolete or historical files are kept in the base-level `archive/` folder for reference
+- The former `notes/` and `reference/` folders have been merged or removed as part of the 2025 repo refactor
+
 ## Setup Instructions
 
 ### Prerequisites
