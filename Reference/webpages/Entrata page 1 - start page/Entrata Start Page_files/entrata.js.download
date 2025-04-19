@@ -1,0 +1,1175 @@
+//Maximum supported attachment size in MB.
+var MAX_SUPPORTED_ATTACHMENT_FILE_SIZE = 19,
+	MAX_SELECTION_LIMIT = 1000,
+	MAINTENANCE_REQUEST_TYPE_MAKE_READY = 1,
+	MAINTENANCE_REQUEST_TYPE_SERVICE_REQUEST = 2,
+	MAINTENANCE_REQUEST_TYPE_RECURRING = 3,
+	isEntrata = true,
+	isHelpEnabled;
+	// below variable need to be set in TPL where we do not want to load the support_system.js
+	boolLoadSupportSystemJS = true;
+
+function loadApplication(aid, strOptions, intPropertyId = null ) {
+	var options = { strUrl: '/?module=application_systemxxx&application[id]=' + aid };
+
+	if( null !== intPropertyId ) {
+		psi.patterns.ajaxRequest( {
+			strElementSelector: 'div#div-view-listing',
+			type: "POST",
+			url: '/?module=guest_card_profilexxx&action=validate_property_occupancy',
+			data: { 'property_id': intPropertyId },
+			dataType: 'JSON',
+			success: function( objResponse ) {
+				psi.patterns.removeLoadingImage( { strElementSelector: 'div#div-view-listing' } );
+
+				if( false === objResponse.status ) {
+					$( "<p class=\"alert slim hide error js-ajax-message\"><i></i>" + objResponse.messages + "</p>" )
+						.prependTo( "div#div-view-listing" )
+						.fadeIn()
+						.animate( {
+							opacity: 1.0
+						}, 7000 )
+						.fadeOut( 500, function() {
+							$( "div.dashboard" ).find( "p.js-ajax-message" ).remove();
+						} );
+					return;
+				}
+
+				if( true === objResponse.data.validate_occupancy ) {
+					options = { strUrl: '/?module=guest_card_profilexxx&application[id]=' + aid };
+				}
+
+				loadLeadSummaryDialog( options, strOptions );
+			}
+		} );
+		return;
+	}
+
+	loadLeadSummaryDialog( options, strOptions );
+}
+
+function loadLeadSummaryDialog( options, strOptions ) {
+	options = $.extend({}, options, strOptions || {});
+	// IF the modal-large changes this also needs to be change
+	if( 0 < $( "body" ).find( ".modal-large" ).length ) {
+		psi.patterns.addDialogContent( options );
+	} else {
+		psi.patterns.loadLargeDialog( options );
+	}
+}
+
+function loadLeaseCustomer(lcid) {
+	psi.patterns.loadLargeDialog({
+		strUrl: '/?module=customerxxx&lease_customer[id]=' + lcid,
+	});
+}
+
+function loadLeaseInLargeDialog(lid, cid) {
+	/* added extra parameter which can reload search listing after popup get closed */
+	if( 0 < $( "body" ).find( ".modal-large" ).length ) {
+		psi.patterns.addDialogContent({
+			strUrl: '/?module=customerxxx&lease[id]=' + lid + '&customer[id]=' + cid + ( null != psi.urlParam('tab') ? '&tab=' + psi.urlParam('tab') : '' ),
+			onCloseCallback: reloadSearchList
+		});
+	} else {
+		psi.patterns.loadLargeDialog({
+			strUrl: '/?module=customerxxx&lease[id]=' + lid + '&customer[id]=' + cid + ( null != psi.urlParam('tab') ? '&tab=' + psi.urlParam('tab') : '' ),
+			onCloseCallback: reloadSearchList
+		});
+	}
+}
+
+function loadGroupInLargeDialog( OrganizationId ) {
+	psi.patterns.loadLargeDialog({
+		strUrl: '/?module=groupxxx&action=view_group&organization[id]='+OrganizationId,
+		strElementSelector: "#view-group",
+		onCloseCallback:function() {
+			psi.patterns.ajaxRequest({
+				url: '/?module=groupsxxx&action=view_groups',
+				strElementSelector: "#div-view-listing"
+			});
+		}
+	});
+}
+
+function loadMaintenanceRequestLargeDialog( mid ) {
+	/* added extra parameter which can reload search listing after popup get closed */
+	psi.patterns.loadLargeDialog({
+		strUrl: '/?module=customer_work_orderxxx&is_resident_system=&maintenance_request[id]=' + mid,
+		onCloseCallback: reloadMaintenanceRequestsList,
+		title: __('View Work Order')
+	});
+}
+
+function loadMaintenanceRequestNewLargeDialog( mid, maintenanceRequestTypeId, maintenance_request_type, is_from_open_work_orders ) {
+	if( undefined == is_from_open_work_orders ) {
+		is_from_open_work_orders = 0;
+	}
+	if( 1 == is_from_open_work_orders ) {
+		psi.patterns.addDialogContent({
+			strUrl: '/?module=customer_work_order_newxxx&is_resident_system=&maintenance_request[id]=' + mid,
+			title: __( '{%s, WorkOrderType, nots} #{%d, WorkOrderId, nots}', { WorkOrderType : maintenance_request_type, WorkOrderId : mid } ),
+			onCloseCallback:function() {
+				$( '#wo-unit-details .current-wos' ).click();
+			}
+		});
+   } else {
+		psi.patterns.loadLargeDialog({
+			strUrl: '/?module=customer_work_order_newxxx&is_resident_system=&maintenance_request[id]=' + mid,
+			onCloseCallback: reloadMaintenanceRequestsList,
+			title: __( '{%s, WorkOrderType,nots} #{%d, WorkOrderId,nots}', { WorkOrderType : maintenance_request_type, WorkOrderId : mid } ) ,
+		});
+	}
+}
+
+function loadSubMaintenanceRequestNewLargeDialog( mid ) {
+	psi.patterns.addDialogContent({
+		strUrl: '/?module=customer_work_order_newxxx&is_sub_task=1&maintenance_request[id]=' + mid,
+		title: __('Subtask') + ' #' + mid
+	});
+}
+
+function loadInspectionLargeDialog( mid ) {
+	psi.patterns.loadLargeDialog({
+		strUrl: '/?module=inspectionxxx&action=load_inspection_form&is_resident_system=&inspection_id=' + mid,
+		onCloseCallback: reloadInspectionsList,
+		title: __('Start Inspection')
+	});
+}/* added extra parameter which can reload search listing after popup get closed */
+
+function showPsiUsernameTooltip( objHTMLSpan ) {
+
+	//PSI Username tooltip
+	var strPSIUserId = '';
+	strPSIUserId = $( objHTMLSpan ).next().html();
+	$( objHTMLSpan ).bt({
+		trigger: 'none',
+		positions: 'top',
+		closeWhenOthersOpen: true,
+		width:'250px',
+		height:'auto',
+		strokeStyle: '#999999',
+		cssStyles: {textAlign: 'center'},
+		fill: 'rgb(242, 248, 254)',
+		ajaxPath: '?module=company_userxxx&action=view_psi_username&user[id]=' + strPSIUserId,
+		ajaxCache: true,
+		ajaxType : 'GET'
+	});
+
+	if( $( objHTMLSpan ).hasClass( 'bt-active' ) ) {
+		$( objHTMLSpan ).btOff();
+	} else {
+		$( objHTMLSpan ).btOn();
+	}
+}
+
+/* Manages Default Text in Textboxes when attribute of that textbox is default_text */
+function manageDefaultText(parentContainer) {
+
+	var textboxes=$("input:text");
+	// Check if parent Container is available, Passing parent container will affect child textboxes only
+	if(typeof(parentContainer)!=='undefined' )
+	{
+		textboxes=$(parentContainer).find("input:text");
+	}
+	textboxes.each(function() {
+		if( $(this).attr('default_text') ) {
+			if( this.value.length == 0) {
+				$(this).addClass("italic text-gray");
+				this.value = $(this).attr('default_text');
+			} else if( this.value == $(this).attr('default_text') ) {
+			 	this.value = "";
+			}
+
+			$(this).blur(function() {
+				$(this).val(
+					$.trim($(this).val())
+				 );
+				// if input is empty, reset value to default
+				if(this.value.length == 0) {
+					this.value = $(this).attr('default_text');
+				}
+			}).focus(function() {
+				// when input is focused, clear its contents
+				if( this.value == $(this).attr('default_text') ) {
+					$(this).removeClass("italic text-gray");
+					this.value = "";
+				}
+			})
+		}
+	});
+}
+
+function searchFieldsInSelectBox($this, parentContainerindex, selectedPropertyType, searchText) {
+
+	if($this.siblings('div#combo_list_' + parentContainerindex + '_' + selectedPropertyType).find('ul:visible').length != 0) {
+		$this.siblings('div#combo_list_' + parentContainerindex + '_' + selectedPropertyType).find('span.header').hide();
+		$this.siblings('div#combo_list_' + parentContainerindex + '_' + selectedPropertyType).find('li').hide();
+		$this.siblings('div#combo_list_' + parentContainerindex + '_' + selectedPropertyType).find('li[data-selected="yes"]').show();
+		$this.siblings('div#combo_list_' + parentContainerindex + '_' + selectedPropertyType).find('li:containsi(' + searchText + ')').show();
+	} else {
+		$this.siblings('div#combo_list_' + parentContainerindex + '_' + selectedPropertyType).find('span.header').hide();
+		$this.siblings('div#combo_list_' + parentContainerindex + '_' + selectedPropertyType).find('span.header:containsi(' + searchText + ')').show();
+	}
+}
+
+function selectAdvancedMultiselectorSingleField( objField, fieldId ) {
+	var $this = $( objField ),
+		dataIndex 	= $this.parents('div.form-advancedmultiselect').attr('data-index');
+
+	$( '#combo_fields_' + dataIndex ).val( fieldId );
+	$this.parents('div.form-advancedmultiselect').children('select.advanced-combo-options').attr('title', $this.text());
+	$this.siblings('li').children('label').removeClass('selected');
+	$this.children('label').addClass('selected');
+	$this.parents('div.form-selectlist').hide();
+}
+
+function selectAdvancedMultiselectorSingleProperty( propertyObject, fieldId ) {
+
+	var $this 		= $(propertyObject),
+		dataIndex 	= $this.parents('div.form-advancedmultiselect').attr('data-index');
+
+	$( '#company_user_properties_' + dataIndex ).val( fieldId );
+	$this.parents('div.form-advancedmultiselect').children('select.options-for-properties').attr('title', $this.text());
+	$this.siblings('li').children('label').removeClass('selected');
+	$this.children('label').addClass('selected');
+	$this.parents('div.form-selectlist').hide();
+}
+
+var intSmsTotalChar = 0,
+	SMS_LENGTH		= 1000;
+function smsCharacterCounter( strElementId, strCharCounterId ) {
+	var intMessageLength 			= $( '#' + strElementId ).val().length,
+		intMessageLengthWithNewLine = ( $( '#' + strElementId ).val().match( /\n/g )||[] ).length;
+
+	intSmsTotalChar 				= intMessageLength + intMessageLengthWithNewLine;
+
+	if ( intSmsTotalChar >= SMS_LENGTH ) {
+		$( '#' + strCharCounterId ).html( __( 'Text messages must be fewer than ' + SMS_LENGTH + ' characters.' ) );
+		$( '#' + strCharCounterId ).css( 'color', 'red' );
+	} else {
+		$( '#' + strCharCounterId ).html( '' );
+	}
+
+}
+
+function preventUserToAddCharacter( objEvent ) {
+	if( ( ( intSmsTotalChar + 1 ) > SMS_LENGTH && ( objEvent.keyCode == 32 || objEvent.keyCode > 47 || objEvent.keyCode == 13 ) ) ||  ( ( ( intSmsTotalChar + 2 ) > SMS_LENGTH ) && objEvent.keyCode == 13 ) ) {
+		objEvent.preventDefault();
+	}
+}
+
+function loadContactSupport( boolDoNotLoadJs ) {
+
+	var strParam = ( true === boolDoNotLoadJs ) ? '' : '&right_side_bar_contact=1';
+
+	psi.patterns.loadDialog( {
+		width       : 980,
+		height      : 768,
+		strUrl      : '/?module=ticket_and_taskxxx&action=create_ticket_and_task&new_support=1' + strParam,
+		strContentId: 'new_ticket_container',
+		title       : __('Contact Support'),
+		ckeditor    : true,
+		isSupport   : true
+	} );
+
+	objBrowserData.getBrowserData();
+	return true;
+}
+
+function createContactSupport( boolDoNotLoadJs, callback ) {
+	var strParam = ( true === boolDoNotLoadJs ) ? '' : '&right_side_bar_contact=1';
+	psi.patterns.ajaxRequest( {
+		url      : '/?module=ticket_and_taskxxx&action=create_ticket_and_task&new_support=1' + strParam,
+		strElementSelector: '#new_ticket_container',
+		success: function( strResponse ) {
+			$( "#new_ticket_container" ).html( strResponse );
+			if( 'function' === typeof callback ) {
+				callback();
+			}
+		}
+	} );
+
+	objBrowserData.getBrowserData();
+}
+
+$(document).ready( function() {
+
+	// UI ESSENTIALS
+	//---------------------------------------------------------------------------------------
+	psi.patterns.bindEssentials();
+
+	// HEADER FUNCTIONS
+	//---------------------------------------------------------------------------------------
+
+	// nav dropdown
+	$('#nav li.main-nav-item').hoverIntent({
+		over: showList,
+		timeout: 100,
+		out: hideList
+	});
+	function showList() {
+		$('ul', this).slideDown(300);
+	}
+	function hideList() {
+		$('ul', this).slideUp(300);
+	}
+
+	// no dropdown on selected
+	//$('#nav li.selected').hoverIntent({ over: noList });
+	//function noList() { $('ul', this).hide(); }
+	var searchIsOpen = false;
+	// user dropdown
+	$('body')
+	.on('click', '.js-show-hidden-drawer', function(e) {
+		e.stopPropagation();
+		hideOpenDrawers( $( this ) );
+	})
+	.on('mouseleave', '.js-hidden-drawer', function() {
+		$(this).fadeOut();
+	})
+	.on('click', '.js-entrata-search-field', function(e) {
+		e.stopPropagation();
+		searchOpen();
+	})
+	.on('click', '.js-clear-search', function(e) {
+		e.stopPropagation();
+		$('#entraraQuickSearch').val('');
+		$('.js-eqsResponse').fadeOut();
+		createSearchFocus();
+		sessionStorage.removeItem('search_session');
+	})
+	.on('click', '#search-category-picker', function(){
+		$('.js-eqsResponse').fadeOut();
+	})
+	.on('click', function() {
+		searchClose();
+		$('.js-hidden-drawer').fadeOut();
+	});
+
+	if( 'true' === $("#quick_search_preference").val() ) {
+		searchOpen();
+	}
+	// Translation Feedback
+	if( "undefined" != window.isI18nFeedbackModeOn && true == window.isI18nFeedbackModeOn ) {
+		$('body').on('click', '#js-translation-feedback', function() {
+			loadTranslationFeedback();
+		});
+		createContextMenu();
+		document.addEventListener('mouseup', function(){
+			storeSelectedTranslation();
+		}, false);
+	}
+
+	function createContextMenu() {
+		$.contextMenu({
+			selector: 'body',
+			zIndex: 9999,
+			callback: function( key, options ) {
+				storeSelectedTranslation();
+				loadTranslationFeedback();
+				setTimeout( function() {
+					if( $("#js-table-view-feedback-body tr:visible").length == 1 ) {
+						$("#js-table-view-feedback-body tr:visible .js-report-bug").trigger('click');
+					}
+				}, 1500 );
+			},
+			items: {
+				"feedback" : {
+					name : "Feedback"
+				}
+			}
+		});
+	}
+
+	function storeSelectedTranslation(  ) {
+		if( '' !== window.getSelection().toString() ) {
+			window.strTranslationFeedbackSelectedText = window.getSelection().toString();
+		}
+	}
+
+	function loadTranslationFeedback() {
+		psi.patterns.loadDialog( {
+			width: '800',
+			height: '600',
+			strUrl: '/?module=translation_feedbackxxx&action=view_translations',
+			strContentId: 'js-translation-feedback-container',
+			title: 'Translation Feedback'
+		} );
+		}
+
+	function searchOpen() {
+		$( ".js-hidden-drawer" ).fadeOut(100);
+		if( searchIsOpen ) {
+			return;
+		}
+
+		var $searchField    = $('.js-search-field'),
+			$searchText     = $('.js-search-text'),
+			$clearSrchBtn   = $('#clear-search-btn'),
+			$picker         = $('#search-category-picker'),
+			tl              = new TimelineLite();
+
+		$searchText.fadeOut(100);
+		$('.search-bar').addClass('expanded');
+		//TweenMax.fromTo($searchField, .5, {'width':'0px', 'opacity':0, 'display':'none'}, {'width':'291px', 'opacity':1, 'display':'flex'});
+		tl.fromTo($searchField, 0.3, {'width':'0px', 'opacity':0, 'display':'none'}, {'width':'291', 'opacity':1, 'display':'flex', ease:Power2.easeInOut})
+			.fromTo($picker, 0.2, {scaleX:0.25, 'opacity':0, 'display':'none', 'borderRadius': '50%'}, {scaleX:1, 'opacity':1, 'display':'flex', 'borderRadius': '10px', ease:Power2.easeOut})
+			.fromTo($('#search_type_name, .svg-entrata-icon'), 0.1, {'opacity':0}, {'opacity':1, ease:Power2.easeOut})
+			.to($searchField, 0.1, {'width':'auto'})
+			.fromTo($clearSrchBtn, 0.1, {scale:0, 'opacity':0}, {scale:1, 'opacity':1, ease:Power1.easeOut, onComplete:createSearchFocus});
+		if( 'false' === $("#quick_search_preference").val() ) {
+			searchIsOpen = true;
+		}
+	}
+
+	function createSearchFocus() {
+		$('#entraraQuickSearch').focus();
+		$('#entraraQuickSearch').focus( function() {
+			$(this).select();
+		} );
+	}
+	function hideOpenDrawers(objHelp) {
+
+		$('.js-eqsResponse').fadeOut(100);
+		$( ".js-hidden-drawer" ).fadeOut(100);
+
+		var drawer,
+			drawerExists = $(objHelp).find( "#support-drawer" ).length;
+
+		if( 0 === drawerExists && "#support-drawer" === $(objHelp).data( 'drawer' ) ) {
+			$( $( "#support" ).find( "#support-drawer" ).clone() ).appendTo( $(objHelp) );
+			drawer = $(objHelp).find( $(objHelp).data( 'drawer' ) );
+		} else if( 1 === drawerExists ) {
+			drawer = $(objHelp).find( $(objHelp).data( 'drawer' ) );
+		} else {
+			drawer = $( $(objHelp).data( 'drawer' ) );
+		}
+
+		if( "#support-drawer" === $(objHelp).data( 'drawer' ) ) {
+			loadHelpMenu(objHelp);
+		}
+
+		drawer.fadeIn(100);
+
+		nqs.closeResponseBox();
+
+	}
+
+	function searchClose() {
+		if( !searchIsOpen || '' != $('#entraraQuickSearch').val() || 'true' === $("#quick_search_preference").val() ) {
+			return;
+		}
+
+		var $searchField    = $('.js-search-field'),
+			$searchText     = $('.js-search-text'),
+			$clearSrchBtn   = $('#clear-search-btn'),
+			$picker         = $('#search-category-picker'),
+			tl              = new TimelineLite();
+
+		tl.to($clearSrchBtn, 0.1, {scale:0, 'opacity':0, ease:Power1.easeIn})
+			.to($picker, 0.1, {scaleX:0.3, 'opacity':0, 'display':'none', ease:Power2.easeIn})
+			.to($searchField, 0.1, {'width':'0px', 'opacity':0, 'display':'none', ease:Power2.easeInOut})
+			.to($searchText, 0.1, {'display':'block'});
+		$('.search-bar').removeClass('expanded');
+		searchIsOpen = false;
+	}
+
+	// search option dropdown
+	// $('#logo-search ul li#search a').click(function() { $('#search-option').fadeIn(100); });
+	// $('#search-option').mouseleave(function() {
+	// 	$('#search-option').fadeOut(100);
+	// });
+	// $('#logo-search ul li#search ul li a').click(function() {
+	// 	$('#search-option').fadeOut(100);
+	// });
+
+	$("body").delegate(".cke_dialog_background_cover", "click", function(){
+		$([document, window]).unbind( "focusin.dialog" );
+		$(".cke_dialog").find('input:first').focus();
+	}); 	/* Reset focus on ckeditor link popup */
+
+	//for tablets--hide open dropdowns on click
+	$('.header, .body').click(function() {
+		$('.form-multiselect ul, .sub-dropdown').hide();
+	});
+
+	$("#cache").click(
+	function() {
+
+		$(this).toggleClass('greenbulb').toggleClass('redbulb');
+		$('.greenbulb').attr( "title", __('Click to force smarty re-compile (pages will load more slowly).') );
+		$('.redbulb').attr( "title", __('Click to load pages faster by blocking smarty re-compile.') );
+
+		if ( $(this).hasClass( "greenbulb" ) ){
+			psi.patterns.ajaxRequest({
+				strElementSelector: '#cache',
+				url: '/?force_smarty_recompile=0'
+			});
+		} else {
+			psi.patterns.ajaxRequest({
+				strElementSelector: '#cache',
+				url: '/?force_smarty_recompile=1'
+			});
+		}
+	});
+
+	//Shortcut Keys
+	//Global Search Focus
+	$(document).bind('keydown', 'ctrl+shift+f', function(event){event.preventDefault(); $(window).scrollTop(0); $("#fastSearch").focus();});
+	$(document).bind('keydown', 'meta+shift+f', function(event){event.preventDefault(); $(window).scrollTop(0); $("#fastSearch").focus();});
+
+
+	// session logout screen
+	var alertContainer = $('div.logout-alert-container .alert-container');
+	alertContainer.css({
+		top:($(window).height() - alertContainer.innerHeight()) / 2
+	});
+	$(window).resize(function() {
+		alertContainer.css({
+			top:($(window).height() - alertContainer.innerHeight()) / 2
+		});
+	});
+	$('.session-logout-alert').click(function(){
+		$('div.logout-alert-container').show();
+		var stop = setInterval(sessionLogoutAlert,1000);
+
+		function sessionLogoutAlert(){
+			var timeCounter = $("div.counter").text(),
+				updateTime = timeCounter - 1;
+			$("div.counter").text(updateTime);
+			if(updateTime == 0) {
+				clearInterval(stop);
+				updateTime=null;
+			}
+		}
+	});
+
+	// Log user history
+	logUserHistory();
+
+	// Capture browser data & create support ticket
+	$('body').on('click', '.support-ticket', function(event){
+		event.stopPropagation();
+		loadContactSupport( !boolLoadSupportSystemJS );
+	});
+
+});
+
+LogoutModule = {};
+LogoutModule.strLogoutUrl;
+LogoutModule.strKeepAliveUrl;
+LogoutModule.strDocumentTitle = document.title;
+LogoutModule.StartCounterTimer = 65;
+LogoutModule.intsetIntervalId = -1;
+LogoutModule.intsetTimeOutId = -1;
+LogoutModule.intNextExpirationCheck;
+LogoutModule.intCurrentExpirationCheck;
+LogoutModule.intExpirationDiff = 0;
+LogoutModule.arrstrCallBackFunctions = {};
+
+LogoutModule.bindEssentials = function() {
+
+	$('.cancel-alert').on( 'click', function() {
+		$('div.logout-alert-container').hide();
+		document.title = LogoutModule.strDocumentTitle;
+		LogoutModule.intExpirationCheckDiff = 0;
+		psi.patterns.ajaxRequest({ strElementSelector: '#force_logout_div', url: LogoutModule.strKeepAliveUrl });
+		LogoutModule.ResetCountdownTimer();
+
+	} );
+	boolFlag = 0;
+
+	if( $.active == 0 ) {
+		boolFlag = 1;
+		LogoutModule.LogoutController();
+	}
+
+	if( boolFlag == 0 ) {
+		$( document ).ajaxStop(function() {
+			LogoutModule.LogoutController();
+			$( document ).unbind("ajaxStop");
+		});
+	}
+}
+
+LogoutModule.ResetCountdownTimer = function() {
+
+	if( 0 <= LogoutModule.intsetIntervalId ) {
+		clearInterval( LogoutModule.intsetTimeOutId );
+	}
+	if( 0 <= LogoutModule.intsetIntervalId ) {
+		clearInterval( LogoutModule.intsetIntervalId );
+	}
+	LogoutModule.StartCounterTimer = 65;
+
+	boolFlag = 0;
+
+	if( $.active == 0 ) {
+		boolFlag = 1;
+		LogoutModule.LogoutController();
+	}
+
+	if( boolFlag == 0 ) {
+		$( document ).ajaxStop(function() {
+			LogoutModule.LogoutController();
+			$( document ).unbind("ajaxStop");
+		});
+	}
+}
+
+LogoutModule.LogoutController = function() {
+	LogoutModule.intNextExpirationCheck = parseInt( getCookie( 'next_expiration_check' ) );
+	LogoutModule.intCurrentExpirationCheck = parseInt( getCookie( 'current_expiration_check' ) );
+
+	var intTimeoutRemainingSeconds = ( LogoutModule.intNextExpirationCheck - LogoutModule.intCurrentExpirationCheck );
+	intTimeInterval = ( intTimeoutRemainingSeconds - LogoutModule.StartCounterTimer ) * 1000;
+
+	if( 0 < LogoutModule.intExpirationDiff ) {
+		intTimeInterval = LogoutModule.intExpirationDiff * 1000;
+	}
+
+	LogoutModule.intExpirationDiff = 0;
+	LogoutModule.intsetTimeOutId = setTimeout( function(){ LogoutModule.CountdownTimer(); }, intTimeInterval );
+}
+
+LogoutModule.CountdownTimer = function() {
+	if( LogoutModule.intNextExpirationCheck == parseInt( getCookie( 'next_expiration_check' ) ) && LogoutModule.intCurrentExpirationCheck == parseInt( getCookie( 'current_expiration_check' ) ) ) {
+		LogoutModule.intsetIntervalId = setInterval( function(){ LogoutModule.checkTimeout(); }, 1000 );
+	} else {
+		LogoutModule.intExpirationDiff = parseInt( getCookie( 'next_expiration_check' ) ) - LogoutModule.intNextExpirationCheck;
+		LogoutModule.ResetCountdownTimer();
+	}
+}
+
+LogoutModule.checkTimeout = function() {
+	if( LogoutModule.StartCounterTimer <= 65 && LogoutModule.StartCounterTimer >= 0 ) {
+		LogoutModule.showCountdown();
+	} else {
+		clearInterval( LogoutModule.intsetIntervalId );
+	}
+	LogoutModule.StartCounterTimer -= 1;
+}
+
+LogoutModule.showCountdown = function() {
+	intTimerCountdown = LogoutModule.StartCounterTimer - 5;
+	var intTimeoutInForCallBacks = 0;
+
+	if( 60 == LogoutModule.StartCounterTimer ){
+		psi.patterns.ajaxRequest({
+			strElementSelector: '#force_logout_div',
+			url: LogoutModule.strKeepAliveUrl + '&called_by_logout_alert=1',
+			success:function() { psi.patterns.removeLoadingImage( { strElementSelector: '#force_logout_div' }); }
+		});
+	}
+
+	if( 5 == LogoutModule.StartCounterTimer && 0 < Object.keys( LogoutModule.arrstrCallBackFunctions ).length ){
+		for(var strFunction in LogoutModule.arrstrCallBackFunctions ) {
+			if( "function" === typeof LogoutModule.arrstrCallBackFunctions[strFunction] ) {
+				LogoutModule.arrstrCallBackFunctions[strFunction]();
+			}
+		}
+		intTimeoutInForCallBacks = 5000;
+	}
+
+	if( LogoutModule.StartCounterTimer <= 0 ){
+		$('div.logout-alert-container').hide();
+		if( objEntrataChat.boolIsUserOnline ) {
+			$('#myStatus').trigger( 'click' );
+		}
+		setTimeout( function() {
+			sessionStorage.clear();
+			window.location = LogoutModule.strLogoutUrl + '&return_url=' + encodeURIComponent( '/' + $(location).attr('search') );
+			return;
+		}, intTimeoutInForCallBacks );
+	}
+
+	$('div.logout-alert-container').show();
+
+	if( 0 <= intTimerCountdown ) {
+		$("div.counter").text( intTimerCountdown );
+	} else {
+		$("div.counter").text( 0 );
+	}
+
+	if( 0 <= intTimerCountdown && 0 == intTimerCountdown % 2){
+		document.title = intTimerCountdown + ' Seconds left to logout.';
+	} else if ( 0 <= intTimerCountdown ) {
+		document.title = LogoutModule.strDocumentTitle;
+	}
+}
+
+function getUserConfirmation(   ) {
+	var boolIsConfirm = false;
+	boolIsConfirm = confirm( __("You have requested to view a resident or applicant's personal information, which can contain sensitive data. \n By continuing, you accept the responsibility to protect this information and use it only for official business purposes.") );
+	return boolIsConfirm;
+}
+
+function logApplicantDownloadDetails( ) {
+	psi.patterns.ajaxRequest({
+		strElementSelector: '#cache',
+		url: '/?module=application_applicantsxxx&action=download_or_print_applicant_applications'
+	});
+}
+
+function getCookie( strCookieName ) {
+	if ( document.cookie.length > 0 ) {
+		strStart = document.cookie.indexOf( strCookieName + "=" );
+		if ( strStart != -1 ) {
+			strStart = strStart + strCookieName.length + 1;
+			strEnd = document.cookie.indexOf(";",strStart);
+			if ( strEnd == -1 ) strEnd = document.cookie.length;
+			return unescape( document.cookie.substring( strStart, strEnd ));
+		}
+	}
+	return false;
+}
+
+function loadMessageBoard( notificationHtml ) {
+
+	if( $('#body .body .lining #alerts_container').length ){
+		return;
+	}
+
+	if( 0 < $('#body').length ) {
+		$('#body').prepend( notificationHtml );
+	}
+}
+
+var objSelectedRecordsIds = {
+	leaseCustomerIds:[],
+	ids:[],
+	leaseIds:[],
+	selectedTab:null
+};
+
+var recordSelection = {
+		toggleRecordsSelection: function( objChkBox, objJsonParam ){
+
+			var thisRef 		= this;
+			var objDivSelectAll = $( 'div.selectall' );
+
+			if( null != objJsonParam.strFormId ){
+				var intSelectedCheckboxCount = $( '#' + objJsonParam.strFormId ).find( 'table.clickable' ).find( 'input:checked' ).length;
+				var intAllCheckBoxCount		 = $( '#' + objJsonParam.strFormId ).find( 'table.clickable' ).find( 'input:checkbox:enabled' ).length;
+				objDivSelectAll.hide();
+				if( intSelectedCheckboxCount == intAllCheckBoxCount ){
+					$( '#' + objJsonParam.strFormId ).find( '#checkAll' ).prop( 'checked', true );
+					objDivSelectAll.show();
+				}
+			}
+			thisRef.setSelectedTabName( objJsonParam.strSelectedItem );
+
+			if ( 1 == objJsonParam.boolIsSelected && false == objChkBox.value in objSelectedRecordsIds.ids ){
+				thisRef.addNewValueInObject( objSelectedRecordsIds.ids, objChkBox.value );
+				if( undefined != $(objChkBox).attr('lease_customer_id') ) {
+					thisRef.addNewValueInObject( objSelectedRecordsIds.leaseCustomerIds, $(objChkBox).attr('lease_customer_id') );
+				}
+			} else {
+				objSelectedRecordsIds.ids = $.grep( objSelectedRecordsIds.ids, function( x ){ return x != objChkBox.value } );
+				if( undefined != $(objChkBox).attr('lease_customer_id') ) {
+					objSelectedRecordsIds.leaseCustomerIds = $.grep( objSelectedRecordsIds.leaseCustomerIds, function( x ){ return x != $(objChkBox).attr('lease_customer_id') } );
+				}
+			}
+			objJsonParam.intCountSelectableItems = $( 'input#selectableItemsCount' ).val();
+			if( objJsonParam.intCountSelectableItems == thisRef.getSelectedCountIds() ){
+				thisRef.showSelectionStatusMessage( objJsonParam );
+			} else {
+				thisRef.showSelectionStatusMessage( objJsonParam );
+			}
+
+		},
+		selectAllRecords: function( objJsonParam ){
+			var thisRef 		= this;
+			thisRef.setSelectedTabName(objJsonParam.strSelectedItem);
+			jQuery.ajax({
+				url			: objJsonParam.strUrl,
+				cache		: false,
+				dataType	: "json",
+				 success: function( arrSelectedItem ){
+					 if( arrSelectedItem.ids ){
+						 $.each( arrSelectedItem.ids, function( i, item ){
+							 thisRef.addNewValueInObject( objSelectedRecordsIds.ids, item );
+						 });
+					 }
+
+					 if( arrSelectedItem.lease_customer_id ){
+
+						 $.each( arrSelectedItem.lease_customer_id, function( i, item ){
+							 thisRef.addNewValueInObject( objSelectedRecordsIds.leaseCustomerIds, item );
+						 });
+					 }
+					 if( arrSelectedItem.lease_id ){
+						 $.each( arrSelectedItem.lease_id, function( i, item ){
+							 thisRef.addNewValueInObject( objSelectedRecordsIds.leaseIds, item );
+						 });
+					 }
+					 objJsonParam.intCountSelectableItems = thisRef.getSelectedCountIds();
+					 thisRef.showSelectionStatusMessage( objJsonParam );
+				}
+			});
+
+		},
+
+		deselectAllRecords: function(){
+			$( 'div.selectall' ).hide();
+			objSelectedRecordsIds = {
+				leaseCustomerIds:[],
+				ids:[],
+				leaseIds:[],
+				selectedTab:null
+			}
+		},
+
+		validateSelectedRecords: function( objJsonParam ){
+			var thisRef = this;
+
+			var intSelectedItemCount	= thisRef.getSelectedCountIds();
+			if( 'undefined' !== typeof objJsonParam && 'undefined' !== typeof objJsonParam.boolIsCount && true == objJsonParam.boolIsCount ){
+				return intSelectedItemCount;
+			} else if( 0 < intSelectedItemCount ){
+				return true;
+			}
+			return false;
+
+		},
+
+		getSelectedCountIds: function(){
+			return objSelectedRecordsIds.ids.length;
+		},
+
+		selectOrDeselectAllRecordsOnPage: function( objJsonParam ){
+
+			var thisRef 		= this;
+			var objDivSelectAll = $( 'div.selectall' );
+//			do without loop by concat
+			thisRef.setSelectedTabName(objJsonParam.strSelectedItem);
+
+			$( 'table.clickable' ).find( 'input:checkbox' ).each( function(){
+
+				if( true == this.checked ){
+					 thisRef.addNewValueInObject( objSelectedRecordsIds.ids, this.value );
+
+					if( undefined != $(this).attr('lease_customer_id') ) {
+						thisRef.addNewValueInObject( objSelectedRecordsIds.leaseCustomerIds, $(this).attr('lease_customer_id') );
+					}
+					objDivSelectAll.show();
+				} else {
+					thisRef.unsetValuesFromObject( objSelectedRecordsIds.ids, this.value );
+					if( undefined != $(this).attr('lease_customer_id') ){
+						thisRef.unsetValuesFromObject( objSelectedRecordsIds.leaseCustomerIds, $(this).attr('lease_customer_id') );
+					}
+				}
+			});
+
+			if( 'undefined' !== typeof objJsonParam.strChkBoxName && 'undefined' !== typeof objDivSelectAll ){
+
+				if( 0 < objDivSelectAll.length && 0 < thisRef.getSelectedCountIds() ){
+					thisRef.showSelectionStatusMessage( objJsonParam );
+				} else {
+					objDivSelectAll.hide();
+				}
+
+			}
+		},
+		showSelectionStatusMessage: function( objJsonParam ){
+			if( undefined == objJsonParam.intCountSelectableItems ) {
+				objJsonParam.intCountSelectableItems = $('input#selectableItemsCount').val();
+			}
+
+			var thisRef 			= this;
+			var objDivSelectAll		= $( 'div.selectall' );
+			var selectedItemName	= '';
+			if( 0 < $( 'input#selectedItemName' ).length ){
+				var selectedItemName = $( 'input#selectedItemName' ).val().replace( /_/g, ' ' ) || '';
+			}
+
+			var strMessageAllSelected 	= __( '{%s, 0} are selected.', { 0: selectedItemName } ) + '</span>';
+
+			if( 1 == objJsonParam.intCountSelectableItems ){
+				if( 's' == selectedItemName[selectedItemName.length-1] ){
+					selectedItemName = selectedItemName.replace( /s$/, '' );
+				}
+				var strMessageAllSelected = __( '{%s, 0} is selected.', { 0: selectedItemName } ) + '</span>';
+			}
+
+			if( thisRef.getSelectedCountIds() >= objJsonParam.intCountSelectableItems ) {
+				objDivSelectAll.children( 'span#selectedItemInCurrentPage' ).html( '<strong><span id="selectedItem">' + objJsonParam.intCountSelectableItems + '</span></strong> ' + strMessageAllSelected );
+				$( '#selectAllItems' ).html( ' <a href="javascript:;" onclick="deselectAllItems( \'' + objJsonParam.strFormId + '\', \'' + objJsonParam.strChkBoxName + '\' );$( \'#checkAll\').trigger( \'change\' );">' + __('Clear selection') + '</a>' );
+			} else {
+				objDivSelectAll.children( 'span#selectedItemInCurrentPage' ).html( __( 'You have currently selected <strong><span id="selectedItem">{%s, 0} </span></strong> {%s, 1}.', { 0: thisRef.getSelectedCountIds(), 1: selectedItemName } ) );
+				objDivSelectAll.children( 'span#selectAllItems' ).html( __( '<a class="link" href="javascript:;" onclick="{%s, 0}">Click Here </a>to select all {%s, 1} in this search result.', { 0: 'selectAllItems( \'' + objJsonParam.strFormId + '\', \'' + objJsonParam.strChkBoxName + '\');', 1: selectedItemName } ) );
+			}
+
+		},
+		setSelectedTabName: function(selectedTab){
+			if( undefined != selectedTab ){
+				if( null == objSelectedRecordsIds.selectedTab ){
+					objSelectedRecordsIds.selectedTab = selectedTab;
+				}
+				if( objSelectedRecordsIds.selectedTab != selectedTab ){
+					objSelectedRecordsIds.selectedTab = selectedTab;
+					objSelectedRecordsIds.ids = [];
+				}
+			}
+		},
+		addNewValueInObject: function(arrintData, intValue ){
+			var boolIsfound = arrintData.some(function(elementVal){
+				return parseInt(elementVal) === parseInt(intValue);
+			});
+
+			if(!boolIsfound && arrintData.length < MAX_SELECTION_LIMIT ){arrintData.push(intValue);}
+		},
+		unsetValuesFromObject: function(objData, intValue){
+			var intIndex = objData.indexOf(intValue);
+			if(intIndex > -1){
+				objData.splice(intIndex, 1);
+			}
+		},
+		checkSelectionLimit:function() {
+			if( objSelectedRecordsIds.ids.length >= MAX_SELECTION_LIMIT ) {
+				alert( 'You cannot select more than ' + MAX_SELECTION_LIMIT + ' records' );
+				return false;
+			}
+			return true;
+		}
+
+	};
+
+psi.entrataHeader = {};
+psi.entrataHeader.init = function( boolIsNavigationLoaded, strPrimaryNavigationId, strSubNavigationId, strTitle ) {
+	if(typeof(Storage) !== "undefined") {
+		if( true == boolIsNavigationLoaded ) {
+			localStorage.entrataHeaderContent = $( '#cached-header' ).html();
+			localStorage.arrstrAvailableToolTipsKey = JSON.stringify( arrstrAvailableToolTipsKey );
+			var d = new Date();
+			d.setTime(d.getTime() + (2*60*60*1000)); // cache for 2 hours
+			document.cookie = "browser_storage=1; expires=" + d.toUTCString() + "; path=/";
+		} else {
+			if( localStorage.entrataHeaderContent && '' != localStorage.entrataHeaderContent ) {
+				$( '#cached-header' ).html( localStorage.entrataHeaderContent );
+				arrstrAvailableToolTipsKey = JSON.parse( localStorage.arrstrAvailableToolTipsKey );
+			}
+		}
+
+		$( '#cached-header ul#nav li' ).removeClass( 'selected' );
+		$( '#cached-header ul#nav li[data-key="' + strPrimaryNavigationId + '"]' ).addClass( 'selected' );
+
+		if( 0 < $( '#cached-header ul#nav li[data-key="' + strPrimaryNavigationId + '"] a' ).length ) {
+			var strPageTitle = $( '#cached-header ul#nav li[data-key="' + strPrimaryNavigationId + '"]' ).attr('data-module-name');
+			document.title = strPageTitle + ' - ' + strTitle;
+		}
+
+		if( 0 < $( '#cached-header ul#nav li[data-key="' + strPrimaryNavigationId + '"] ul' ).length && 0 == $('#sub-navigation li').length ) {
+			$( '#sub-navigation' ).html( '<ul class="sub-nav">' + $( '#cached-header ul#nav li[data-key="' + strPrimaryNavigationId + '"] ul' ).html() + '</ul>' );
+			$( '#sub-navigation ul.sub-nav li' ).removeClass( 'selected' );
+			$( '#sub-navigation ul.sub-nav li[data-module-name="' + strSubNavigationId + '"]' ).addClass( 'selected' );
+		} else if( 0 == $('#sub-navigation li').length ) {
+			$( '#sub-navigation' ).html( '<ul class="sub-nav"></ul>' );
+		}
+	}
+};
+
+psi.urlParam = function(name){
+	var results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(window.location.href);
+
+	if (results==null){
+		return null;
+	}
+	else{
+		return decodeURI(results[1]) || 0;
+	}
+}
+
+function closeDialog( divId ) {
+	jQuery( '#' + divId + '' ).dialog('close');
+}
+
+function addMaintenanceRequestNewLargeDialog( mid ) {
+	psi.patterns.addDialogContent({
+		strUrl: '/?module=customer_work_order_newxxx&is_resident_system=&maintenance_request[id]=' + mid,
+		title: __( 'Work Order #{%d, 0, nots}', [ mid ] )
+	});
+}
+
+function logUserHistory(){
+	var arrHistory = [];
+	if('undefined' !== typeof(window.sessionStorage.history) ) {
+		arrHistory = window.sessionStorage.history.split(",");
+	}
+
+	if( arrHistory.length >= 20 ) {
+		arrHistory.shift();
+	}
+
+	arrHistory.push(window.location.href);
+	sessionStorage.setItem('history', arrHistory.join());
+}
+
+function loadHelpMenu(objHelp) {
+	var intModuleId 		= "",
+		strModuleName 		= "",
+		strHtml             = "";
+
+	if($('.sub-nav').children().length > 0) {
+		intModuleId			= jQuery('ul.sub-nav li.selected').attr('data-module-id');
+		strModuleName		= jQuery('ul.sub-nav li.selected').attr('data-module-title');
+	} else {
+		intModuleId			= $('ul.sidetabs-menu li.selected').data('module-id');
+		strModuleName		= $('ul.sidetabs-menu li.selected').data('module-title');
+	}
+
+	strHtml	= __('Help on') + '&nbsp' + strModuleName;
+
+	if( 'Help' == strModuleName ) {
+		strHtml = strModuleName;
+	}
+
+	if( typeof strModuleName != "undefined" || strModuleName != null ) {
+		psi.patterns.ajaxRequest( {
+			url: '/?module=helpxxx&action=load_module_associated_help_contents&help[search_id]=' + intModuleId + '&help[search_string]=' + encodeURIComponent( strModuleName ),
+			success: function( strResponse ) {
+				if( true == strResponse.status ) {
+					$( objHelp ).find( '.dynamic_help_link' )
+						.show()
+						.html( strHtml )
+						.attr( "loadUrl", "/?module=helpxxx&module_id=" + intModuleId + "&module_name=" + encodeURIComponent( strModuleName ) );
+				} else {
+					$( objHelp ).find( '.dynamic_help_link' ).parent().remove();
+				}
+			}
+		} );
+	} else {
+		$( objHelp ).find( '.dynamic_help_link' ).parent().remove();
+	}
+
+}
+
+function enableOrDisableHistoricalProperties( boolEnable ) {
+	document.cookie = 'browser_storage=0';
+	if( true == boolEnable ) {
+		document.cookie = 'current_url=' + window.location.href;
+	}
+	psi.patterns.ajaxRequest( {
+		strElementSelector: 'body',
+		url: '/?module=new_dashboardxxx&action=historical_properties&historical_properties_data=' + (boolEnable ? 1 : 0),
+		success: function() {
+			if( false == boolEnable && -1 != document.cookie.indexOf( 'current_url=' )  ) {
+				var strRedirectingUrl = getCookie( 'current_url');
+				if( strRedirectingUrl.indexOf( '#' ) !== -1 ) {
+					strRedirectingUrl = strRedirectingUrl.replace( "#", '' );
+				}
+				window.location = strRedirectingUrl;
+			} else {
+				window.location = '/?module=new_dashboardxxx';
+			}
+		}
+	} );
+}
+
+function enableOrDisablePreviewMode( boolEnable ) {
+	document.cookie = 'browser_storage=0';
+	psi.patterns.ajaxRequest( {
+		url: '/?module=company_user_permissionsxxx&action=preview_permission&preview_permissions=' + (boolEnable ? 1 : 0) + '&company_user[id]=' + $("#js-preview-permissions").data('company-user-id'),
+		success: function() {
+			if( boolEnable ) {
+				window.open( '/?module=new_dashboardxxx', '_blank' );
+			} else {
+				location.href = '/?module=users_and_groupsxxx';
+			}
+		}
+	} );
+}
+
+function collectLocalIp( strLogLocalIpUrl ) {
+	try {
+		var RTCPeerConnection = window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+		var boolLogLocalIp = false, strLocalIp = '', strExpression = /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/;
+
+		if (RTCPeerConnection) {
+			(function () {
+				var rtc = new RTCPeerConnection({ iceServers:[] });
+				if (1 || window.mozRTCPeerConnection) {
+					rtc.createDataChannel('', { reliable:false });
+				};
+
+				rtc.onicecandidate = function (evt) {
+					if (evt.candidate) grepSDP("a="+evt.candidate.candidate);
+				};
+				rtc.createOffer(function (offerDesc) {
+					grepSDP(offerDesc.sdp);
+					rtc.setLocalDescription(offerDesc);
+				}, function (e) { });
+
+				function grepSDP(sdp) {
+					sdp.split('\r\n').forEach(function (line) {
+						if ( ~line.indexOf("a=candidate") || ~line.indexOf("c=") ) {
+							var ip_address = '';
+							if( false == boolLogLocalIp && null != line.match( strExpression ) ) {
+								ip_address = line.match( strExpression )[0];
+							}
+							if( '' != ip_address && '0.0.0.0' != ip_address && ( false == boolLogLocalIp || strLocalIp != ip_address ) ){
+								boolLogLocalIp = true;
+								strLocalIp = ip_address;
+								sendLocalIp( strLogLocalIpUrl, ip_address );
+							}
+						}
+					});
+				}
+			})();
+		} else {
+			sendLocalIp( strLogLocalIpUrl, 'unknown' );
+		}
+	}
+	catch(err) {
+		sendLocalIp( strLogLocalIpUrl, 'unknown' );
+	}
+}
+
+function sendLocalIp( strLogLocalIp, strIpAddress ){
+	$.ajax( {
+		url: strLogLocalIp,
+		data: "local_ip=" + btoa( strIpAddress ),
+		method: 'post'
+	});
+}
+
+function generateNavigation( boolCopyToClipboard ) {
+	let setupPaths = [ '#task_content .tabs-mid', '#dashboard_sub_tabs ul', '#dashboard_content ul', '#main-blog-content', '#div_msh_tabs', '#customer_system .tabs', '#customer_system .tabs-menu', '#application_system_container .tabs', '#guest-manager-main', '#settings_content', '#settings_navigation_content', '#modal_body1', '.tabs-view-data' ];
+
+	let path = '';
+	let nav = $( '#nav' ).children();
+	for( let i = 0; i < nav.length; i++ ) {
+		if( $( nav[i] ).hasClass( 'selected' ) ) {
+			path += $( nav[i] ).attr( 'data-module-name' ).trim();
+		}
+	}
+
+	let subNav = $( '#sub-navigation .sub-nav').children();
+	for( let i = 0; i < subNav.length; i++ ) {
+		if( $( subNav[i] ).hasClass( 'selected' ) ) {
+			path += ' >> ' + $( subNav[i] ).attr( 'data-module-title' ).trim();
+		}
+	}
+
+	for( let i = 0; i < setupPaths.length; i++ ) {
+		let setupNav = $( setupPaths[i] );
+		if( setupNav.length ) {
+			$('li', setupNav).each( function( index, value ) {
+				let subTab = $( value );
+				if( subTab.hasClass( 'selected' ) && false === subTab.parent().hasClass( 'hide' ) && 'none' !== subTab.parent().css( 'display' ) ) {
+					path += ' >> ' + subTab.text().trim();
+				}
+			} );
+		}
+	}
+
+	path = path.replace(/(\r\n|\n|\r)/gm, "");
+	if( boolCopyToClipboard ) {
+		let dummy = $( '<input>' ).val( path ).appendTo( 'body' ).select()
+		document.execCommand( 'copy' );
+		$( dummy ).remove();
+	}
+
+	return path;
+}

@@ -1,0 +1,2112 @@
+var MessageCenter = {};
+MessageCenter.ScheduledEmail = {};
+MessageCenter.ScheduledEmail.Preview = {};
+MessageCenter.ScheduledEmailFilterList = {};
+MessageCenter.ScheduledEmailFilterList.Resident = {};
+MessageCenter.ScheduledEmailFilterList.SavedTab = {};
+MessageCenter.ScheduledEmailFilterList.Temporary = {};
+
+MessageCenter.Reports = {};
+MessageCenter.Reports.ViewSentMessageSummary = {};
+MessageCenter.Reports.DateOfMessageOpens = {};
+MessageCenter.Reports.ClickRecipientList = {};
+MessageCenter.Reports.TopClickedLinks = {};
+MessageCenter.Reports.TopClickMap = {};
+MessageCenter.Reports.ViewRecipientsList = {};
+////////////// Common Functins ///////////////
+MessageCenter.loadComposeMessage = function( intScheduledEmailId ) {
+	var strUrl = MessageCenter.exitTags.create_scheduled_email;
+	if( intScheduledEmailId ) {
+		strUrl += '&scheduled_email[id]=' + intScheduledEmailId;
+	}
+
+	psi.patterns.loadLargeDialog({
+		title	: __('Create New Email'),
+		strUrl	: strUrl,
+		onCloseCallback: function () {
+			loadCurrentTab( true ); }
+	});
+	return false;
+};
+
+MessageCenter.reUseMessage = function( intScheduledEmailId ) {
+
+	psi.patterns.ajaxRequest({
+		type		: 'POST',
+		url			: MessageCenter.exitTags.reuse_scheduled_email + '&scheduled_email[id]=' + intScheduledEmailId,
+		dataType	: 'json',
+		success		: function( objResponse ) {
+			if( true == objResponse.status ) {
+				$('#view_single_message').dialog('close');
+				MessageCenter.loadComposeMessage( objResponse.scheduled_email_id );
+			} else {
+				MessageCenter.showMessage( 'error', objResponse.message, 'reuse_alert_message' );
+				GtmTracking.addError( 'modal interaction', '', 'reuse', 'message summary', objResponse.message );
+			}
+		}
+	});
+};
+
+MessageCenter.ScheduledEmail.resetAttemptCount = function( intScheduledEmailId ) {
+
+	psi.patterns.ajaxRequest({
+		type		: 'POST',
+		url			: MessageCenter.exitTags.reset_attempt_count + '&scheduled_email[id]=' + intScheduledEmailId,
+		dataType	: 'json',
+		success		: function( objResponse ) {
+			if( true == objResponse.status ) {
+				loadPendingTab(true);
+			}
+		}
+	});
+
+	return false;
+};
+
+MessageCenter.loadContactList = function( intScheduledEmailFilterId, strComposeEmailMode, boolIsFirstLoad, intScheduledEmailId, intIsSmsTextMessageList, boolIsEmergencyTextMessageList ) {
+
+	var strComposeEmailMode = strComposeEmailMode || false;
+	var boolIsFirstLoad = boolIsFirstLoad || 0;
+	var intScheduledEmailId = intScheduledEmailId || '';
+	var intIsSmsTextMessageList = intIsSmsTextMessageList || false;
+	var boolIsEmergencyTextMessageList = boolIsEmergencyTextMessageList || false;
+
+	var boolIsFromEmailList = false;
+	if( $('#left_menu_emails').hasClass('selected') && !$('#form_compose_email').length ) {
+		boolIsFromEmailList = true;
+	}
+
+	GtmTracking.addComponentInteraction( 'list', 'dropdown' );
+
+	if( true == strComposeEmailMode ) {
+		var strUrl = MessageCenter.exitTags.open_scheduled_email_filter;
+
+		if( true == $( '#pendingTab' ).hasClass( 'selected' ) ) {
+			GtmTracking.addModalTimestampStart( 'scheduled', 'edit list' );
+		} else if( true == $( '#draftTab' ).hasClass( 'selected' ) ) {
+			GtmTracking.addModalTimestampStart( 'drafts', 'edit list' );
+		}
+	} else {
+		var strUrl = MessageCenter.exitTags.create_scheduled_email_filter;
+
+		if( 1 == boolIsFirstLoad ) {
+			GtmTracking.addModalTimestampStart( 'list', 'create list' );
+		} else {
+			if( true == $( '#savedTab' ).hasClass( 'selected' ) ) {
+				GtmTracking.addModalTimestampStart( 'saved', 'edit list' );
+			} else if( true == $( '#temporaryTab' ).hasClass( 'selected' ) ) {
+				GtmTracking.addModalTimestampStart( 'temporary', 'edit list' );
+			}
+		}
+	}
+
+	if( intScheduledEmailId ) {
+		strUrl += '&scheduled_email_id=' + intScheduledEmailId;
+	}
+
+	var strDialogTitle = __( 'Create List' );
+	if( intScheduledEmailFilterId ) {
+		strUrl += '&scheduled_email_filter_id='+intScheduledEmailFilterId;
+		strDialogTitle = __( 'Edit List' );
+	} else {
+		if( 1 == boolIsFirstLoad ) strUrl += '&is_first_load=1&scheduled_email_type_id='+$('#scheduled_email_type_id').val();
+	}
+
+	if( $( '#scheduled_email_filter_id' ).length ) {
+		strUrl += '&assigned_scheduled_email_filter_ids=' + $( '#scheduled_email_filter_id' ).val();
+	}
+
+	if( 1 == intIsSmsTextMessageList ) {
+		strUrl += '&is_sms_text_message_list=1';
+
+		if( true == boolIsEmergencyTextMessageList ) {
+			strUrl += '&is_emergency_text=1';
+		}
+	}
+
+	if( true == strComposeEmailMode && false == boolIsFromEmailList && false == intIsSmsTextMessageList ) {
+		psi.patterns.addDialogContent({
+			title: strDialogTitle,
+			strUrl: strUrl
+		});
+	} else {
+		psi.patterns.loadLargeDialog({
+			title: strDialogTitle,
+			strUrl: strUrl
+		});
+	}
+
+	return false;
+};
+
+MessageCenter.showMessage = function( strMessageType, strMessage, strLocation, intMessageTime ) {
+	$( '#modal_container0' ).scrollTop(0);
+
+	var strMessageDiv = strLocation || 'alert_message';
+	intMessageTime = intMessageTime || 7000;
+	$('#'+strMessageDiv).html('<p class="alert ' + strMessageType + ' slim"><i></i>' + strMessage + '</p>');
+	$('#'+strMessageDiv).show().delay(intMessageTime).fadeOut();
+};
+
+MessageCenter.multiOption = function( strOptionName ) {
+	var strOption0 = '#' + strOptionName + '0';
+	var strOptionAll =  '.' + strOptionName;
+	var strLabel = '#label_' + strOptionName;
+	var strGroupResidents = '.group_residents';
+
+    if( ( 'customer_type_ids' == strOptionName ) &&  ( 1 == $(strOption0 + ':checked').length ) ) {
+	    MessageCenter.ScheduledEmailFilterList.loadGroupContracts( $(strGroupResidents) );
+    }
+	$(strOption0).click( function() {
+		if( 0 == $(strOptionAll+':checked').length ) $(strOption0).prop('checked', true);
+		if( this.checked ) {
+			$(strOptionAll).prop( 'checked', false );
+		};
+
+		$(strLabel).html( $(strOption0).parent().text() );
+
+		if( 'customer_type_ids' == strOptionName ) {
+			MessageCenter.ScheduledEmailFilterList.loadGroupContracts( $(strGroupResidents) );
+		}
+	});
+
+	$(strOptionAll).click(function() {
+		$(strOption0).prop('checked', ( 0 == $(strOptionAll+':checked').length ) );
+		if( 0 == $(strOptionAll+':checked').length ) $(strLabel).html( $(strOption0).parent().text() );
+		if( 1 == $(strOptionAll+':checked').length ) $(strLabel).html( $(strOptionAll+':checked').first().parent().text() );
+		if( 2 <= $(strOptionAll+':checked').length ) $(strLabel).html( __('Multiple') );
+		if( 'customer_type_ids' == strOptionName ) {
+			if( 0 < $(strGroupResidents+':checked').length || 1 == $(strOption0+':checked').length ) {
+				MessageCenter.ScheduledEmailFilterList.loadGroupContracts( $(strGroupResidents) );
+			} else {
+				$('#type_group').hide();
+			}
+		}
+	});
+
+	$(strGroupResidents).click(function() {
+		if( 0 < $(strGroupResidents+':checked').length  ) {
+			MessageCenter.ScheduledEmailFilterList.loadGroupContracts( this );
+		} else {
+			$('#type_group').hide();
+		}
+	});
+
+	$(strOption0).prop('checked', ( 0 == $(strOptionAll+':checked').length ) );
+	if( 0 == $(strOptionAll+':checked').length ) $(strLabel).html( $(strOption0).parent().text() );
+	if( 1 == $(strOptionAll+':checked').length ) $(strLabel).html( $(strOptionAll+':checked').first().parent().text() );
+	if( 2 <= $(strOptionAll+':checked').length ) $(strLabel).html( __('Multiple') );
+};
+
+MessageCenter.multiOptionForProperties = function( strOptionName ) {
+	var strOption0 = '#' + strOptionName + '0';
+	var strOptionAll =  '.' + strOptionName;
+	var strLabel = '#label_' + strOptionName;
+
+	$(strOption0).click( function() {
+		if( this.checked ) {
+			$(strOptionAll).prop( 'checked', true );
+			$(strLabel).html( __( 'All Properties' ) );
+		} else {
+			$(strOptionAll).prop( 'checked', false );
+			$(strLabel).html( __( 'Select Property' ) );
+		};
+
+	});
+
+	$(strOptionAll).click(function() {
+		if( 0 == $(strOptionAll+':checked').length ) $(strLabel).html( __( 'Select Property' ) );
+		if( 1 == $(strOptionAll+':checked').length ) $(strLabel).html( $(strOptionAll+':checked').first().parent().text() );
+		if( 2 <= $(strOptionAll+':checked').length ) $(strLabel).html( __( 'Multiple' ) );
+		if( ( $(strOptionAll).length == $(strOptionAll+':checked').length ) ) {
+			$(strOption0).prop( 'checked', true );
+			$(strLabel).html( __( 'All Properties' ) );
+		} else {
+			$(strOption0).prop( 'checked', false );
+		}
+	});
+
+	if( 0 == $(strOptionAll+':checked').length ) $(strLabel).html( __( 'Select Property' ) );
+	if( 1 == $(strOptionAll+':checked').length ) $(strLabel).html( $(strOptionAll+':checked').first().parent().text() );
+	if( 2 <= $(strOptionAll+':checked').length ) $(strLabel).html( __( 'Multiple' ) );
+	if( ( $(strOptionAll).length == $(strOptionAll+':checked').length ) ) {
+		$(strOption0).prop( 'checked', true );
+		$(strLabel).html( __( 'All Properties' ) );
+	} else {
+		$(strOption0).prop( 'checked', false );
+	}
+};
+
+MessageCenter.subMultiOption = function( strOptionName, strCallback ) {
+	var strOption0 = '#' + strOptionName + '0';
+	var strOptionAll = '.' + strOptionName;
+	var strCallback = strCallback || '';
+
+	$(strOption0).click( function() {
+		$(strOptionAll).prop('checked', this.checked);
+		if( '' != strCallback ) MessageCenter.multiOption( strCallback );
+	});
+
+	$(strOptionAll).click(function() {
+		$(strOption0).prop('checked', ( $(strOptionAll).length == $(strOptionAll+':checked').length) );
+	});
+
+	$(strOption0).prop('checked', ( $(strOptionAll).length == $(strOptionAll+':checked').length) );
+};
+
+MessageCenter.multiOptionForContracts = function( strOptionName ) {
+	var strOption0 = '#' + strOptionName + '0';
+	var strOptionAll =  '.' + strOptionName;
+	var strLabel = '#label_' + strOptionName;
+	var strGroupResidents = '.group_residents';
+
+	$(strOption0).click( function() {
+		if( 1 == $(strOption0+':checked').length ) {
+			$(strOptionAll).prop('checked', true);
+			$(strLabel).html( __( 'All' ) );
+		} else {
+			$(strOptionAll).prop('checked', false);
+			$(strLabel).html( __('Select Contract(s)') );
+		}
+	});
+
+	$(strOptionAll).click(function() {
+		$(strOption0).prop('checked', false );
+
+		if( 0 == $(strOptionAll+':checked').length ) $(strLabel).html( __('Select Contract(s)') );
+		if( 1 == $(strOptionAll+':checked').length ) $(strLabel).html( $(strOptionAll+':checked').first().parent().text() );
+		if( 2 <= $(strOptionAll+':checked').length ) $(strLabel).html( __('Multiple') );
+	});
+
+	if( 0 == $(strOptionAll+':checked').length ) $(strLabel).html( __('Select Contract(s)') );
+	if( 1 == $(strOptionAll+':checked').length ) $(strLabel).html( $(strOptionAll+':checked').first().parent().text() );
+	if( 2 <= $(strOptionAll+':checked').length ) $(strLabel).html( __('Multiple') );
+
+
+	if( $(strOptionAll).length == $(strOptionAll+':checked').length || 1 == $(strOption0+':checked').length ) {
+		$(strOption0).prop('checked', true);
+		$(strOptionAll).prop('checked', true);
+		$(strLabel).html( __( 'All' ) );
+	}
+
+	if(  0 < $(strGroupResidents+':checked').length || 1 == $('#customer_type_ids0:checked').length    ) {
+		$('#type_group').show();
+	} else {
+		$('#type_group').hide();
+	}
+};
+
+MessageCenter.ScheduledEmail.uploadFile = function() {
+	var strFileName = $("#email_template_file_name").val();
+	if( '' == strFileName ) {
+		MessageCenter.showMessage('error',__( 'Please select a file to upload' ), 'upload_file_msg' );
+	} else {
+		psi.patterns.showLoadingImage({
+			strElementSelector: '#create_email_attachment_dlg'
+		});
+		$( '#form_upload_email_attachment' ).ajaxSubmit({
+			target: '#create_email_attachment_dlg',
+			dataType: 'json',
+			success: function( returnedData ) {
+				for( var i = 0; i < returnedData.length; i++ ) {
+					if( true == returnedData[i].status ) {
+						MessageCenter.ScheduledEmail.addFileAttachment( returnedData[i].id, returnedData[i].title );
+						$( '#create_email_attachment_dlg' ).dialog( 'close' );
+					} else {
+						MessageCenter.showMessage('error',returnedData[i].message, 'upload_file_msg' );
+						$('#form_upload_email_attachment')[0].reset();
+					}
+				}
+				MessageCenter.ScheduledEmail.ajaxSaveScheduledEmail();
+				psi.patterns.removeLoadingImage({
+					strElementSelector: '#create_email_attachment_dlg'
+				});
+			}
+		});
+	}
+	return false;
+};
+
+MessageCenter.ScheduledEmail.addSlotImage = function( strSlotName, intWidth, intHeight ) {
+	gStrImageSlot = 	'#'+strSlotName;
+
+	if( '' == $(gStrImageSlot).attr( 'src' ) ) {
+		psi.mediaLibrary.initiateMediaLibrary({
+			url: MessageCenter.exitTags.load_media_library,
+			params: {
+				referer_id: strSlotName + '_company_media_file',
+				referer_div: strSlotName,
+				marketing_media_type_id: MessageCenter.intMediaTypeId,
+				marketing_media_sub_type_id: MessageCenter.intMarketingMediaSubTypeId
+			},
+			company_media_file: {
+				location_width: intWidth,
+				location_height: intHeight
+			}
+		});
+		GtmTracking.addModalTimestampStart( 'edit', 'create new email > media library' );
+
+		$( 'img#' + strSlotName ).one( 'load', function() {
+			MessageCenter.ScheduledEmail.updateImageButtonLabel();
+		});
+
+		$( gStrImageSlot ).on( 'load', function() {
+			$( gStrImageSlot + '_company_media_file' ).attr( { 'title': $( gStrImageSlot ).attr( 'src' ) } );
+		});
+
+	} else {
+		$(gStrImageSlot).attr( 'src', '' );
+		$(gStrImageSlot+'_company_media_file').attr( { 'value':'', 'title':'' } );
+		MessageCenter.ScheduledEmail.updateImageButtonLabel();
+		gStrImageSlot = '';
+	}
+};
+
+MessageCenter.ScheduledEmail.addLinkToSlotImage = function( strSlotName ) {
+
+	var arrLink		= $( '#' + strSlotName ).attr( 'data-link');
+	var strTarget	= $( '#' + strSlotName ).attr( 'data-link-target');
+
+	var arrLinkData = {
+		slot_name	: strSlotName,
+		url			: arrLink,
+		target		: strTarget
+	};
+
+	psi.patterns.loadDialog({
+		width:600,
+		height:250,
+		strUrl: MessageCenter.exitTags.edit_link_to_image,
+		strContentId:'link_image',
+		title: __( 'Link' ),
+		method:'post',
+		data: arrLinkData,
+		datatype:'json'
+	});
+};
+
+MessageCenter.ScheduledEmail.submitLinkToImage = function() {
+	var strLink		  = $( "#link_url" ).val();
+	var strLinkTarget = $( "#link_target" ).val();
+	var strSlotName	  = $( '#slot_name' ).val();
+	var valUrl		  = /^(http|https|ftp):\/\/(([A-Z0-9][A-Z0-9_\-]*)(\.[A-Z0-9][A-Z0-9_\-]*)+)(:(\d+))?/i;
+
+	if( true == valUrl.test( strLink ) ) {
+		$( '#link_image' ).dialog('close');
+		$( '#' + strSlotName + '_link').val( strLink );
+		$( '#' + strSlotName ).attr( 'data-link', strLink );
+		$( '#' + strSlotName + '_link_target').val( strLinkTarget );
+		$( '#' + strSlotName ).attr( 'data-link-target', strLinkTarget );
+	} else {
+		MessageCenter.showMessage( 'error', __( 'Please enter correct URL.' ), 'show-error-msg' );
+		GtmTracking.addError( 'modal interaction', '', 'save', 'create new email > link', 'Please enter correct URL.' );
+	}
+
+};
+
+MessageCenter.ScheduledEmail.cancelLinkToImage = function() {
+	$( '#link_image' ).dialog('close');
+};
+
+MessageCenter.ScheduledEmail.updateImageButtonLabel = function() {
+
+	$( '.image_slot' ).each(function( index ) {
+		if( '' == $(this).find('img').attr('src') ) {
+			$(this).find('a').html( '<i class="edit"></i> ' + __( 'Edit' ) );
+			$(this).find('img').attr('data-link',"");
+			$(this).find('img').attr('data-link-target',"");
+
+			var strSlotName = $(this).find('img').attr('id');
+			$( '#' + strSlotName + '_link').val("");
+			$( '#' + strSlotName + '_link_target').val("");
+			$(this).find('.image-link-button').hide();
+		} else {
+			$(this).find('a').html( '<i class="delete"></i> ' + __( 'Remove' ) );
+			$(this).find('.image-link-button').show();
+		}
+	});
+};
+
+//Templates section
+MessageCenter.ScheduledEmail.selectTemplate = function(id, arrstrHeaderFooterOptions ) {
+
+	$('#system_message_template_id').val(id);
+
+	psi.patterns.ajaxRequest({
+		url					: MessageCenter.exitTags.edit_email_template,
+		strElementSelector	: '#templateEditor',
+		data				:$('#form_compose_email').serialize(),
+		success				: function( strResponse ) {
+			$('#templateEditor').html( strResponse );
+
+			var arrstrImageSlots = [ 'header_main_image', 'left_image', 'center_image', 'right_image' ];
+			arrstrImageSlots.forEach( function ( strImageSlot ) {
+				if( 0 == $( '#' + strImageSlot ).length ) {
+				  $( '#' + strImageSlot + '_company_media_file' ).attr( 'title', '' );
+				  $( '#' + strImageSlot + '_company_media_file' ).val( '' );
+				} else {
+				  $( '#' + strImageSlot ).attr( 'src', $( '#' + strImageSlot + '_company_media_file' ).attr( 'title' ) );
+				  $( '#' + strImageSlot ).attr( 'data-link', $( '#' + strImageSlot + '_link' ).val() );
+				  $( '#' + strImageSlot ).attr( 'data-link-target', $( '#' + strImageSlot + '_link_target' ).val() );
+				}
+			  } );
+
+			$('.compose-toolbar').show();
+			$('.choose-template-label').hide();
+
+			MessageCenter.ScheduledEmail.changePreviewButtonsStatus();
+			MessageCenter.ScheduledEmail.changeSendTestEmailButtonStatus();
+			MessageCenter.ScheduledEmail.updateImageButtonLabel();
+			MessageCenter.ScheduledEmail.changeDefaultLogoStatus( arrstrHeaderFooterOptions );
+		}
+	});
+};
+
+MessageCenter.ScheduledEmail.changeDefaultLogoStatus = function( arrstrHeaderFooterOptions ) {
+	var intSelectedValue = $('#display_items').val();
+	$('#header_footer_option_type_id').val(null);
+
+	$('#headerPlaceHolder').remove();
+	$('#footerPlaceHolder').remove();
+	$('#logoPlaceHolder').remove();
+
+	var strHeaderPlaceHolder = __( 'Property Header' );
+	var strFooterPlaceHolder = __( 'Property Footer' );
+
+	if( false == isNaN( intSelectedValue ) ) {
+		$('#header_footer_option_type_id').val(intSelectedValue);
+	}
+		switch( intSelectedValue ) {
+			case '1':
+				$('#contents').before( '<div id="logoPlaceHolder">' + __('Logo will display here') + '</div>' );
+				break;
+			case '2':
+				$('#contents').before( '<div id="headerPlaceHolder">' + strHeaderPlaceHolder + '</div>' );
+				break;
+			case '3':
+				$('#contents').after( '<div id="footerPlaceHolder">' + strFooterPlaceHolder + '</div>' );
+				break;
+			case '4':
+				$('#contents').before( '<div id="headerPlaceHolder">' + strHeaderPlaceHolder + '</div>' );
+				$('#contents').after( '<div id="footerPlaceHolder">' + strFooterPlaceHolder + '</div>' );
+				break;
+			default:
+			// default block
+		}
+
+	MessageCenter.ScheduledEmail.ajaxSaveScheduledEmail();
+}
+
+var AUTOSAVE_TIME = 300000; //milisecond; 300000 milisec = 5 min
+var objAutoSaveCall;
+var objAutoSaveRequest = new Object();
+
+MessageCenter.ScheduledEmail.ajaxSaveScheduledEmail = function( boolShowAlertMessage ) {
+
+	var strMsgs = MessageCenter.ScheduledEmail.validateEmailOwner();
+	if( '' != strMsgs ) {
+		MessageCenter.showMessage( 'error', strMsgs );
+		GtmTracking.addError( 'modal interaction', '', 'save', 'create new email', strMsgs );
+		return false;
+	}
+
+	if( $('#subject').val() && false == MessageCenter.ScheduledEmail.validateEmailSubject() ) {
+		return false;
+	}
+
+	if( true == $('#save_scheduled_email_button').hasClass('disabled') ) {
+		return;
+	}
+
+	//dont call ajaxSaveScheduledEmail other then compose email form
+	if(1 > $('#auto_save_flag').length) {
+		clearTimeout( objAutoSaveCall );
+		return;
+	}
+
+	if($('.cke_focus').attr('title')) {
+		MessageCenter.ScheduledEmail.focusOutAndSaveContentData();
+	}
+
+	if(false == $.isEmptyObject(objAutoSaveRequest) && 4 != objAutoSaveRequest.readyState) {
+		setTimeout(function() {
+			MessageCenter.ScheduledEmail.ajaxSaveScheduledEmail(true);
+		}, 5000);
+		return;
+	}
+
+	objAutoSaveRequest = psi.patterns.ajaxRequest({
+		type		: 'POST',
+		url			: MessageCenter.exitTags.ajax_update_scheduled_email,
+		dataType	: 'json',
+		data		: $('#form_compose_email').serialize(),
+		beforeSend	: function() {
+			$('#save_scheduled_email_button').addClass('disabled');
+			if(boolShowAlertMessage) {
+				MessageCenter.showMessage('warning', __( 'Saving...' ), 'ajax_save_message', 3000);
+			}
+		},
+		success		: function( objResponse ) {
+			if( '' == $('#scheduled_email_id').val() ) {
+				$('#scheduled_email_id').val(objResponse.id);
+			}
+			if( '' == $('#system_message_template_id').val() ) {
+				$('#system_message_template_id').val(objResponse.system_message_template_id);
+			}
+
+			$('#is_all_shared_list').val( objResponse.is_all_shared_list );
+
+			if( 0 == objResponse.sharing_permission ) {
+				$('#sharing_button').addClass('disabled');
+			} else {
+				$('#sharing_button').removeClass('disabled');
+			}
+
+			$('#sharingPermission').val(objResponse.sharing_permission);
+			$('#sharingPermissionMessage').html(objResponse.sharing_permission_message);
+			MessageCenter.ScheduledEmail.updateSharingPermission(objResponse);
+
+			$('#save_scheduled_email_button').removeClass('disabled');
+
+			if( '' != objResponse.msg && null != objResponse.msg ) {
+				strmessageType = 'warning';
+
+				if( 0 <= objResponse.msg.indexOf("residentworks.com") ) {
+					strmessageType = 'error';
+					GtmTracking.addError( 'modal interaction', '', 'save', 'create new email', objResponse.msg );
+				}
+
+				MessageCenter.showMessage(strmessageType, objResponse.msg, 'ajax_save_message', 7000);
+			} else {
+				if(boolShowAlertMessage) {
+					MessageCenter.showMessage('warning', __( 'Saved' ), 'ajax_save_message', 2000);
+				}
+			}
+		}
+	});
+
+	//recall auto save if form is presend and email is already saved
+	if( ( 0 < $('#auto_save_flag').length ) && ( 0 < $('#scheduled_email_id').val() ) ) {
+		clearTimeout( objAutoSaveCall );
+		objAutoSaveCall = setTimeout(function(){ MessageCenter.ScheduledEmail.ajaxSaveScheduledEmail(true) }, AUTOSAVE_TIME);
+	}
+
+};
+
+MessageCenter.ScheduledEmail.downloadFileAttachment = function( intFileId ) {
+	window.onbeforeunload = null;
+	location.href = MessageCenter.exitTags.download_email_attachment + '&file[id]=' + intFileId;
+};
+
+MessageCenter.ScheduledEmail.addFileAttachment = function( intFileId, strFileTitle ) {
+	if( $('.file_attachments[value=""]').length > 0 ) {
+		$('input.file_attachments[value=""]:first').attr( { 'value':intFileId, 'title':strFileTitle } );
+	}
+
+	MessageCenter.ScheduledEmail.updateFileAttachmentList();
+};
+
+MessageCenter.ScheduledEmail.deleteFileAttachment = function( intFileId ) {
+	psi.patterns.ajaxRequest({
+		url 	: MessageCenter.exitTags.delete_email_attachment + '&file[id]=' + intFileId,
+		type 	: 'POST',
+		dataType: 'json',
+		success	: function( objResponse ) {
+			if( true == objResponse.status ) {
+				$(".file_attachments[value='" + intFileId + "']").attr( { 'value':'', 'title':'' });
+				MessageCenter.ScheduledEmail.updateFileAttachmentList();
+				MessageCenter.ScheduledEmail.ajaxSaveScheduledEmail();
+			} else {
+				MessageCenter.showMessage( 'warning', objResponse.message, 'ajax_save_message', 2000 );
+				GtmTracking.addError( 'modal interaction', '', 'create new email', 'delete attachment', objResponse.message );
+			}
+		}
+	});
+};
+
+MessageCenter.ScheduledEmail.updateFileAttachmentList = function() {
+	$('#attachedFileList').html('');
+
+	$('.file_attachments').each(function( index ) {
+		if( '' != $(this).attr('value') ) {
+			var intFileId = $(this).attr('value');
+			var strFileTitle = $(this).attr('title');
+
+			var strFileLink = '';
+			strFileLink += "<li id='file_attachment_"+intFileId+"'>";
+			strFileLink += "<a href='#' onclick='MessageCenter.ScheduledEmail.downloadFileAttachment("+ intFileId +");'>"+ strFileTitle +"</a>";
+			strFileLink += "<a href='#' onclick='MessageCenter.ScheduledEmail.deleteFileAttachment("+ intFileId +");'><i class='delete-gray'></i></a>";
+			strFileLink += "</li>";
+
+			$( '#attachedFileList' ).append( strFileLink );
+		}
+	});
+	if( 0 < $(".file_attachments[value='']").length ) {
+		$('#attachFile').show();
+	} else {
+		$('#attachFile').hide();
+	}
+};
+
+
+MessageCenter.ScheduledEmail.validateFileExtension = function( objFileElement ) {
+	var arrobjFiles = $(objFileElement).get(0).files;
+	var arrstrAllowedExtensions = new Array( 'bmp', 'gif', 'jpe', 'jpeg', 'png', 'tif', 'jpg', 'ico', 'txt', 'tiff', 'psd', 'pdf', 'doc', 'docx', 'xls', 'xlsx' );
+	var arrstrInvalidExtensions = [];
+	var boolValidExtension = true;
+
+	for( var i = 0; i < arrobjFiles.length; i++ ) {
+		var strFileExtension = arrobjFiles[i]['name'].split('.').pop().toLowerCase();
+		if( -1 == $.inArray( strFileExtension, arrstrAllowedExtensions ) && -1 == $.inArray( strFileExtension, arrstrInvalidExtensions ) ) {
+			arrstrInvalidExtensions.push( strFileExtension );
+			boolValidExtension = false;
+		}
+	}
+
+	if( false == boolValidExtension ) {
+		var strMessage = __( '{%s, file_extension} is not a supported extension.', { file_extension: arrstrInvalidExtensions.join() } );
+		$( '#upload_file_msg' ).html( '<p class="alert error slim"><i></i>' + strMessage + '</p>' ).show().delay( 3000 ).fadeOut( 1000 );
+		GtmTracking.addError( 'modal interaction', '', 'upload', 'create new email > upload', strMessage );
+		objFileElement.value = '';
+		return false;
+	}
+};
+
+// Preview Data
+MessageCenter.ScheduledEmail.setEmailTemplatePreviewData = function() {
+	$( '#previewAttachedFileList' ).html('');
+	var strFileLinkHtml = '';
+
+	$('.file_attachments').each( function( index ) {
+		if( '' != $(this).attr('value') ) {
+			var intFileId = $(this).attr('value');
+			var strFileTitle = $(this).attr('title');
+			strFileLinkHtml += "<li><i class='attach'></i><a href='#' onclick='MessageCenter.ScheduledEmail.downloadFileAttachment("+ intFileId +");'>"+ strFileTitle +"</a></li>";
+		}
+	});
+
+	if( '' != strFileLinkHtml ) {
+		$( '#previewAttachedFileList' ).append( '<strong>' + __( 'File attachments:' ) + '</strong>' + strFileLinkHtml );
+	}
+};
+
+MessageCenter.ScheduledEmail.changePreviewButtonsStatus = function() {
+	if( '' == $.trim( $('#system_message_template_id').val() ) || '' == $.trim( $('#scheduled_email_filter_id').val() ) ) {
+		$( '#preview-buttons .button' ).addClass( 'disabled' );
+	} else {
+		$( '#preview-buttons .button' ).removeClass( 'disabled' );
+	}
+};
+
+MessageCenter.ScheduledEmail.showPreview = function( strPreviewMode, objElement ) {
+	MessageCenter.ScheduledEmail.ajaxSaveScheduledEmail();
+
+	if( 'desktop' == strPreviewMode ) {
+		var strUrl = MessageCenter.exitTags.preview_sent_email + '&preview_mode=desktop&is_preview=1&scheduled_email_filter_ids=' + $('#scheduled_email_filter_id').val();
+		psi.patterns.loadDialog({
+			title		: __( 'Email Preview' ),
+			strContentId: null,
+			strUrl		: strUrl,
+			width		: 1200,
+			height		: 845,
+			resizable	:false
+		});
+	}
+};
+MessageCenter.ScheduledEmail.changeRandomRecipient = function() {
+	var strUrl = MessageCenter.exitTags.preview_sent_email + "&preview_mode=desktop&scheduled_email_filter_ids=" + $('#scheduled_email_filter_id').val() + "&property_id=" + $('#propertyListForsearchSent').val();
+
+	psi.patterns.ajaxRequest({
+		url: strUrl,
+		dataType: 'json',
+		type: 'POST',
+		success: function( objResponse ) {
+			if( true == objResponse.status ) {
+				$('#recipient_name').text(objResponse.recipient_data.name_first + ' ' + objResponse.recipient_data.name_last );
+				$('#preview_recipient_id_sent').val(objResponse.recipient_data.recipient_id);
+				$('#preview_lease_id_sent').val(objResponse.recipient_data.lease_id);
+				$('#preview_application_id_sent').val(objResponse.recipient_data.application_id);
+			} else if( false == objResponse.status ) {
+				$('#recipient_name').text(objResponse.recipient_data);
+				$('#preview_recipient_id_sent').val('');
+				$('#preview_lease_id_sent').val('');
+				$('#preview_application_id_sent').val('');
+			}
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.changeTestEmailRandomRecipient = function() {
+	var strUrl = MessageCenter.exitTags.load_test_email + "&scheduled_email_filter_ids=" + $('#scheduled_email_filter_id').val() + "&property_id=" + $('#propertyListForsearchSent').val();
+
+	psi.patterns.ajaxRequest({
+		url: strUrl,
+		dataType: 'json',
+		type: 'POST',
+		success: function( objResponse ) {
+			if( true == objResponse.status ) {
+				$('#recipient_name').text(objResponse.recipient_data.name_first+' '+objResponse.recipient_data.name_last );
+				$('#recipient_id').val(objResponse.recipient_data.recipient_id);
+				$('#lease_id').val(objResponse.recipient_data.lease_id);
+				$('#application_id').val(objResponse.recipient_data.application_id);
+			} else if( false == objResponse.status ) {
+				$('#recipient_name').text(objResponse.recipient_data);
+				$('#recipient_id').val('');
+				$('#lease_id').val('');
+				$('#application_id').val('');
+			}
+		}
+	});
+}
+MessageCenter.ScheduledEmail.changeSendTestEmailButtonStatus = function() {
+	if( '' == $('#system_message_template_id').val() || '' == $('#scheduled_email_filter_id').val() || '' == $('#subject').val()) {
+		$( '.send-test-msg' ).addClass( 'disabled' );
+	} else {
+		$( '.send-test-msg' ).removeClass( 'disabled' );
+	}
+};
+
+MessageCenter.ScheduledEmail.validateEmailSubject = function() {
+	var strSubject = $('#subject').val();
+	var boolSubject = true;
+
+	if( strSubject.match(/<[^>]*>/) ) {
+		MessageCenter.showMessage( 'error', __( 'Please do not use HTML tag in subject.' ) );
+		GtmTracking.addError( 'modal interaction', '', 'save', 'create new email', 'Please do not use HTML tag in subject.' );
+		$('#subject').focus();
+		boolSubject = false;
+	}
+
+	var strSanitizedSubject = strSubject.replace( '\\', '' );
+	if( strSubject != strSanitizedSubject ) {
+		MessageCenter.showMessage( 'error', __( 'Please do not use slash (\\) in subject.' ) );
+		GtmTracking.addError( 'modal interaction', '', 'save', 'create new email', 'Please do not use slash (\\) in subject.' );
+		boolSubject = false;
+	}
+
+	return boolSubject;
+};
+
+MessageCenter.ScheduledEmail.validateEmailOwner = function() {
+
+	var intSelectedEmailOwnerId = $( '#email_owner_label_id' ).val();
+	var strEmailOwnerValidationMessage	= '';
+
+	if( '' == intSelectedEmailOwnerId ) {
+		return strEmailOwnerValidationMessage;
+	}
+
+	var arrmixCompanyUsers = $( '#email_owner' ).data( 'companyUsers' );
+
+	if( 'undefined' !== typeof arrmixCompanyUsers && null !== arrmixCompanyUsers ) {
+		var arrintEmailOwnerIds = [];
+		var intIndex = 0, intLength = arrmixCompanyUsers.length;
+		while( intIndex < intLength ) {
+			arrintEmailOwnerIds.push( arrmixCompanyUsers[intIndex++]['id'] );
+		}
+
+		var intOwnerIdIndex = arrintEmailOwnerIds.indexOf( intSelectedEmailOwnerId );
+		if( intOwnerIdIndex < 0 ) {
+			strEmailOwnerValidationMessage = __( 'The selected email owner no longer has the permissions required to send this email. Please select a different email owner to continue.' );
+			return strEmailOwnerValidationMessage;
+		}
+	}
+
+	return strEmailOwnerValidationMessage;
+};
+
+//To load Property Standard Responses For editor plugin
+MessageCenter.ScheduledEmail.loadPropertyStandardResponses = function() {
+	var strUrl = MessageCenter.exitTags.view_property_standard_responses;
+	if( 'undefined' == typeof $( '#scheduled_email_filter_id' ).val() ) return false;
+	var strScheduledEmailFilterId = $('#scheduled_email_filter_id').val();
+	strUrl += '&scheduled_email_filter_id=' + strScheduledEmailFilterId;
+
+	psi.patterns.ajaxRequest({
+		type	: 'POST',
+		url  	: strUrl,
+		dataType: 'json',
+		data	: $('#form_compose_email').serialize(),
+		success : function( objResponse ) {
+			arrQuickResponses = objResponse.quickResponses;
+			boolIsEmployeeList = objResponse.is_employee_list;
+			MessageCenter.ScheduledEmail.init();
+		}
+	});
+};
+
+MessageCenter.ScheduledEmail.loadPropertyLeadSources = function() {
+	var strUrl = MessageCenter.exitTags.view_property_lead_sources;
+	if( 'undefined' == typeof $( '#scheduled_email_filter_id' ).val() ) return false;
+	var strScheduledEmailFilterId = $('#scheduled_email_filter_id').val();
+	strUrl += '&scheduled_email_filter_id=' + strScheduledEmailFilterId;
+
+	psi.patterns.ajaxRequest({
+		type	: 'POST',
+		url		: strUrl,
+		dataType: 'json',
+		data	: $('#form_compose_email').serialize(),
+		success	: function( objResponse ) {
+			arrLeadSources = objResponse.lead_sources;
+
+		}
+	});
+};
+
+MessageCenter.ScheduledEmail.loadPropertyAmenities = function() {
+	var strUrl = MessageCenter.exitTags.view_property_amenities;
+	if( 'undefined' == typeof $( '#scheduled_email_filter_id' ).val() ) return false;
+	var strScheduledEmailFilterId = $('#scheduled_email_filter_id').val();
+	strUrl += '&scheduled_email_filter_id=' + strScheduledEmailFilterId;
+
+	psi.patterns.ajaxRequest({
+		type        : 'POST',
+		url         :  strUrl,
+		dataType    : 'json',
+		data        : $('#form_compose_email').serialize(),
+		success     : function( objResponse ) {
+			arrAmenities = objResponse.amenities;
+		}
+	});
+};
+
+MessageCenter.ScheduledEmail.updateResponsePluginButtonStatus = function() {
+	if( $('#scheduled_email_filter_id').val() ) {
+		if( arrQuickResponses ) {
+			$('.cke_combo__quickresponses').show();
+			$('.cke_combo__quickresponses').parent().css( 'display', 'block' );
+		} else {
+			$('.cke_combo__quickresponses').hide();
+			$('.cke_combo__quickresponses').parent().css( 'display', 'none' );
+		}
+	} else {
+		$('.cke_combo__quickresponses').hide();
+		$('.cke_combo__quickresponses').parent().css( 'display', 'none' );
+	}
+};
+
+MessageCenter.ScheduledEmail.updateSharingPermission = function( objResponse ) {
+
+	var strMsg = '';
+	var boolIsAllSharedList = true;
+	var strFilterListForCreate = $( '#scheduled_email_filter_list_types' ).val();
+	var intScheduledEmailTypeId = $('#scheduled_email_type_id').val();
+
+	if( 'undefined' == typeof strFilterListForCreate ) {
+		strFilterListForCreate = '';
+	}
+
+	if( 1 == $('#is_temporary_list').val() ) {
+		strMsg = __( 'Temporary List can not be used for sharing message' );
+	} else if( '' == $('#scheduled_email_filter_id').val() || 'NULL' == $('#scheduled_email_filter_id').val() ) {
+		strMsg = __( 'You cannot share this email until you select recipients.' );
+	} else if( ( '' == strFilterListForCreate || ( 0 < strFilterListForCreate.length && -1 == strFilterListForCreate.indexOf( intScheduledEmailTypeId ) ) ) && 'false' == $('#is_all_shared_list').val() ) {
+		boolIsAllSharedList = false;
+		strMsg = __( 'You do not have permission to share one or more of the selected lists.' );
+	}
+
+	if( 'undefined' != typeof objResponse ) {
+		boolIsAllSharedList = objResponse.is_all_shared_list;
+	}
+
+	if( '' == $('#scheduled_email_filter_id').val() || 'NULL' == $('#scheduled_email_filter_id').val() || 1 == $('#is_temporary_list').val() || ( ( '' == strFilterListForCreate || ( 0 < strFilterListForCreate.length && -1 == strFilterListForCreate.indexOf( intScheduledEmailTypeId ) ) ) && false == boolIsAllSharedList ) ) {
+		$('#is_shared_email').val('');
+		$('#sharing_permission').val(0);
+		$('#sharingPermissionMessage').html(strMsg);
+
+		GtmTracking.addError( 'modal interaction', '', 'save', 'edit list', strMsg );
+
+		$('#sharing_button').removeClass("on").addClass("off");
+		$('#sharing_button').find("input").val(0);
+		$('#sharing_button').find("span").text(__("Off"));
+		$('#sharing_button').find("b").css( 'left', 1);
+		$('#sharing_button').addClass("disabled")
+	} else {
+		if( 1 == $('#is_shared_email').val() && 1 != $( '#is_temporary_list' ).val() && true == boolIsAllSharedList ) {
+
+			$('.filterListName').each(function(index) {
+				var strContent = $.trim( $( this ).html() );
+
+				if( -1 == strContent.indexOf( '<i class="shared"' ) && -1 == strContent.indexOf( '<i title="Shared" class="shared"' ) ) {
+					strContent = '<i class="shared" title="Shared"></i>' + strContent;
+				}
+
+				$( this ).html( strContent );
+			});
+		}
+	}
+};
+
+function toggleText ( strElementId, intElementCount, strMessage ) {
+	var intTotalSelected = 0;
+
+	document.getElementById( strElementId + '_0' ).checked = false;
+
+	for( i = 1; i <= intElementCount; i++ ) {
+		if( true == document.getElementById( strElementId + '_' + i ).checked ) intTotalSelected = intTotalSelected + 1;
+		if( 2 <= intTotalSelected ) document.getElementById( strElementId ).innerHTML = 'Multiple';
+	}
+
+	// If a single item is selected, put that items label in the visible display area
+	if( 1 == intTotalSelected ) {
+		for( i = 1; i <= intElementCount; i++ ) {
+			if( true == document.getElementById( strElementId + '_' + i ).checked ) {
+				document.getElementById( strElementId ).innerHTML = document.getElementById( 'txt_' + strElementId + '_' + i ).innerHTML;
+			}
+		}
+	}
+
+	if( 0 == intTotalSelected ) {
+		document.getElementById( strElementId + '_0' ).checked = true;
+		document.getElementById( strElementId ).innerHTML = strMessage;
+	}
+};
+
+function unCheckAll ( strElementId, intElementCount, htmlElement ) {
+	intElementCount++;
+
+	for( i = 0; i < intElementCount; i++ ) {
+		document.getElementById( strElementId + '_' + i ).checked = false;
+	}
+
+	htmlElement.checked = true;
+	document.getElementById( strElementId ).innerHTML = document.getElementById("label_"+htmlElement.id).innerHTML;
+};
+
+//CkEditor
+MessageCenter.ScheduledEmail.focusOutAndSaveContentData = function() {
+	var strTitle	= $('.cke_focus').attr('title');
+	var editorId	= strTitle.split(",");
+	editorId		= editorId[1].trim();
+	var editor		= CKEDITOR.instances[editorId];
+	var strData 	= editor.getData();
+
+	strData = strData.replace( /<sampletext>(.*)<\/sampletext>/, '' );
+	$('#TEXT_'+editorId).val( strData );
+};
+
+MessageCenter.ScheduledEmail.Preview.init = function() {
+	psi.patterns.bindEssentials();
+	var propertiesSelectionChanged = false;
+
+	$(document).ready( function() {
+		MessageCenter.ScheduledEmail.Preview.loadRecipientListComboBox();
+		MessageCenter.ScheduledEmail.Preview.loadPropertyComboBox();
+		MessageCenter.ScheduledEmail.Preview.loadRecipientComboBox();
+
+		$('#content_update_sent').click( function(){
+			MessageCenter.ScheduledEmail.Preview.showScheduledEmailContentPreview( 'desktop', this );
+		});
+
+		$('#desktop_button_sent').click( function() {
+			MessageCenter.ScheduledEmail.Preview.showScheduledEmailContentPreview( 'desktop', this );
+		});
+
+		$('#mobile_button_sent').click( function() {
+			MessageCenter.ScheduledEmail.Preview.showScheduledEmailContentPreview( 'mobile', this );
+		});
+
+		$('#pdf_message_content_sent').click( function(){
+			MessageCenter.ScheduledEmail.Preview.pdfMessageContent();
+		});
+
+		$('#print_message_content_sent').click( function(){
+			MessageCenter.ScheduledEmail.Preview.printMessageContent();
+		});
+
+		if( '' == $("#preview_recipient_id_sent").val() ) {
+			$('#recipient_name').text(__( 'No {%s,0} found', ['{$scheduled_email_type}'] ));
+		}
+
+		$('#content_update_sent').click();
+	});
+
+	$('#message_preview_frame_sent').load(function() {
+		MessageCenter.ScheduledEmail.setEmailTemplatePreviewData();
+	});
+};
+
+MessageCenter.ScheduledEmail.Preview.showScheduledEmailContentPreview = function( strPreviewMode, objElement ) {
+
+	if( $('#scheduled_email_id').length ) {
+		intScheduledEmailId = $('#scheduled_email_id').val();
+	}
+
+	var emailContentPreviewUrl = MessageCenter.exitTags.scheduled_email_content_preview + "&system_message_template_id=" + $('#system_message_template_id').val() + "&scheduled_email[id]=" + intScheduledEmailId + "&property_id=" + $('#propertyListForsearchSent').val() + "&recipient_id=" + $("#preview_recipient_id_sent").val() + "&lease_id=" + $("#preview_lease_id_sent").val() + "&application_id=" + $("#preview_application_id_sent").val() + "&recipient_list_id=" + $("#selectedRecipientForsearchSent").val();
+
+	var message_preview_iframe		= document.createElement("IFRAME");
+	message_preview_iframe.id		="message_preview_iframe_sent";
+	message_preview_iframe.setAttribute("src", emailContentPreviewUrl);
+
+	var previewContainer	= ( 'mobile' == strPreviewMode ) ? '#mobile_iframe_holder_sent' : '#desktop_iframe_holder_sent';
+	var emptyContainer		= ( 'mobile' == strPreviewMode ) ? '#desktop_iframe_holder_sent' : '#mobile_iframe_holder_sent';
+	var activeButton		= ( 'mobile' == strPreviewMode ) ? '#mobile_button_sent' : '#desktop_button_sent';
+	var disableButton		= ( 'mobile' == strPreviewMode ) ? '#desktop_button_sent' : '#mobile_button_sent';
+
+	$(emptyContainer).html('');
+	$(emptyContainer).addClass( 'hide' );
+	$(previewContainer).removeClass( 'hide' );
+	$(previewContainer).html(message_preview_iframe);
+	$(disableButton).removeClass( 'button action' );
+	$(activeButton).addClass( 'button action' );
+
+	if( 'mobile' == strPreviewMode ) {
+		message_preview_iframe.style.width = 254+"px";
+		message_preview_iframe.style.height = "84%";
+		message_preview_iframe.frameborder  = "0";
+	} else {
+		var intDialogHeight	= ( $(window).height() < 700 )? 350 : 550;
+		intDialogHeight		= intDialogHeight - 10 - parseInt( $('#attachment_holder').height() );
+
+		$('.desktop_holder').height(intDialogHeight);
+
+		message_preview_iframe.style.width = 680+"px";
+		message_preview_iframe.style.height = intDialogHeight+"px";
+		message_preview_iframe.style.border = "none";
+		message_preview_iframe.scrolling="auto";
+	}
+
+	psi.patterns.showLoadingImage({
+		strElementSelector: previewContainer
+	});
+
+	message_preview_iframe.onload = function(){
+		psi.patterns.removeLoadingImage({
+			strElementSelector: previewContainer
+		});
+	}
+
+	$('#message_preview_frame_sent').load(function(){
+		MessageCenter.ScheduledEmail.setEmailTemplatePreviewData();
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.loadRecipientListComboBox = function() {
+
+	$( '#searchRecipientListComboboxSent' ).val(  $('option:selected', '#selectedRecipientForsearchSent').data('title') )
+	$( '#searchRecipientListComboboxSent' ).psiSearchCombobox({
+		delay	: 0,
+		dataList: $('#selectedRecipientForsearchSent'),
+		select	: function(event, response) {
+			MessageCenter.ScheduledEmail.Preview.loadPropertiesList( response.item.data );
+			$( '#selectedRecipientForsearchSent' ).val( response.item.data );
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.loadPropertyComboBox = function() {
+
+	$( '#searchPropertyComboboxSent' ).val( $('option:selected', '#propertyListForsearchSent').data('title') )
+	$( '#searchPropertyComboboxSent' ).psiSearchCombobox({
+		delay	: 0,
+		dataList: $('#propertyListForsearchSent'),
+		select	: function(event, response) {
+			MessageCenter.ScheduledEmail.Preview.loadPropertyRecipientsList( response.item.data );
+			$('#propertyListForsearchSent').val( response.item.data );
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.loadTestMessagePropertyComboBox = function() {
+
+	$( '#searchPropertyComboboxSent' ).val( $('option:selected', '#propertyListForsearchSent').data('title') )
+	$( '#searchPropertyComboboxSent' ).psiSearchCombobox({
+		delay	: 0,
+		dataList: $('#propertyListForsearchSent'),
+		select	: function(event, response) {
+			MessageCenter.ScheduledEmail.Preview.loadTestMessagePropertyRecipientsList( response.item.data );
+			$('#propertyListForsearchSent').val( response.item.data );
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.loadRecipientComboBox = function() {
+
+	$( '#searchRecipientComboboxSent' ).val(  $('option:selected', '#recipientsListForsearchSent').data('name'))
+	$( '#searchRecipientComboboxSent' ).psiSearchCombobox({
+		delay: 0,
+		dataList: $('#recipientsListForsearchSent'),
+		select: function(event, response) {
+			$('#preview_recipient_id_sent').val( $(response.item.option).data('recipient-id') );
+			$('#preview_lease_id_sent').val( $(response.item.option).data('lease-id') );
+			$('#preview_application_id_sent').val( $(response.item.option).data('application-id') );
+			$('#recipientsListForsearchSent').val(response.item.data);
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.loadPropertiesList = function( intScheduledEmailFilterId ) {
+	var strUrl = MessageCenter.exitTags.preview_sent_email + "&preview_mode=desktop&scheduled_email_filter_ids=" + intScheduledEmailFilterId;
+
+	psi.patterns.ajaxRequest({
+		url: strUrl,
+		type: 'GET',
+		success: function( data ) {
+			$('#properties_select_wrapper_sent').html( data );
+			MessageCenter.ScheduledEmail.Preview.loadPropertyComboBox();
+		},
+		complete: function() {
+			MessageCenter.ScheduledEmail.Preview.loadPropertyRecipientsList( $("#propertyListForsearchSent option:first").val() )
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.loadTestMessagePropertiesList = function( intScheduledEmailFilterId ) {
+	var strUrl = MessageCenter.exitTags.preview_sent_email + "&preview_mode=desktop&scheduled_email_filter_ids=" + intScheduledEmailFilterId;
+
+	psi.patterns.ajaxRequest({
+		url: strUrl,
+		type: 'GET',
+		success: function( data ) {
+			$('#properties_select_wrapper').html( data );
+			MessageCenter.ScheduledEmail.Preview.loadTestMessagePropertyComboBox();
+		},
+		complete: function() {
+			MessageCenter.ScheduledEmail.Preview.loadTestMessagePropertyRecipientsList( $("#propertyListForsearchSent option:first").val() );
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.loadTestMessagePropertyRecipientsList = function( intPropertyId ) {
+
+	var strUrl = MessageCenter.exitTags.load_test_email + "&scheduled_email_filter_ids=" + $('#scheduled_email_filter_id').val() + "&property_id=" + intPropertyId;
+
+	psi.patterns.ajaxRequest({
+		url: strUrl,
+		type: 'GET',
+		success: function( data ) {
+			psi.patterns.ajaxRequest({
+				url: strUrl,
+				dataType: 'json',
+				type: 'POST',
+				success: function( objResponse ) {
+					if( true == objResponse.status ) {
+						$('#recipient_name').text(objResponse.recipient_data.name_first + ' ' + objResponse.recipient_data.name_last );
+						$('#recipient_id').val(objResponse.recipient_data.recipient_id);
+						$('#lease_id').val(objResponse.recipient_data.lease_id);
+						$('#application_id').val(objResponse.recipient_data.application_id);
+					} else if( false == objResponse.status ) {
+						$('#recipient_name').text(objResponse.recipient_data);
+						$('#recipient_id').val('');
+						$('#lease_id').val('');
+						$('#application_id').val('');
+					}
+				}
+			});
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.loadPropertyRecipientsList = function( intPropertyId ) {
+	var strUrl = MessageCenter.exitTags.preview_sent_email + "&preview_mode=desktop&scheduled_email_filter_ids=" + $('#selectedRecipientForsearchSent').val() + "&property_id=" + intPropertyId;
+
+	psi.patterns.ajaxRequest({
+		url: strUrl,
+		type: 'GET',
+		success: function( data ) {
+			$('#recipients_select_wrapper_sent').html(data);
+			MessageCenter.ScheduledEmail.Preview.loadRecipientComboBox();
+		}
+	});
+}
+
+MessageCenter.ScheduledEmail.Preview.printMessageContent = function() {
+	var printIframe = document.getElementById("message_preview_iframe_sent").contentWindow
+
+	printIframe.print();
+}
+
+MessageCenter.ScheduledEmail.Preview.pdfMessageContent = function() {
+
+}
+
+MessageCenter.deleteScheduledEmails = function( strUrl ) {
+	GtmTracking.addComponentInteraction( 'delete scheduled email', 'selection' );
+	var strScheduledEmailIds = "";
+	var objScheduledEmail = $( ".emailTabAlerts" )
+	var boolIsEmailSelected = false;
+
+	$( '.scheduledEmailId' ).each(function( index ){
+		if( true == $( this ).prop('checked' ) ) {
+			strScheduledEmailIds = strScheduledEmailIds + $( this ).val() + ",";
+			boolIsEmailSelected = true;
+		}
+	});
+
+	if( true == boolIsEmailSelected ) {
+		strUrl = strUrl + '&scheduled_email[ids]=' + strScheduledEmailIds;
+		psi.patterns.ajaxRequest({
+			type	: 'POST',
+			url		: strUrl,
+			dataType: 'json',
+			success : function( objResponse ) {
+				if( false == objResponse.status ) {
+					objScheduledEmail.addClass( 'alert slim' );
+					objScheduledEmail.addClass( 'error' );
+					objScheduledEmail.html(objResponse.message).fadeIn().animate( { opacity: 1.0 } , 7000).fadeOut(5000);
+					GtmTracking.addError( 'component interaction', 'scheduled', '', '', objResponse.message );
+					loadPendingTab();
+				} else {
+					objScheduledEmail.addClass( 'alert slim' );
+					objScheduledEmail.addClass( 'success' );
+					objScheduledEmail.html(objResponse.message).fadeIn().animate( { opacity: 1.0 } , 7000).fadeOut(5000);
+					loadCurrentTab(true);
+				}
+			}
+		});
+	} else {
+		alert( __( "Select at least one email" ) );
+		GtmTracking.addError( 'component interaction', 'scheduled', '', '', 'Select at least one email' );
+		$('.tip').parent().css('opacity', '');
+		$('.tip').remove();
+	}
+}
+
+MessageCenter.deleteDraftedEmails = function( strUrl ) {
+	GtmTracking.addComponentInteraction( 'delete draft email', 'selection' );
+	var strScheduledEmailIds = "";
+	var objScheduledEmail = $( ".emailTabAlerts" )
+	var boolIsEmailSelected = false;
+
+	$( '.draftedEmailId' ).each(function( index ){
+		if( true == $( this ).prop('checked' ) ) {
+			strScheduledEmailIds = strScheduledEmailIds + $( this ).val() + ",";
+			boolIsEmailSelected = true;
+		}
+	});
+
+	if( true == boolIsEmailSelected ) {
+		strUrl = strUrl + '&scheduled_email[ids]=' + strScheduledEmailIds;
+
+		psi.patterns.ajaxRequest({
+			type	: 'POST',
+			url		: strUrl,
+			dataType: 'json',
+			success : function( objResponse ) {
+				if( false == objResponse.status ) {
+					objScheduledEmail.addClass( 'alert slim' );
+					objScheduledEmail.addClass( 'error' );
+					objScheduledEmail.html(objResponse.message).fadeIn().animate( { opacity: 1.0 } , 7000).fadeOut(5000);
+					GtmTracking.addError( 'component interaction', 'drafts', '', '', objResponse.message );
+					loadDraftTab(true);
+				} else {
+					objScheduledEmail.addClass( 'alert slim' );
+					objScheduledEmail.addClass( 'success' );
+					objScheduledEmail.html(objResponse.message).fadeIn().animate( { opacity: 1.0 } , 7000).fadeOut(5000);
+					loadCurrentTab(true);
+				}
+			}
+		});
+	} else {
+		alert( __( "Select atleast one email" ) );
+		GtmTracking.addError( 'component interaction', 'drafts', '', '', 'Select atleast one email' );
+		loadCurrentTab(true);
+	}
+}
+
+MessageCenter.downloadSentEmail = function( strUrl ) {
+	GtmTracking.addComponentInteraction( 'download sent email', 'selection' );
+	if( $('#downloadSentEmailButton').hasClass('disabled') ) return false;
+
+	var strSentEmailIds = "";
+	var objSentEmail = $( ".emailTabAlerts" );
+	var boolIsEmailSelected = false;
+
+	$( '.sentEmailId' ).each(function( index ){
+		if( true == $( this ).prop('checked' ) ) {
+			strSentEmailIds = strSentEmailIds + $( this ).val() + ",";
+			boolIsEmailSelected = true;
+		}
+	});
+
+	if( true == boolIsEmailSelected ) {
+		$( '#form_sent_email' ).attr( 'action', strUrl + '&scheduled_email[ids]=' + strSentEmailIds);
+		$( '#form_sent_email' ).submit();
+	} else {
+		alert( __( 'Select at least one email' ) );
+		GtmTracking.addError( 'component interaction', 'sent', '', '', 'Select at least one email' );
+	}
+
+}
+
+// ------------------Filter List-------------------------------
+MessageCenter.ScheduledEmailFilterList.init = function() {
+	$('#scheduled_email_filter_temporary_tab').click(function(){
+		$('#filter_list_filter_sort_by_option').val('updated_on');
+		$('#filter_list_filter_sort_order').val('DESC');
+		boolIsReset = 1;
+		loadTemporaryTab(true);
+	});
+
+	$('#scheduled_email_filter_saved_tab').click(function(){
+		$('#filter_list_filter_sort_by_option').val('updated_on');
+		$('#filter_list_filter_sort_order').val('DESC');
+		boolIsReset = 1;
+		loadSavedTab(true);
+	});
+}
+
+function setDefaultFilterSortOrderOptions () {
+	var strSortOrder 	= $('#filter_list_sort_order').val();
+	var strSortOption 	= $('#filter_list_sort_by_option').val();
+
+	if( '' != strSortOption ) {
+		var objElement 	= $('#' +strSortOption);
+		objElement.parent().addClass('selected');
+
+		if( 'DESC' == strSortOrder ) {
+			objElement.parent().find('i').addClass('desc');
+		} else if( 'ASC' == strSortOrder ) {
+			objElement.parent().find('i').addClass('asc');
+		}
+	}
+}
+
+function sortContactsFilterList( strElement ) {
+	var objElement = $('#' + strElement);
+	var strSortOrder = $('#filter_list_sort_order').val();
+	var strOldSortByOption = $('#filter_list_sort_by_option').val();
+
+	$('#filter_list_sort_by_option').val(strElement);
+
+	if( strOldSortByOption == strElement ) {
+		if( 'DESC' == strSortOrder ) {
+			objElement.parent().find('i').removeClass('desc').addClass('asc');
+			$('#filter_list_sort_order').val('ASC');
+		} else if( 'ASC' == strSortOrder ) {
+			objElement.parent().find('i').removeClass('asc').addClass('desc');
+			$('#filter_list_sort_order').val('DESC');
+		}
+	} else {
+		if( 'DESC' == strSortOrder ) {
+			objElement.parent().find('i').removeClass('desc').addClass('asc');
+			$('#filter_list_sort_order').val('ASC');
+		}
+	}
+
+	loadRecipients();
+}
+
+MessageCenter.ScheduledEmailFilterList.resetFilters = function( strCreatedStartDate, strCreatedEndDate ) {
+
+	$("#scheduled_email_filter_search_filter_start_date").datepicker("setDate", strCreatedStartDate);
+	$(".scheduled_email_filter_start_date").datepicker("setDate", strCreatedStartDate);
+	$("#scheduled_email_filter_search_filter_start_date").datepicker( "refresh" );
+	$( document ).find("#ui-datepicker-div .ui-datepicker-current-day").trigger("click");
+
+	$("#scheduled_email_filter_search_filter_end_date").datepicker("setDate", strCreatedEndDate);
+	$(".scheduled_email_filter_end_date").datepicker("setDate", strCreatedEndDate);
+	$("#scheduled_email_filter_search_filter_end_date").datepicker( "refresh" );
+	$( document ).find("#ui-datepicker-div .ui-datepicker-current-day").trigger("click");
+
+	$('#last_used_start_day').val('');
+	$('#last_used_start_month').val('');
+	$('#last_used_start_year').val('');
+
+	$('#last_used_end_day').val('');
+	$('#last_used_end_month').val('');
+	$('#last_used_end_year').val('');
+
+	if( true == $('.switch-button').hasClass('on') ) {
+		$('.switch-button').trigger('click');
+	}
+
+	$('#adv_property_search').text( __( 'All Properties' ) );
+	$('.multiselect-property').prop('checked', false);
+	$('#adv_property_search_0').prop('checked', true);
+
+	$('.scheduled_email_filter_search_filter').val('');
+	$('#scheduled_email_filter_search_filter_last_used_start_date').val( '' );
+	$('#scheduled_email_filter_search_filter_last_used_end_date').val( '' );
+	$('#scheduled_email_filter_search_filter_sort_by_field').val('updated_on');
+	$('#scheduled_email_filter_search_filter_sort_by_order').val('DESC');
+	$('.autocomplete-tags .remove-tags').trigger( "click" );
+	$('#created_by_input').val('');
+	$('#company_user_id').val('');
+
+	boolIsReset 			= 1;
+	strActiveSortedColumnId = $('#saved_filter_list th.selected').attr('id');
+	loadCurrentTab(true);
+}
+
+MessageCenter.ScheduledEmailFilterList.applySettings = function() {
+	if(true == $('.refresh-report').hasClass('disabled')) return false;
+
+	var boolIsValidate = true;
+
+
+	if( ( intScheduledEmailTypeResident == $('#scheduled_email_type').val()
+		&& ( '' != $('#scheduled_email_filter_balance_due_min').val() || '' != $('#scheduled_email_filter_balance_due_max').val() )
+		&& ( '' != $('#scheduled_email_filter_credit_balance_min').val() || '' != $('#scheduled_email_filter_credit_balance_max').val() )
+		&& 1 == $('.properties:checked').length ) ) {
+		MessageCenter.showMessage( 'error', __( 'Only one balance type filter is allowed at a time' ), 'step3_error_message' );
+		GtmTracking.addError( 'modal interaction', '', 'compose message', 'create new email', 'Only one balance type filter is allowed at a time' );
+		return false;
+	}
+
+	if( intScheduledEmailTypeResident == $( '#scheduled_email_type' ).val() ) {
+		var strUnitNumber = $( '#unit_numbers' ).val();
+		if( 1 < strUnitNumber.split( '-' ).length-1 && ( 0 < strUnitNumber.split( ',' ).length-1 || 0 < strUnitNumber.split( ' ' ).length-1 ) ) {
+			var boolIsValidUnitRange = true;
+			var intUnitLength = strUnitNumber.length;
+			for( var intUnitIndex = 0; intUnitIndex < intUnitLength; intUnitIndex++ ) {
+				if( ' ' === strUnitNumber[intUnitIndex] && ( '-' === strUnitNumber[intUnitIndex+1] || '-' === strUnitNumber[intUnitIndex-1]  ) ) continue;
+				if( strUnitNumber[intUnitIndex] === ' ' || strUnitNumber[intUnitIndex] === ',') boolIsValidUnitRange = false;
+			}
+
+			if( false == boolIsValidUnitRange ) {
+				MessageCenter.showMessage( 'error', __( 'Only one unit range filter allowed at a time !' ), 'step3_error_message' );
+				GtmTracking.addError( 'modal interaction', '', 'compose message', 'create new email', 'Only one unit range filter allowed at a time !' );
+				return false;
+			}
+		}
+	}
+
+	if( true == boolIsValidateFilters ) {
+		boolIsValidate = validateFilters();
+	}
+
+	if(boolIsValidate) {
+		loadRecipients();
+	}
+}
+// ------------------ Filter list for Resident ------------------
+MessageCenter.ScheduledEmailFilterList.Resident.init = function() {
+	entrataUI.components.init('#form_scheduled_email_filters');
+	$( '#manual-update-balance-credit' ).click( function() {
+
+		if( true == $( '#manual-update-balance-due' ).hasClass( 'disabled' ) ) return false;
+
+		$( '#manual-update-balance-due-sync-icon-credit' ).hide();
+		$( '#manual-update-balance-due-credit' ).addClass( 'disabled' );
+		$( '.refresh-report' ).addClass( 'disabled' );
+		$( '.reset-report' ).addClass( 'disabled' );
+		$( '#scheduled_email_filter_properties' ).addClass( 'disabled' );
+		$( '#manual-update-balance-due-processing-credit' ).show();
+
+		$.ajax( {
+			url: MessageCenter.exitTags.retrieve_customers_with_balance,
+			dataType: 'json',
+			data: $( '#form_scheduled_email_filters' ).serialize(),
+			type: 'POST'
+		} ).done( function( objResponse ) {
+
+			$( '#manual-update-balance-due-credit' ).removeClass( 'disabled' );
+			$( '.refresh-report' ).removeClass( 'disabled' );
+			$( '.reset-report' ).removeClass( 'disabled' );
+			$( '#scheduled_email_filter_properties' ).removeClass( 'disabled' );
+			$( '#manual-update-balance-due-processing-credit' ).hide();
+			$( '#manual-update-balance-due-sync-icon-credit' ).show();
+
+			if( false == objResponse.status ) {
+				MessageCenter.showMessage( 'error', objResponse.msg, 'validation_filter_msg' );
+				GtmTracking.addError( 'modal interaction', '', 'compose message', 'create new email', objResponse.msg );
+			} else {
+				MessageCenter.showMessage( 'success', objResponse.msg, 'validation_filter_msg' );
+			}
+		} );
+		return false;
+	} );
+
+	$( '#manual-update-balance-oustanding' ).click( function() {
+
+		if( true == $( '#manual-update-balance-due' ).hasClass( 'disabled' ) ) return false;
+
+		$( '#manual-update-balance-due-sync-icon-outstanding' ).hide();
+		$( '#manual-update-balance-due-outstanding' ).addClass( 'disabled' );
+		$( '.refresh-report' ).addClass( 'disabled' );
+		$( '.reset-report' ).addClass( 'disabled' );
+		$( '#scheduled_email_filter_properties' ).addClass( 'disabled' );
+		$( '#manual-update-balance-due-processing-outstanding' ).show();
+
+		$.ajax( {
+			url: MessageCenter.exitTags.retrieve_customers_with_balance,
+			dataType: 'json',
+			data: $( '#form_scheduled_email_filters' ).serialize(),
+			type: 'POST'
+		} ).done( function( objResponse ) {
+
+			$( '#manual-update-balance-due-oustanding' ).removeClass( 'disabled' );
+			$( '.refresh-report' ).removeClass( 'disabled' );
+			$( '.reset-report' ).removeClass( 'disabled' );
+			$( '#scheduled_email_filter_properties' ).removeClass( 'disabled' );
+			$( '#manual-update-balance-due-processing-outstanding' ).hide();
+			$( '#manual-update-balance-due-sync-icon-outstanding' ).show();
+
+			if( false == objResponse.status ) {
+				MessageCenter.showMessage( 'error', objResponse.msg, 'validation_filter_msg' );
+				GtmTracking.addError( 'modal interaction', '', 'compose message', 'create new email', objResponse.msg );
+			} else {
+				MessageCenter.showMessage( 'success', objResponse.msg, 'validation_filter_msg' );
+			}
+		} );
+		return false;
+	} );
+}
+// ------------------Saved Tab Filter list  ------------------
+MessageCenter.ScheduledEmailFilterList.SavedTab.init = function() {
+
+	$('.sort_saved_filter_list').click(function() {
+		var strSortOption = $(this).data('sort-option');
+		MessageCenter.ScheduledEmailFilterList.SavedTab.sortFilterList( strSortOption );
+	});
+}
+
+MessageCenter.ScheduledEmailFilterList.SavedTab.setDefaultSortOrderOptions = function( ) {
+
+	var strSortOrder = $('#filter_list_filter_sort_order').val();
+	var strSortOption = $('#filter_list_filter_sort_by_option').val();
+	var objElement = $('#' +strSortOption);
+
+	$('#filter_list_filter_sort_by_option').val(strSortOption);
+	$('#filter_list_filter_sort_order').val(strSortOrder);
+	objElement.addClass('selected');
+
+	if( 'DESC' == strSortOrder ) {
+		objElement.find('i').addClass('desc');
+	} else if( 'ASC' == strSortOrder ) {
+		objElement.find('i').addClass('asc');
+	}
+}
+
+MessageCenter.ScheduledEmailFilterList.SavedTab.sortFilterList = function( strSortColumnName ) {
+
+	var objElement = $('#' + strSortColumnName);
+	var strSortOrder = $('#filter_list_filter_sort_order').val();
+	var strOldSortByOption = $('#filter_list_filter_sort_by_option').val();
+
+	$('#filter_list_filter_sort_by_option').val(strSortColumnName);
+
+	if( strOldSortByOption == strSortColumnName ) {
+		if( 'DESC' == strSortOrder ) {
+			objElement.find('i').removeClass('desc').addClass('asc');
+			$('#filter_list_filter_sort_order').val('ASC');
+		} else if( 'ASC' == strSortOrder ) {
+			objElement.find('i').removeClass('asc').addClass('desc');
+			$('#filter_list_filter_sort_order')	.val('DESC');
+		}
+	} else {
+		if( 'DESC' == strSortOrder ) {
+			objElement.find('i').removeClass('desc').addClass('asc');
+			$('#filter_list_filter_sort_order').val('ASC');
+		}
+	}
+
+	loadSavedTab(true);
+}
+
+// ------------------Temporary Tab Filter list  ------------------
+
+MessageCenter.ScheduledEmailFilterList.Temporary.init = function() {
+
+	$('.sort_temporary_filter_list').click(function() {
+		var strSortOption = $(this).data('sort-option');
+		MessageCenter.ScheduledEmailFilterList.Temporary.sortFilterList( strSortOption );
+	});
+}
+
+MessageCenter.ScheduledEmailFilterList.Temporary.setDefaultSortOrderOptions = function( ) {
+
+	var strSortOrder = $('#filter_list_filter_sort_order').val();
+	var strSortOption = $('#filter_list_filter_sort_by_option').val();
+	var objElement = $('#' +strSortOption);
+
+	$('#filter_list_filter_sort_by_option').val(strSortOption);
+	$('#filter_list_filter_sort_order').val(strSortOrder);
+	objElement.addClass('selected');
+
+	if( 'DESC' == strSortOrder ) {
+		objElement.find('i').addClass('desc');
+	} else if( 'ASC' == strSortOrder ) {
+		objElement.find('i').addClass('asc');
+	}
+}
+
+MessageCenter.ScheduledEmailFilterList.Temporary.sortFilterList = function( strSortColumnName ) {
+
+	var objElement = $('#' + strSortColumnName);
+	var strSortOrder = $('#filter_list_filter_sort_order').val();
+	var strOldSortByOption = $('#filter_list_filter_sort_by_option').val();
+
+	$('#filter_list_filter_sort_by_option').val(strSortColumnName);
+
+	if( strOldSortByOption == strSortColumnName ) {
+		if( 'DESC' == strSortOrder ) {
+			objElement.find('i').removeClass('desc').addClass('asc');
+			$('#filter_list_filter_sort_order').val('ASC');
+		} else if( 'ASC' == strSortOrder ) {
+			objElement.find('i').removeClass('asc').addClass('desc');
+			$('#filter_list_filter_sort_order')	.val('DESC');
+		}
+	} else {
+		if( 'DESC' == strSortOrder ) {
+			objElement.find('i').removeClass('desc').addClass('asc');
+			$('#filter_list_filter_sort_order').val('ASC');
+		}
+	}
+
+	loadTemporaryTab(true);
+}
+
+MessageCenter.ScheduledEmailFilterList.setMultiselectorWidth = function( strInputWidth ) {
+	$('div.property-search').click(function() {
+		setTimeout(function() {
+			$('input#option_filter_text').css('width', strInputWidth );
+		}, 50);
+	});
+}
+
+MessageCenter.ScheduledEmailFilterList.processContactlist = function() {
+	$( '.scheduled_email_filter_row' ).click( function( e ) {
+		clearRecipientCountAjaxRequests();
+		var intCellPosition = $( e.target ).closest( 'td' ).index();
+		if( intCellPosition != 0 ) {
+			MessageCenter.loadContactList( $( this ).attr( 'tag' ) );
+			e.stopPropagation();
+		}
+	});
+
+	$( '.viewAction' ).click( function( e ) {
+		loadFiltersApplied( $( this ).attr( 'tag' ) );
+		e.stopPropagation();
+	});
+
+	$( "#select-all" ).click( function () {
+		$('input[type=checkbox].filterListId:not(:disabled)').prop( 'checked', $( this ).prop( 'checked' ) );
+	});
+
+	$( ".filterListId" ).click( function () {
+
+		if( false == $( this ).prop( 'checked' ) ) {
+			$( "#select-all").prop( 'checked',false );
+		}
+		if( $( '.filterListId' ).size() == $( '.filterListId:checked' ).size() ) {
+			$( "#select-all" ).prop( 'checked' ,true );
+		}
+	});
+
+	$( '#bulk-filter-delete' ).click( function() {
+		var strFilterIds = [];
+
+		if( 0 == $('.filterListId:checked').length ) {
+			alert( __( 'Please select at least one list' ) );
+			return false;
+		}
+
+		$( '.filterListId:checked' ).each( function (){
+			strFilterIds.push($( this ).val());
+		});
+
+		psi.patterns.loadDialog({
+			title			: __( "Delete List" ),
+			strContentId	: "delete_list_dlg",
+			strUrl			: MessageCenter.exitTags.view_bulk_scheduled_emails_by_filters + '&scheduled_email_filter[ids]=' + strFilterIds,
+			width			: 850,
+			height			: 800
+		});
+	});
+}
+
+MessageCenter.ScheduledEmailFilterList.deletebulkFilterList = function () {
+
+	$('#delete_bulk_list').click( function(){
+
+		psi.patterns.showLoadingImage({
+			strElementSelector: '#delete_list_dlg'
+		});
+
+		var strUrl = MessageCenter.exitTags.delete_bulk_scheduled_email_filters;
+		strUrl += '&scheduled_email_filter[ids]=' + $('#scheduled_emails_filter_ids').val();
+
+		psi.patterns.ajaxRequest({
+			url					: strUrl,
+			strElementSelector	: '',
+			success				: function( strResponse ) {
+				psi.patterns.removeLoadingImage({
+					strElementSelector: "#delete_list_dlg"
+				});
+
+				var objJsonMsg = $.parseJSON( strResponse );
+
+				if( true == objJsonMsg.status ) {
+					$( '#bulk_list_delete_response' ).html( '<p class="alert success slim"><i></i>' + objJsonMsg.message + '</p>' ).delay( 1000 ).fadeOut( 0, function(){
+						$('#delete_list_dlg').dialog( 'close' );
+						loadCurrentTab();
+					});
+				} else {
+					$( '#bulk_list_delete_response' ).html( '<p class="alert error slim"><i></i>' + objJsonMsg.message + '</p>' );
+					GtmTracking.addError( 'modal interaction', '', 'delete', 'delete list', objJsonMsg.message );
+				}
+			}
+		});
+	});
+}
+
+MessageCenter.ScheduledEmailFilterList.loadGroupContracts = function(objElm) {
+	if( 0 == $('#type_group').length ) {
+		psi.patterns.ajaxRequest( {
+			url: MessageCenter.exitTags.load_group_contracts,
+			strElementSelector: "#type_resident",
+			data: $( objElm ).closest( 'form' ).serialize(),
+			success: function( strResult ) {
+				$( '#type_resident' ).after( strResult );
+				psi.patterns.removeLoadingImage( {
+					strElementSelector: '#type_resident'
+				} );
+				psi.patterns.bindEssentials();
+				MessageCenter.multiOptionForContracts('group_contracts');
+				$('.group-contract-ids').remove();
+			}
+		} );
+	} else {
+		$('#type_group').show();
+	}
+};
+
+MessageCenter.Reports.DateOfMessageOpens.init = function() {
+
+	var strGraphCategory = $('#graph-category').val();
+	var strGraphData = $('#graph-data').val();
+	var chartHeight = '400';
+
+	if( '' == strGraphCategory || '' == strGraphData ) {
+		chartHeight = '100';
+	}
+
+	$(window).ready(function() {
+
+		setTimeout(function() {
+			var zoomline = new FusionCharts({
+				type: 'zoomline',
+				width: '100%',
+				height: chartHeight,
+				dataFormat: 'json',
+				dataSource: {
+					"chart": {
+						"theme": "entrata",
+					},
+					"categories": [ {
+						"category":  strGraphCategory
+					}
+					],
+					"dataset": [ {
+						"seriesname": "Message Opens",
+						"data": strGraphData
+					}
+					]
+				},
+			});
+			zoomline.render("zoomline");
+
+		}, 500 );
+	});
+}
+
+MessageCenter.Reports.ClickRecipientList.init = function() {
+	$('.close-click-list-form').click(function(){
+		$('#clicks_list').dialog('close');
+	});
+
+	$('#quick_search_recipents').submit(function(){
+
+		psi.patterns.ajaxRequest( {
+			url: MessageCenter.exitTags.view_clicked_recipient_list + '&kill_session=1&quick_search=1',
+			strElementSelector: '#ricipients_list',
+			data: jQuery('#quick_search_recipents').serialize()
+		} );
+
+		return false;
+	});
+
+	$( '.resident-profile' ).unbind( 'click' ).bind( 'click', function(){
+		var intLeaseId = $( this ).data( 'lease-id' );
+		var intCustomerId = $( this ).data( 'customer-id' );
+		var strUrl = MessageCenter.exitTags.customerxxx + '&lease[id]=' + intLeaseId + '&customer[id]=' + intCustomerId + '&is_from_message_center=1';
+		var strTitle = __( 'Resident Profile' );
+
+		MessageCenter.Reports.ViewRecipientsList.loadProfile( strTitle, strUrl, '#clicks_list' );
+	});
+
+	$( '.lead-profile' ).unbind( 'click' ).bind( 'click', function(){
+		var intApplicationId = $( this ).data( 'application-id' );
+		var strUrl = MessageCenter.exitTags.application_systemxxx + '&application[id]=' + intApplicationId + '&is_from_message_center=1';
+		var strTitle = __( 'Lead Profile' );
+
+		MessageCenter.Reports.ViewRecipientsList.loadProfile( strTitle, strUrl, '#clicks_list' );
+
+	});
+}
+
+MessageCenter.Reports.ViewSentMessageSummary.init = function() {
+
+	$(document).ready( function() {
+		var intPerDelivered = $('#delivered_percentage').val();
+		var intPerOpened	= $('#opened_percentage').val();
+		var intPerClicked	= $('#clicked_percentage').val();
+
+		var intDegDeliveredChart = intPerDelivered * 3.6;
+		var intDegOpenedChart	 = intPerOpened * 3.6;
+		var intDegClickedChart	 = intPerClicked * 3.6;
+
+		if( 50 > intPerDelivered ) {
+			$('.chartDelivered').find('.two').attr( 'style', "clip: rect(0 70px 140px 0);-webkit-transform:rotate( " + ( intDegDeliveredChart - 180 ) + "deg );transform: rotate( " + ( intDegDeliveredChart - 180 ) + "deg );background: #e1e1e1;" );
+		} else {
+			$('.chartDelivered').find('.two').attr( 'style', "clip: rect(0 70px 140px 0);-webkit-transform: rotate( " + ( intDegDeliveredChart ) + "deg );transform: rotate( " + ( intDegDeliveredChart )  + "deg ); background: #48b2c1;" );
+		}
+
+		if( 50 > intPerOpened ) {
+			$('.chartOpened').find('.two').attr( 'style', "clip: rect(0 70px 140px 0); -webkit-transform: rotate( " + ( intDegOpenedChart - 180 ) + "deg ); transform: rotate( " + ( intDegOpenedChart - 180 ) + "deg ); background: #e1e1e1;" );
+		} else {
+			$('.chartOpened').find('.two').attr( 'style', "clip: rect(0 70px 140px 0); -webkit-transform: rotate( " + ( intDegOpenedChart ) + "deg );transform: rotate( " + ( intDegOpenedChart ) + "deg );background: #f26a4a;");
+		}
+
+		if( 50 > intPerClicked ) {
+			$('.chartClicked').find('.two').attr( 'style', "clip: rect(0 70px 140px 0); -webkit-transform: rotate( " + ( intDegClickedChart - 180 ) + "deg );transform: rotate( " + ( intDegClickedChart - 180 ) + "deg );background: #e1e1e1;" );
+		} else {
+			$('.chartClicked').find('.two').attr( 'style', "clip: rect(0 70px 140px 0); -webkit-transform: rotate( " + ( intDegClickedChart ) + "deg );transform: rotate( " + ( intDegClickedChart ) + "deg );background: #50c690;" );
+		}
+
+	});
+
+	$( '.js-sent-reuse' ).on( 'click', function() {
+		var intScheduledEmailId = $( this ).data('scheduled-email-id');
+		psi.MessageCenterEmail.isReuseEmail = true;
+		psi.MessageCenterEmail.reUseMessage( intScheduledEmailId );
+	} );
+
+	$('.js-sent-preview').on( 'click', function() {
+		var intScheduledEmailId = $( this ).data('scheduled-email-id');
+		var intDialogHeight = ( 700 > $( window ).height()  ) ? 550 : 846;
+		var strPreviewMode = strPreviewMode || 'desktop';
+		var strSubject = strPreviewMode + 'Preview';
+		var strUrlOption = '&scheduled_email[id]=' + intScheduledEmailId;
+		var strUrl = MessageCenter.exitTags.preview_email + '&preview_mode=desktop' + strUrlOption;
+
+		psi.patterns.loadDialog( {
+			title: __( 'Email Preview' ),
+			strContentId: strSubject,
+			strUrl: strUrl,
+			width: 1055,
+			height: intDialogHeight,
+			resizable: false,
+			close: function( event ) {
+				if( event.hasOwnProperty( 'originalEvent' ) ) {
+					GtmTracking.addModalTimestampComplete( 'sent', 'close', 'message summary > email preview' );
+				} else {
+					GtmTracking.addModalTimestampComplete( 'sent', 'close', 'message summary > email preview' );
+				}
+			}
+		} );
+		GtmTracking.addModalTimestampStart( 'message preview', 'message summary > email preview' );
+	});
+}
+
+MessageCenter.Reports.TopClickedLinks.init = function() {
+	$(document).ready(function(){
+
+		$(".clickedWrapper").click(function () {
+			var strEmailEventIds    = $(this).data('email-event-ids');
+			var intItemCount        = $(this).data('click-count');
+
+			psi.patterns.loadDialog({
+				width:960,
+				height:650,
+				strUrl: MessageCenter.exitTags.view_clicked_recipient_list + '&email_event_ids=' + strEmailEventIds + '&item_count=' + intItemCount,
+				strContentId:'clicks_list',
+				title: __( 'Clicks List' )
+			});
+		});
+
+		$('.clickmap').click(function(){
+
+			psi.patterns.loadDialog({
+				width:1200,
+				height:'auto',
+				strUrl: MessageCenter.exitTags.view_click_map,
+				strContentId:'clicks_list',
+				title: __( 'Message Click Map' )
+			});
+		});
+	});
+}
+
+MessageCenter.Reports.TopClickMap.init = function() {
+	$( document ).ready( function() {
+
+		if( null != arrCustomLinkDetails ) {
+			$.each( arrCustomLinkDetails, function( i, arrCustomLinks ) {
+				var strColor = '';
+
+				if( 'undefined' != typeof $( "span:contains('*" + arrCustomLinks.title + "*')" ).html() ) {
+					$( "span:contains('*" + arrCustomLinks.title + "*')" ).html( $( "span:contains('*" + arrCustomLinks.title + "*')" ).html().replace( '*' + arrCustomLinks.title + '*', '<span class="content-link-overlay colorbox colorbox ' + arrCustomLinks.color + '" data-point="' + arrCustomLinks.data_point + '">*' + arrCustomLinks.title + '*</span>' ) )
+				} else if( $( '[href="*' + arrCustomLinks.title + '*"]' ).is( 'a' ) ) {
+					$( '[href="*' + arrCustomLinks.title + '*"]' ).wrap( '<span class="content-link-overlay colorbox ' + arrCustomLinks.color + '" data-point="' + arrCustomLinks.data_point + '"></span>' );
+				} else if( true == $( 'a[href="' + arrCustomLinks.url + '"]' ).is( 'a' ) ) {
+					$( 'a[href="' + arrCustomLinks.url + '"]' ).wrap( '<span class="content-link-overlay colorbox ' + arrCustomLinks.color + '" data-point="' + arrCustomLinks.data_point + '"></span>' );
+				} else {
+					$( '#custom_links' ).removeClass( 'hide' );
+					$( '#custom_links' ).append( '<span class="content-link-overlay colorbox ' + arrCustomLinks.color + '" data-point="' + arrCustomLinks.data_point + '">' + arrCustomLinks.url + '</span><br/>' );
+				}
+			} );
+
+			$( "span:contains('*VIEW_IT_IN_YOUR_BROWSER*')" ).html( $( "span:contains('*VIEW_IT_IN_YOUR_BROWSER*')" ).html().replace( '*VIEW_IT_IN_YOUR_BROWSER*', 'View it in your browser' ) )
+			$( "span:contains('*UNSUBSCRIBE*')" ).html( $( "span:contains('*UNSUBSCRIBE*')" ).html().replace( '*UNSUBSCRIBE*', 'UNSUBSCRIBE' ) )
+		}
+
+		$( '.legend-link' ).mouseover( function() {
+			var legend = this.id;
+			$( '.content-link-overlay' ).filter( function() {
+				return $( this ).data( 'point' ) == legend;
+			} ).toggleClass( 'enlarge' );
+			$( this ).toggleClass( 'enlarge' );
+		} );
+
+		$( '.legend-link' ).mouseout( function() {
+			var legend = this.id;
+			$( '.content-link-overlay' ).filter( function() {
+				return $( this ).data( 'point' ) == legend;
+			} ).toggleClass( 'enlarge' );
+			$( this ).toggleClass( 'enlarge' );
+		} );
+
+		$( '.content-link-overlay' ).mouseover( function() {
+			var link = $( this ).attr( "data-point" );
+			$( '.legend-link-group' ).find( '#' + link ).toggleClass( 'enlarge' );
+			$( this ).toggleClass( 'enlarge' );
+		} );
+
+		$( '.content-link-overlay' ).mouseout( function() {
+			var link = $( this ).attr( "data-point" );
+			$( '.legend-link-group' ).find( '#' + link ).toggleClass( 'enlarge' );
+			$( this ).toggleClass( 'enlarge' );
+		} );
+	} );
+}
+
+MessageCenter.Reports.ViewRecipientsList.init = function() {
+
+	$('#download_recipients_button').on( 'click', function() {
+		if( true  == $('#download_recipients_button').hasClass('disabled') ) {
+			return false;
+		}
+		$( '#frmSubReportFilter' ).attr( 'action', MessageCenter.exitTags.download_message_details );
+		$( '#frmSubReportFilter' ).submit();
+	});
+
+	$( "#search_recipient_form" ).submit(function( event ) {
+		psi.patterns.ajaxRequest({
+			url					: MessageCenter.exitTags.view_recipients_list,
+			strElementSelector	: '#subReportDetails',
+			data				: $( '#search_recipient_form' ).serialize()
+		});
+		return false;
+	});
+
+	$('.email-event-type').unbind('click').bind('click', function () {
+		var intEmailCount = $(this).data('email-count');
+		var strEmailEventType = $(this).data('email-event-type');
+
+		//Show list of unsubscribed receipent of markating scheduled email
+		var EMAIL_EVENT_TYPE_UNSUBSCRIBE = 11;
+		if( EMAIL_EVENT_TYPE_UNSUBSCRIBE == strEmailEventType && true == $( this ).data( 'is-promotional-scheduled-email' ) ) {
+			var strEmailEventIds = $( this ).data( 'email-event-ids' );
+			var intItemCount = intEmailCount;
+			psi.patterns.loadDialog( {
+				width: 960,
+				height: 650,
+				strUrl: MessageCenter.exitTags.view_clicked_recipient_list + '&email_event_ids=' + strEmailEventIds + '&item_count=' + intItemCount,
+				strContentId: 'clicks_list',
+				title: __( 'Message Unsubscribed List' )
+			} );
+
+			return false;
+		}
+		//End unsubscribed receipent of markating scheduled email
+
+		$( '#frmSubReportFilter #subfilter_email_event_type_id' ).val( strEmailEventType );
+		$( '#frmSubReportFilter #subfilter_item_count' ).val( intEmailCount );
+
+		var strUrl = MessageCenter.exitTags.view_recipients_list;
+
+		psi.patterns.loadDialog({
+			width: 960,
+			height: 600,
+			strUrl: strUrl,
+			strElementSelector: '#subReportDetails',
+			data: $( '#frmSubReportFilter' ).serialize(),
+			strContentId: 'users_list',
+			title: __( 'Message Sent List' ),
+			close: function() {
+				GtmTracking.addModalTimestampComplete( 'message summary', 'close', 'message summary > message sent list' );
+			}
+		});
+		GtmTracking.addModalTimestampStart( 'message by the numbers', 'message summary > message sent list' );
+		return false;
+	});
+
+	$( '.resident-profile' ).unbind( 'click' ).bind( 'click', function(){
+		var intLeaseId = $( this ).data( 'lease-id' );
+		var intCustomerId = $( this ).data( 'customer-id' );
+		var intCustomerTypeId = $( this ).data( 'customer-type-id' );
+		var intOrganizationId = $( this ).data( 'organization-id' );
+		if( MessageCenter.customerTypeGroup == intCustomerTypeId ) {
+			var strUrl = MessageCenter.exitTags.groups + '&organization[id]=' + intOrganizationId + '&is_from_message_center=1';
+		} else {
+			var strUrl = MessageCenter.exitTags.customerxxx + '&lease[id]=' + intLeaseId + '&customer[id]=' + intCustomerId + '&is_from_message_center=1';
+			var strTitle = __( 'Resident Profile' );
+		}
+
+		MessageCenter.Reports.ViewRecipientsList.loadProfile( strTitle, strUrl, '#users_list' );
+	});
+
+	$( '.lead-profile' ).unbind( 'click' ).bind( 'click', function(){
+		var intApplicationId = $( this ).data( 'application-id' );
+		var strUrl = MessageCenter.exitTags.application_systemxxx + '&application[id]=' + intApplicationId + '&is_from_message_center=1';
+		var strTitle = __( 'Lead Profile' );
+
+		MessageCenter.Reports.ViewRecipientsList.loadProfile( strTitle, strUrl, '#users_list' );
+
+	});
+}
+
+MessageCenter.Reports.ViewRecipientsList.loadProfile = function( strTitle, strUrl, strDialogueElement ) {
+	$( strDialogueElement ).parent( '.ui-dialog' ).prev().css( 'display', 'none' );
+	$( strDialogueElement ).parent( '.ui-dialog' ).css( 'display', 'none' );
+
+	psi.patterns.addDialogContent( {
+		title : strTitle,
+		strUrl: strUrl,
+		onCloseCallback:function() {
+			$( strDialogueElement ).parent( '.ui-dialog' ).prev().css( 'display', 'block' );
+			$( strDialogueElement ).parent( '.ui-dialog' ).css( 'display', 'block' );
+		}
+	} );
+}
+
+MessageCenter.ScheduledEmail.init = function() {
+	var boolIsVendorList = 0;
+	if( $('#scheduled_email_type_vendor').val() == $('#scheduled_email_type_id').val() ) {
+		boolIsVendorList = 1;
+	}
+
+	if( 'undefined' == typeof $( '#scheduled_email_filter_id' ).val() || 'undefined' == typeof $( '#scheduled_email_id').val() ) return false;
+
+	var intScheduledEmailId       = $('#scheduled_email_id').val();
+	var strScheduledEmailFilterId = $('#scheduled_email_filter_id').val();
+
+	strUrl += '&scheduled_email_filter_id=' + strScheduledEmailFilterId + '&scheduled_email_id=' + intScheduledEmailId + '&from_email_label=true' + '&is_employee_list=' + boolIsEmployeeList + '&is_vendor_list=' + boolIsVendorList;
+
+	psi.patterns.ajaxRequest({
+		url					: strUrl,
+		dataType            : 'json',
+		strElementSelector	: '#multiple_from_email',
+		success			    : function( strResponse ) {
+
+			if( strResponse.label ) {
+				$( '#from_email_label' ).text( strResponse.label );
+			} else {
+				$('#from_email_label').text( $('#from_email_address').val() );
+			}
+		}
+	});
+}

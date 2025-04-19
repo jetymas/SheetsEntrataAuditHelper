@@ -1,0 +1,98 @@
+var processing_payment_toast = document.getElementById("processing_payment_toast");
+var complete_payment_toast = document.getElementById('complete_payment_toast');
+var error_payment_toast = document.getElementById('error_payment_toast');
+var wrapper_sepa_bulk_payments = document.getElementById('wrapper_sepa_bulk_payments');
+var forceDismiss = false;
+
+function showProcessingPaymentToast( totalPaymentLength ) {
+    jQuery('#view_property_leases_with_open_charges').dialog('close');
+    document.getElementById('processing_payment_value').innerHTML =  "1/" + totalPaymentLength;
+    displayProcessingPaymentToast();
+}
+
+function displayProcessingPaymentToast() {
+    processing_payment_toast.style.display = "flex";
+    wrapper_sepa_bulk_payments.style.display = "block";
+    processing_payment_toast.style.transform = "translateX(0)";
+}
+
+function displayCompletePaymentToast( success, fail ) {
+    forceDismiss = false;
+    document.getElementById('success_payment_message_with_count').innerHTML = success + " of payments that have successfully processed";
+    document.getElementById('failed_payment_message_with_count').innerHTML = fail + " of payments that have failed";
+    complete_payment_toast.style.display = "flex";
+    wrapper_sepa_bulk_payments.style.display = "block";
+    complete_payment_toast.style.transform = "translateX(0)";
+}
+
+function closeProcessingPaymentToast() {
+    forceDismiss = true;
+    processing_payment_toast.style.display = "none";
+    wrapper_sepa_bulk_payments.style.display = "none";
+    processing_payment_toast.style.transform = "translateX(50px)";
+}
+
+function closeCompletePaymentToast() {
+    forceDismiss = false;
+    complete_payment_toast.style.display = "none";
+    wrapper_sepa_bulk_payments.style.display = "none";
+    complete_payment_toast.style.transform = "translateX(500px)";
+}
+
+function closeErrorToast() {
+    error_payment_toast.style.display = "none";
+    wrapper_sepa_bulk_payments.style.display = "none";
+    error_payment_toast.style.transform = "translateX(500px)";
+}
+
+function displayErrorToast( errormsg ) {
+    document.getElementById('failed_payment_message').innerHTML = errormsg;
+    error_payment_toast.style.display = "flex";
+    wrapper_sepa_bulk_payments.style.display = "block";
+    error_payment_toast.style.transform = "translateX(0)";
+}
+
+function onclickViewSummary() {
+    closeCompletePaymentToast();
+    var sepa_result = $( '#sepa_result_data' ).val();
+    psi.patterns.loadDialog({
+        width: 650,
+        height: 400,
+        strUrl: '/?module=ar_paymentsxxx&action=view_bulk_payments_processed_summary&sepa_bulk_result='+sepa_result,
+        strContentId: 'view_bulk_payment_processed_summary',
+        title: __('Bulk Pull Payments Summary')
+    });
+}
+
+function buildPaymentsNotificationPopup( options ) {
+    var strMessage = options.message.description;
+    if( "string" == typeof strMessage ) {
+        strMessage = JSON.parse( strMessage );
+    }
+    var strContainer = '';
+    if( 'inprogress' == strMessage.status ) {
+        if( forceDismiss == false ) {
+            displayProcessingPaymentToast(); //re-enabling in case of redirected / navigated
+        }
+        var livestatus = strMessage.current_count_processed_payments +'/'+ strMessage.total_count_payments;
+        $('#processing_payment_value').text( livestatus );
+        return;
+    } else if( 'done' == strMessage.status ) {
+        var sepa_result = options.message.sepa_bulk_result;
+        if( "object" == typeof sepa_result ) {
+            sepa_result = JSON.stringify( options.message.sepa_bulk_result );
+        }
+        sepa_result = encodeURI( sepa_result );
+        $( '#sepa_result_data' ).val(sepa_result);
+        var success = strMessage.success_payments + ' payments were successful';
+        var fail = strMessage.failed_payments + ' payments were failed';
+        closeProcessingPaymentToast();
+        closeErrorToast();
+        displayCompletePaymentToast( success, fail );
+        return;
+    } else if( 'error' == strMessage.status  ) {
+        closeProcessingPaymentToast();
+        displayErrorToast(strMessage.error_msg);
+        return;
+    }
+}

@@ -55,20 +55,22 @@
   - Sheets API error paths.
   - AuditController start/stop flows and error injection.
   - BaseAuditType methods (skip, marking, dynamic import failures).
-- [ ] 6.2 **Integration Tests** (jsdom):
+- [x] 6.2 **Integration Tests** (jsdom):
   - Load HTML from `reference/webpages` via jsdom.
   - Test content-script message handlers and DOM updates.
-- [ ] 6.3 **E2E Tests** (Puppeteer or Playwright):
-  - Load extension in headless Chrome.
-  - Simulate full audit flow; verify sheet mock updates.
-- [ ] 6.4 Add fixtures under `__tests__/fixtures/` for spreadsheets and HTML.
+- [x] 6.3 **E2E Tests** (Puppeteer):
+  - [x] Scaffold Puppeteer harness (`tests/e2e/audit.e2e.test.js`)
+  - [x] Embed static server for `reference/webpages`
+  - [x] Add JSON fixture for Sheets API (`tests/fixtures/sheetResponse.json`)
+  - [x] Write assertions for flow completion
+- [x] 6.4 Add fixtures under `tests/fixtures/` for spreadsheets and HTML.
 
 ## 7. CI/CD Pipeline
-7.1. GitHub Actions:
-  - `lint` & `unit tests` on pull request.
-  - `integration tests` on merge to main.
-  - `E2E tests` nightly or on tag.
-7.2. Enforce coverage ≥90%.
+- [ ] 7.1 GitHub Actions:
+  - [ ] `lint` & `unit tests` on pull request
+  - [ ] `integration tests` on merge to main
+  - [ ] `E2E tests` nightly or on tag
+- [ ] 7.2 Enforce coverage ≥90%.
 
 ## 8. Documentation
 8.1. Update `README.md`:

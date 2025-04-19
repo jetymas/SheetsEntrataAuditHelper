@@ -1,0 +1,133 @@
+	#call_association_container a.jp-play {
+		left:3px!important;
+	}
+	
+	#call_association_container .jp-type-single {
+		width: 77%!important;
+	}
+	
+	#call_association_container .jp-progress {
+		width: 88%!important;
+	}
+	
+ 	#dashboard_container a.jp-play {
+		left:4px!important;
+	}
+	 
+	#call_logs_container a.jp-play {
+		background-image: url("/assets/components/patterns/images/main_sprite.png")!important;
+	}
+	
+	#call_logs_container a.jp-pause {
+		background-image: url("/assets/components/patterns/images/main_sprite.png")!important;
+	}
+	
+	#call_logs_container a.jp-play {
+		left:3px!important;
+	}
+	#call_logs_container ul.jp-controls {
+		margin:0px;
+	}
+	
+	#call_logs_container .jp-progress {
+		width: 75%!important;
+	}
+	#leasing_center_call_queue a.jp-play {
+		background-image: url("/assets/components/patterns/images/main_sprite.png");
+	}
+	
+	#leasing_center_call_queue a.jp-pause {
+		background-image: url("/assets/components/patterns/images/main_sprite.png");
+		left:2px!important;
+	}
+	
+	#leasing_center_call_queue .jp-progress {
+		width: 69%!important;
+	}
+	
+	#leasing_center_call_queue .jp-type-single {
+		width: 57%!important;
+	}
+	#leasing_center_call_queue .playCall {
+		border: 0px!important;
+	}
+	
+	#leasing_center_call_queue ul.jp-controls {
+		padding: 0px!important;
+	}
+	
+	#leasing_center_call_queue #play_recorded_call {
+		margin-left:50px;
+	}
+	
+	#call_analysis_container a.jp-play {
+		background-image: url("/assets/components/patterns/images/main_sprite.png")!important;
+		left: 3px;
+	}
+	
+	#call_analysis_container a.jp-pause {
+		background-image: url("/assets/components/patterns/images/main_sprite.png")!important;
+	}
+	
+	.jp-type-single {
+		width:100%
+	}
+	 
+	a.jp-play {
+	  	background-image: url("/Common/assets/components/patterns/images/main_sprite.png");
+		background-position: 0 -297px;
+		bottom: -5px;
+		cursor: pointer;
+		display: block;
+		height: 25px;
+		position: relative;
+		width: 25px;
+	 	top:5px!important;
+	 	left: 5px;
+	}
+	a.jp-pause {
+		background-image: url("/Common/assets/components/patterns/images/main_sprite.png");
+		background-position: -25px -297px;
+		bottom: -5px;
+		cursor: pointer;
+		display: block;
+		height: 25px;
+		position: relative;
+		width: 25px;
+	 	top:5px!important;
+	}
+	.jp-progress {
+	 	cursor: pointer;
+		display: inline-block;
+		margin-bottom: 4px;
+		width: 80%;
+		background-color: #C6C6C6;
+		  
+	}
+	.jp-seek-bar {
+	 	display: block;
+	 	background-color: #c6c6c6;
+	 	width: 100%;
+	}
+	.jp-play-bar {
+		background-color: #949494;
+		display: block;
+		height: 5px;
+	}
+	
+	ul.jp-controls {
+		padding: 0 0 10px;
+	 	list-style-type: none;
+	}
+	
+	.jPlayer_width_250{
+		width:250px;
+	}	
+
+	#call_agent_call_analysis_container a.jp-play {
+		background-image: url("/assets/components/patterns/images/main_sprite.png")!important;
+	}
+
+	#call_agent_call_analysis_container a.jp-pause {
+		background-image: url("/assets/components/patterns/images/main_sprite.png")!important;
+	}

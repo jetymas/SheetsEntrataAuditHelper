@@ -1,0 +1,572 @@
+class GenerativeAI {
+
+    static intServiceLimit = 0;
+    defaultConfig = {
+        'loader_text': 'Creating your message...',
+        'btn_use_response': 'Yes, Use Generated Text',
+        'btn_refine': 'Refine Prompt',
+        'input_placeholder': 'What would you like to say in the body of your message?',
+        'response_placeholder': "Ok, here's the text I generated for you:",
+        'input_heading_text': "In a few words, tell me what you would like to say:"
+    }
+
+    arrHumanInputs = [];
+
+    constructor(instance, intServiceLimit, intDefaultLimit) {
+        GenerativeAI.intServiceLimit        = intServiceLimit;
+        this.intDefaultLimit                = intDefaultLimit;
+        this.strLocalPath                   = 'Entrata/js/module/eli/';
+        this.objInstance                    = instance;
+        this.intId                          = this.objInstance.getAttribute('gai');
+        this.intPropertyId                  = this.objInstance.getAttribute('gai-pid') || '';
+        this.strPP                          = this.objInstance.getAttribute('gai-pp');
+        this.strServiceName                 = this.objInstance.getAttribute('gai-service_name') || '';
+        this.strInput                       = this.objInstance.getAttribute('gai-input') || '';
+        this.permission                     = this.objInstance.getAttribute('gai-permission');
+        this.objGenerativeAIResponseStorage = new GenerativeAIResponseStorage( this.intId );
+        this.responseString                 = '';
+        this.streaming                     = true;
+
+        const config                        = this.objInstance.getAttribute('gai-config') || '{}';
+
+        this.config( config );
+        this.init();
+    }
+
+    init = () => {
+        this.objGenerativeAIResponseStorage.clearResponse();
+        this.objInstance.setAttribute('gai-init',1);
+        this.addGenerativeAITags();
+        this.addGenerativeAIButton();
+    }
+
+    config = ( config ) => {
+
+        config  = JSON.parse( config );
+        this.defaultConfig = { ...this.defaultConfig, ...config };
+
+        const root = document.querySelector(":root");
+        root && root.style.setProperty('--pseudo-gai-input-placeholder', '"' + this.defaultConfig.input_placeholder + '"');
+    }
+
+    addGenerativeAITags = () => {
+            this.objWrapper = document.createElement('div');
+            this.objWrapper.classList.add('generative-ai-wrapper');
+            this.objWrapper.setAttribute('gai-id', this.intId);
+
+            this.objInstance.parentNode.insertBefore(this.objWrapper, this.objInstance);
+            this.objWrapper.appendChild(this.objInstance);
+    }
+
+    addGenerativeAIButton = () => {
+        /*
+        *  Set genAI button height
+        */
+        const objGenerativeAIImg = document.createElement('img');
+        const intEditorHeight = this.objInstance.offsetHeight;
+
+        if( false === isNaN( intEditorHeight ) && intEditorHeight > 25  && intEditorHeight < 35 ) {
+            objGenerativeAIImg.style.height = intEditorHeight + 'px';
+            objGenerativeAIImg.style.width = intEditorHeight + 'px';
+        }
+
+        objGenerativeAIImg.setAttribute('src',this.strLocalPath + 'assets/generative_ai_icon.png');
+
+        this.objGenerativeAIButton = document.createElement('button');
+        this.objGenerativeAIButton.setAttribute('type', 'button');
+        this.objGenerativeAIButton.classList.add('generative-ai-button');
+        this.objGenerativeAIButton.appendChild(objGenerativeAIImg);
+
+        const contentBox = this.objWrapper.firstElementChild;
+        this.objGenerativeAIButton.style.paddingLeft = '4px';
+        this.objWrapper.insertBefore(this.objGenerativeAIButton, this.objWrapper.firstElementChild);
+
+        /*
+         * Get Dynamic alignment for button in Ckeditor|Textarea|input
+         */
+
+        const intheightAdjustment = this.getButtonAlignmet();
+        this.objGenerativeAIButton.style.marginTop = intheightAdjustment + 'px';
+
+        const gaiWidth = window.getComputedStyle(this.objGenerativeAIButton).width;
+        const generativeAIPaddingLeft = 'padding-left: ' + gaiWidth + ' !important';
+        if(contentBox.style.cssText.includes('padding-left')){
+            const startingIndex = contentBox.style.cssText.indexOf('padding-left');
+            const endingIndex = contentBox.style.cssText.indexOf(';', startingIndex);
+            if(startingIndex && endingIndex){
+                contentBox.style.cssText = contentBox.style.cssText.slice(0, startingIndex) + generativeAIPaddingLeft + contentBox.style.cssText.slice(endingIndex);
+            }
+        }
+        else {
+            contentBox.style.cssText += generativeAIPaddingLeft;
+        }
+
+        this.handleCkEditorTextPadding();
+        this.objGenerativeAIButton.addEventListener( 'click', ( event ) => {
+            this.strUid = self.crypto.randomUUID();
+            event.preventDefault();
+            if( this.objWrapper.querySelector('.gai-modal') != null ) return;
+            this.showModal();
+        } );
+    }
+
+    getButtonAlignmet = () => {
+        let intheightAdjustment = 3;
+        if( false == this.objInstance.hasAttribute( 'contenteditable' ) && undefined !== CKEDITOR.instances[this.objInstance.id] ) return 125;
+
+        return intheightAdjustment;
+    }
+
+    handleCkEditorTextPadding = () => {
+        if( false == this.objInstance.hasAttribute( 'contenteditable' ) && undefined !== CKEDITOR.instances[this.objInstance.id] ) {
+            const strCkId = this.objInstance.getAttribute('id');
+            let objCkContent = document.querySelector( '#cke_' + strCkId )?.querySelector('.cke_contents');
+            if( undefined !== objCkContent ) {
+                objCkContent.style.marginLeft = '30px';
+            }
+        }
+
+    }
+
+
+    loader = ( boolShowLoading ) => {
+        const modal = document.querySelector('[gai-id="' + this.intId + '"]').querySelector('.gai-modal-response.active');
+        if( modal ) {
+            boolShowLoading ? modal.querySelector('.gai-modal-loading').style.display = 'flex' : modal.querySelector('.gai-modal-loading').style.display = 'none';
+
+        }
+    }
+
+    updateServiceLimit = () => {
+        let objServiceLimit = document.querySelector('[gai-id="' + this.intId + '"]')?.querySelector('.gai-service-limit span:first-child');
+
+        const objFormData = new FormData();
+        objFormData.set( 'permission', this.permission );
+        objFormData.set( 'eli-type', 'gai' );
+        fetch( window.location.origin + '/?module=generative_aixxx&action=get_service_limit', { method: 'POST', body: objFormData })
+            .then( res => res.json() )
+            .then( res => {
+                if( res.success ) {
+                    GenerativeAI.intServiceLimit = res?.data?.service_limit;
+                    objServiceLimit.innerHTML = GenerativeAI.intServiceLimit;
+                }
+            });
+    }
+
+    keyEventListener = () => {
+        this.objInput.addEventListener( 'keypress', ( e ) => {
+            if( true != e.shiftKey && e.key === 'Enter' ) {
+                e.preventDefault();
+                this.sendPrompt('');
+            } else if( true == e.shiftKey && e.key === 'Enter' ) {
+                e.preventDefault();
+                if (window.getSelection) {
+                    var selection = window.getSelection(),
+                        range = selection.getRangeAt(0),
+                        br = document.createElement("br"),
+                        textNode = document.createTextNode("\u00a0");
+                        range.deleteContents();
+                        range.insertNode(textNode);
+                        range.insertNode(br);
+                        range.collapse(false);
+                        // range.selectNodeContents(textNode);
+
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                        return false;
+                }
+            }
+        });
+    }
+}
+
+class SimpleGenerativeAI extends GenerativeAI {
+    constructor( instance, intServiceLimit, intDefaultLimit ) {
+        super( instance, intServiceLimit, intDefaultLimit );
+    }
+
+    showModal = () => {
+
+        const root = document.querySelector(":root");
+        root && root.style.setProperty('--pseudo-gai-input-placeholder', '"' + this.defaultConfig.input_placeholder + '"');
+
+        let formUI = this.loadFormUI(this.strInput);
+        let strModal = `
+        <div class="gai-modal" id="` + this.intId + `">
+            <div class="gai-modal-body"> ` + formUI + ` </div>
+        </div>`;
+
+        const objParser = new DOMParser();
+        const objHtml = objParser.parseFromString(strModal, 'text/html');
+        const objBody = objHtml.querySelector('.gai-modal');
+        this.objWrapper.appendChild(objBody);
+        this.bindModal();
+
+        /*
+         *  set modal top alignment
+         */
+        let intModalAligment = this.getButtonAlignmet();
+        if( this.objInstance.hasAttribute( 'contenteditable' ) || undefined !== CKEDITOR.instances[this.objInstance.id] ) {
+            this.objModal.style.top = '0px';
+        } else {
+            this.objModal.style.top = (intModalAligment - 3) + 'px';
+        }
+
+        if (this.strInput.length > 0) this.sendPrompt('')
+
+    }
+
+    loadFormUI = ( strInput= '' ) => {
+        const boolIsAllowed = ( GenerativeAI.intServiceLimit < 1 ) ? false : true;
+        const strButtonDisabled = (!boolIsAllowed) ? 'disabled' : '';
+       return `
+                        <div class='gai-modal-form'>
+                            <div class="gai-init">
+                             <div class="gai-init-icon">
+                                <img src='` + this.strLocalPath + `assets/generative_ai_icon.png' />
+                              </div>
+                              <div  class="gai-init-message">
+                                <span>` + this.defaultConfig.input_heading_text + `</span>
+                              </div>
+                               <div class="gai-init-close-button">
+                                    <img class='gai-btn-close' src='` + this.strLocalPath + `assets/close.png' alt='close.png' />
+                               </div>
+
+                            </div>
+                            <div class="gai-custom-response"></div>
+                            <div class="gai-modal-input-wrapper-parent">
+                                <div class="gai-modal-input-wrapper">
+                                    <span class="gai-modal-input" role="textbox" contenteditable="` + boolIsAllowed + `">` + strInput + `</span>
+                                    <div class="gai-submit-button">
+                                        <button type='button' class='gai-btn-send' ` + strButtonDisabled + `>Submit</button>
+                                    </div>
+                                </div>
+                                <button type='button' class='gai-btn-save'>` + this.defaultConfig.btn_use_response + `</button>
+                            </div>
+
+                            <div class="gai-service-limit"><span>` + GenerativeAI.intServiceLimit + `</span>/<span>` + this.intDefaultLimit + `</span> Prompts remaining</div>
+                        </div>
+                        `;
+    }
+
+    loadResponeUI = () => {
+        document.querySelector('[gai-id="' + this.intId + '"]')?.querySelector('.gai-modal-response.active')?.classList.remove('active');
+        const hideQuery = ( this.strInput !== '' ) ? 'display:none' : '';
+        const strResponseUI = `
+        <div class='gai-modal-response active'>
+                <div class="gai-modal-response-wrapper">
+                    <div class="gai-modal-question-wrapper" style="` + hideQuery + `">
+                        <img src='` + this.strLocalPath + `assets/reponse_user.png' />
+                        <div class="gai-modal-response-question"></div>
+                    </div>
+                </div>
+                <div class='gai-modal-loading' style='display:none'>
+                    <img src='` + this.strLocalPath + `assets/outer_cube.png' />
+                    <span>` + this.defaultConfig.loader_text + `</span>
+                </div>
+
+                 <div class='gai-modal-loading gai-error-wrapper' style='display:none'>
+                    <img src='` + this.strLocalPath + `assets/outer_cube.png' />
+                    <div class="alert error slim hide rebuild-error gai-error">
+                        <span></span>
+                        <div class="gai-regenerate-wrapper">
+                            <img src='` + this.strLocalPath + `assets/regenerate.png' />
+                            <button type="button" class="gai-btn-regenerate">Regenerate response</button>
+                        </div>
+                    </div>
+                 </div>
+
+
+            <div class="gai-modal-response-container" style='display:none'>
+                <div class="gai-modal-response-heading">
+                    <img src='` + this.strLocalPath + `assets/outer_cube.png' />
+                    <span>` + this.defaultConfig.response_placeholder + `</span>
+                </div>
+                <div class="gai-actual-response">
+                    <pre></pre>
+                </div>
+            </div>
+
+        </div>`;
+
+        this.objModalBody = document.querySelector('[gai-id="' + this.intId +'"]').querySelector('.gai-modal-body').querySelector('.gai-modal-form').querySelector('.gai-custom-response');
+        this.objModalBody.classList.add('show-response')
+        this.objModalBody.innerHTML += strResponseUI;
+        this.bindModal();
+    }
+
+    bindModal = () => {
+        this.objModal = document.querySelector('[gai-id="' + this.intId + '"]').querySelector('.gai-modal');
+        this.objInput = document.querySelector('[gai-id="' + this.intId + '"]').querySelector('.gai-modal-input');
+        this.objBtnSend = document.querySelector('[gai-id="' + this.intId + '"]').querySelector('.gai-btn-send');
+        this.objBtnSave = document.querySelector('[gai-id="' + this.intId + '"]').querySelector('.gai-btn-save');
+        this.objBtnCloseModal = document.querySelector('[gai-id="' + this.intId + '"]').querySelector('.gai-btn-close');
+
+        this.objBtnModalQuestion = document.querySelector('[gai-id="' + this.intId + '"]')?.querySelector('.gai-modal-response.active')?.querySelector('.gai-modal-response-question');
+        this.objBtnModalAnswer = document.querySelector('[gai-id="' + this.intId + '"]')?.querySelector('.gai-modal-response.active')?.querySelector('.gai-actual-response pre');
+        this.objBtnModalResponseContainer = document.querySelector('[gai-id="' + this.intId + '"]')?.querySelector('.gai-modal-response.active')?.querySelector('.gai-modal-response-container');
+        this.objErrorWrapper = document.querySelector('[gai-id="' + this.intId + '"]')?.querySelector('.gai-modal-response.active')?.querySelector('.gai-error-wrapper')
+        this.objError = document.querySelector('[gai-id="' + this.intId + '"]')?.querySelector('.gai-modal-response.active')?.querySelector('.gai-error')
+        this.objRegenerateResponse = document.querySelector('[gai-id="' + this.intId + '"]')?.querySelector('.gai-modal-response.active')?.querySelector('.gai-btn-regenerate');
+
+        this.objInput && this.objInput.focus();
+        this.objBtnSend && this.objBtnSend.addEventListener( 'click', () => this.sendPrompt('') );
+        this.objBtnRefine && this.objBtnRefine.addEventListener( 'click', this.refine );
+        this.objBtnSave && this.objBtnSave.addEventListener( 'click', this.save );
+        this.objRegenerateResponse && this.objRegenerateResponse.addEventListener( 'click', this.regenerateResponse )
+        this.objBtnCloseModal && this.objBtnCloseModal.addEventListener( 'click', this.closeModalWithFeedback );
+
+        this.keyEventListener();
+    }
+
+    sendPrompt = ( lastResponse ) => {
+        // change modal body to response body
+
+        const strValue = ( lastResponse !== '' ) ? lastResponse : this.objInput.textContent;
+        if( '' == strValue || this.objBtnSend.hasAttribute('disabled') ) {
+            // TODO Validation
+            return;
+        }
+
+        this.arrHumanInputs?.push( strValue );
+
+        if( typeof lastResponse !== 'object' && lastResponse === '' ) {
+            this.loadResponeUI();
+        }
+
+        this.objBtnModalQuestion.innerHTML = strValue;
+        this.objInput.innerHTML = '';
+
+        const  objResponseWrapper = document.querySelector('.gai-custom-response');
+        // make a api request
+        this.loader( true );
+        objResponseWrapper.scrollTo(0, objResponseWrapper.scrollHeight);
+
+        const root = document.querySelector(":root");
+        root && root.style.setProperty('--pseudo-gai-input-placeholder', '"Suggest Changes"');
+        this.objBtnSend.classList.add('visited');
+        this.objBtnSave.style.display = 'block';
+
+        this.objBtnSend.setAttribute( 'disabled', true );
+        this.objBtnSave.setAttribute( 'disabled', true );
+
+        const objFormData = new FormData();
+        objFormData.set('message', strValue);
+        objFormData.set( 'pp', this.strPP );
+        objFormData.set( 'pid', this.intPropertyId );
+        objFormData.set( 'session_id', this.strUid );
+        objFormData.set( 'service_name', this.strServiceName );
+        objFormData.set( 'permission', this.permission );
+        objFormData.set( 'eli-type', 'gai' );
+        objFormData.set( 'id', this.intId );
+        objFormData.set( 'streaming', this.streaming );
+
+        fetch(window.location.origin + '/?module=generative_aixxx&action=send_prompt', { method:'POST', body: objFormData })
+            .then( async res => {
+
+                if( !res.ok ) {
+                    const errorResponse =  await res.json();
+                    throw new ServerError( res?.status, errorResponse?.message, res?.header?.get('Content-Type') );
+                }
+
+                if( res.ok && res?.header?.get('Content-Type') === 'text/html; charset=UTF-8' ) {
+                    throw new ServerError( res?.status, '', res?.header?.get('Content-Type') );
+                }
+                return res;
+            })
+            .then( response => {
+
+                    const stream = response.body;
+                    const reader = stream.getReader();
+                    this.responseString = '';
+
+                    const readChunk = () => {
+
+                        reader.read()
+                            .then(({ value, done}) => {
+                                objResponseWrapper.scrollTo(0, objResponseWrapper.scrollHeight);
+                                if (done) {
+                                    this.objBtnSend.removeAttribute( 'disabled' );
+                                    this.objBtnSave.removeAttribute( 'disabled' );
+                                    this.bindModal();
+                                    this.updateServiceLimit();
+                                    return;
+                                }
+                                // Convert the chunk value to a string
+                                let chunkString = new TextDecoder().decode(value);
+                                this.loader( false );
+                                chunkString = chunkString.replace(/^"+|"+$/g, '');
+                                const regex = /\\n|\\r\\n|\\n\\r|\\r/g;
+                                chunkString = chunkString.replace(regex, '<br>');
+                                this.objBtnModalAnswer.innerHTML += chunkString;
+                                this.responseString += chunkString;
+                                this.objBtnModalResponseContainer.style.display = 'block';
+                                this.objBtnCloseModal.classList.remove('hide');
+
+                                // Read the next chunk
+                                readChunk();
+                            });
+                    };
+
+                    readChunk();
+            } )
+            .catch( error => {
+            switch( error.intErrorCode ) {
+                case 403:
+                    this.objError.querySelector('span').innerHTML = error.message;
+                    break;
+                case 429:
+                    this.objError.querySelector('span').innerHTML = error.message;
+                    break;
+                default:
+                    this.objError.querySelector('span').innerHTML = 'Oops, something went wrong. Please try again.';
+                    break;
+            }
+            this.loader( false );
+            this.objBtnSend.removeAttribute( 'disabled' );
+            this.objBtnCloseModal.classList.remove('hide');
+            this.objErrorWrapper.style.display = 'flex';
+        });
+    }
+
+    refine = () => {
+        this.objModalBody = document.querySelector('[gai-id="' + this.intId + '"]').querySelector('.gai-modal-body');
+        this.objModalBody.innerHTML = this.loadFormUI();
+        this.bindModal();
+    }
+
+    save = () => {
+        const objResponse = this.objGenerativeAIResponseStorage.getLastResponse();
+        if( this.objInstance.hasAttribute( 'contenteditable' ) || undefined !== CKEDITOR.instances[this.objInstance.id] ) {
+
+            var editor = CKEDITOR.instances[this.objInstance.id];
+
+            if( this.objInstance.hasAttribute( 'contenteditable' ) && 'undefined' != typeof editor ) {
+                editor.setData('');
+                editor.insertHtml(this.responseString.split('\n').join('<br />'));
+                editor.updateElement();
+            } else if( 'undefined' == typeof editor ) {
+                var strEditorId = this.objInstance.id;
+                psi.InlineCkeditor5CustomPlugin.insertHtmlContent( strEditorId, this.responseString.split('\n').join('<br />') );
+                psi.InlineCkeditor5CustomPlugin.getEditorFocus( strEditorId );
+            } else {
+                editor.setData(this.responseString.split('\n').join('<br />'));
+            }
+
+            if (null != document.querySelector('#built_by_generative_ai')) {
+                document.querySelector('#built_by_generative_ai').value = '1';
+            }
+        } else if( ['input', 'textarea'].includes( this.objInstance.tagName.toLowerCase() ) ) {
+            // this.objInstance.value = objResponse.answer;
+            this.objInstance.value = this.responseString;
+
+        } else {
+            this.objInstance.innerHTML = this.responseString.split('\n').join('<br />');
+        }
+
+        this.saveFeedback(true);
+        this.closeModal();
+    }
+
+    closeModal = () => {
+        this.objGenerativeAIResponseStorage.clearResponse();
+        this.objModal.remove();
+    }
+
+    closeModalWithFeedback = () => {
+        this.saveFeedback(false);
+        this.closeModal();
+    }
+
+    regenerateResponse = () => {
+        let strLastResponse = this.arrHumanInputs.pop();
+        this.objErrorWrapper.style.display = 'none'
+        this.sendPrompt( strLastResponse );
+    }
+
+    saveFeedback = (accepted) => {
+        const objFormData = new FormData();
+        objFormData.set( 'session_id', this.strUid );
+        objFormData.set( 'accepted', accepted );
+        fetch(window.location.origin + '/?module=generative_aixxx&action=save_gen_feedback', { method:'POST', body: objFormData })
+    }
+}
+
+
+class GenerativeAIResponseStorage {
+
+    constructor( id ) {
+        this.intId = id;
+    }
+
+    getResponse = () => {
+        const responses = JSON.parse(sessionStorage.getItem( this.intId ));
+        return responses || [];
+    }
+
+    setResponse = ( newResponse ) => {
+        const responses = [ ...this.getResponse(), newResponse ];
+        sessionStorage.setItem( this.intId, JSON.stringify( responses ) );
+    }
+
+    getLastResponse = () => {
+        const responses = this.getResponse();
+        const response = responses.pop();
+        return response;
+    }
+
+    clearResponse = () => {
+        sessionStorage.removeItem( this.intId );
+    }
+}
+
+class ServerError extends Error {
+    constructor( intErrorCode, strErrorMessage, strContentType ) {
+        super( strErrorMessage );
+        this.intErrorCode = intErrorCode;
+        this.strContentType = strContentType;
+    }
+}
+
+let GenerativeAIFactory = ( strType ) => {
+    let generativeAI = null;
+    strType = ( typeof strType == 'string' ) ? strType : '';
+    switch( strType.toUpperCase() ) {
+        case 'AUTO-RESPONSE':
+            // generativeAI = AutoResponseGenerativeAI;
+        default:
+            generativeAI = SimpleGenerativeAI;
+    }
+
+    return generativeAI;
+}
+
+// main execution
+psi.generativeAI = ( function() {
+    let initGenerativeAI = () => {
+
+        let instance = document.querySelectorAll('[gai]');
+        instance.forEach( function( val ) {
+            if( false === val.hasAttribute('gai-init') ) {
+                const objFormData = new FormData();
+                objFormData.set('permission', val.getAttribute('gai-permission') || '');
+                objFormData.set( 'eli-type', 'gai' );
+                fetch( window.location.origin + '/?module=generative_aixxx&action=get_configuration', { method: 'POST', body: objFormData })
+                    .then( res => res.json() )
+                    .then( res => {
+                        if( res.success ) {
+                            if( res?.data?.is_allowed ) {
+                                const intServiceLimit = res?.data?.service_limit;
+                                const intDefaultLimit = res?.data?.default_limit;
+                                let generativeAI = GenerativeAIFactory( val.getAttribute('gai-type') );
+                                new generativeAI(val, intServiceLimit, intDefaultLimit );
+                            }
+                        }
+                    });
+            }
+        });
+    }
+    return {
+        initGenerativeAI
+    }
+})();

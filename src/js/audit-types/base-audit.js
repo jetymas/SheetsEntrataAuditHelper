@@ -194,4 +194,4 @@ class BaseAuditType {
   }
 }
 
-module.exports = BaseAuditType;
+export default BaseAuditType;

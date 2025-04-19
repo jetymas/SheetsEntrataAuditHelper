@@ -1,0 +1,724 @@
+var ReportSystem = {};
+ReportSystem.request_module				= 'report_systemxxx';
+ReportSystem.boolEditReportMode			= false;
+ReportSystem.strDeletedReportIds		= '';
+ReportSystem.strDeletedReportGroupIds	= '';
+ReportSystem.strReportGroupPositions	= '';
+ReportSystem.strUpdatedReportGroupNames = '';
+ReportSystem.strCurrentReportUrl		= '';
+ReportSystem.strCurrentReportName		= '';
+ReportSystem.strCurrentReportVersion	= '';
+ReportSystem.intCurrentReportTypeId		= 1;
+ReportSystem.strUpdatedReportsName		= '';
+ReportSystem.boolIsReload				= false;
+ReportSystem.intCurrentReportInstanceId	= null;
+ReportSystem.intCurrentReportModuleId	= null;
+
+ReportSystem.BuildReport = function() {
+	psi.patterns.loadLargeDialog({
+		strUrl: '/?module=user_defined_reportsxxx&tab=' + ReportSystem.request_module,
+		title: 'Build Report'
+	});
+};
+
+ReportSystem.AddReportGroup = function() {
+	psi.patterns.loadDialog( {
+		width:'600',
+		height:'450',
+		strUrl:'/?module=report_groupsxxx&action=add_report_group&add_report_group_in=' + ReportSystem.request_module,
+		title: __( 'Add Report Group' ),
+		beforeClose: function() {
+			psi.patterns.showLoadingImage({
+				strElementSelector: "#add_report_group_form"
+			});
+			location.reload();
+			return false;
+		}
+	});
+};
+
+ReportSystem.AddReportInstance = function() {
+	psi.patterns.loadDialog( {
+		width:'700',
+		height:'450',
+		strUrl:'/?module=report_instancesxxx&action=add_report_instance&add_report_instance_in=' + ReportSystem.request_module,
+		title: __( 'Add Report' ),
+		beforeClose: function() {
+
+			if( true == ReportSystem.boolIsReload ) {
+				psi.patterns.showLoadingImage({
+					strElementSelector: "#add_report_instance_form"
+				});
+
+				location.reload();
+				return false;
+			}
+		}
+		});
+};
+
+ReportSystem.ShowReportInstance = function( reportInstanceId ) {
+
+	psi.patterns.loadDialog( {
+		width:'700',
+		height:'450',
+		strUrl:'/?module=report_instancesxxx&action=edit_report_instance&report_instance_id='+ reportInstanceId,
+		title: __( 'Edit Report' ),
+		beforeClose: function() {
+
+			if( true == ReportSystem.boolIsReload ) {
+				psi.patterns.showLoadingImage({
+					strElementSelector: "#add_report_instance_form"
+				});
+
+				location.reload();
+				return false;
+			}
+		}
+		});
+};
+
+ReportSystem.openReport = function( obj ) {
+	if( true == this.boolEditReportMode ) return;
+	eval( $(obj).attr( 'data-custom-click-url' ) );
+};
+
+// Reorder report group/container.
+ReportSystem.submitReportGroupReorder = function() {
+	var reportGroupPosition = '';
+	$( ".js-bucket" ).each( function() {
+		var currentPosition=parseInt($(this).attr('value'));
+		$(this).find('b.reports-group').each(function() {
+			var oldPosition = $(this).find('input:hidden.js-old-group-position').attr('value');
+			if( undefined != $(this).find('input[type=text]').val() ) {
+				ReportSystem.strUpdatedReportGroupNames = ReportSystem.strUpdatedReportGroupNames + '&report_group_name[' + $(this).find('input:hidden').attr('id').replace('report_group_id_','') + ']=' + encodeURIComponent( $(this).find('input[type=text]').val() );
+			}
+			if(oldPosition != undefined) {
+				if( true == isNaN(currentPosition) ) {
+					currentPosition=oldPosition;
+					$(this).find('input:hidden.js-old-group-position').val(currentPosition);
+					reportGroupPosition+='report_group_id['+$(this).find('input:hidden').attr('id').replace('report_group_id_','')+']='+$(this).find('input:hidden').val()+'&';
+					$(this).parent().val(currentPosition);
+					currentPosition=currentPosition+4;
+
+				} else {
+					$(this).find('input:hidden.js-old-group-position').val(currentPosition);
+					currentPosition=currentPosition+4;
+					reportGroupPosition+='report_group_id['+$(this).find('input:hidden').attr('id').replace('report_group_id_','')+']='+$(this).find('input:hidden').val()+'&';
+				}
+			}
+		});
+		$(this).find('b.report').each(function() {
+			if( undefined != $(this).find('input[type=text]').val() && true == $(this).find('input[type=text]').is(':visible') ) {
+				ReportSystem.strUpdatedReportsName = ReportSystem.strUpdatedReportsName + '&reports_name[' + $(this).find('input').attr('id') + ']=' + $(this).find('input').val();
+			}
+		});
+	});
+
+	ReportSystem.strReportGroupPositions = reportGroupPosition;
+};
+
+// Delete reports.
+ReportSystem.deleteReport = function(report_instance_id, IsDeleteFromLibrary) {
+
+	if( true == IsDeleteFromLibrary ) {
+		IsDeleteFromLibrary = 1;
+	} else {
+		IsDeleteFromLibrary = 0;
+	}
+
+	var strReportDetails = 'selected_report_instance_id=' + report_instance_id + '&delete_from_library=' + IsDeleteFromLibrary;
+
+	psi.patterns.ajaxRequest({
+		url: ReportSystem.delete_report,
+		strElementSelector: '#viewReports',
+		data: strReportDetails,
+		success: function() {
+			$( '#delete_icon' ).hide();
+			$('#report_instance_id_'+report_instance_id).hide();
+		}
+	});
+
+};
+
+ReportSystem.intCurrentReportId		= '';
+ReportSystem.strCurrentReportTitle	= '';
+
+// Handle report link click
+$(document)
+	.on('click', '.report-link', function() {
+		var obj					= $( this ).parent( 'div' ),
+			url					= obj.data( 'report-url' ),
+			intReportId			= obj.data( 'report-id' ),
+			intReportInstanceId	= obj.data( 'report-instance-id' ),
+			reportTypeId		= obj.data( 'report-type-id' ),
+			data				= { report_instance_id: intReportInstanceId },
+			strReportInstanceId	= '&report_instance_id=' + intReportInstanceId;
+
+		// Delete the object so that it is generated freshly for all reports.
+		delete psi.reportDisplayOptions;
+
+		if( '' == obj.data( 'report-filter-id' ) || "undefined" == typeof obj.data( 'report-filter-id' ) ) {
+			psi.patterns.loadLargeDialog( {
+				strUrl: url + strReportInstanceId,
+				title: obj.data( 'report-title' ),
+				data: data,
+				boolBookmark: true,
+				onCloseCallback: function() {
+					$dataGroupMap = {};
+				}
+			} );
+		} else {
+			//event.preventDefault();
+			var intReportFilterId	= obj.data("report-filter-id"),
+				strReportTitle		= obj.data("report-title"),
+				strReportFilterId	= '&report_filter_id=' + intReportFilterId;
+
+			if( "undefined" != intReportFilterId ) {
+				strReportFilterId = strReportFilterId + '&is_from_default_filter=1';
+			}
+
+			psi.patterns.loadLargeDialog({
+				strUrl: url + strReportFilterId,
+				title: strReportTitle,
+				data: data,
+				beforeSend: function() {
+					$( '.ui-button' ).trigger( 'click' );
+					psi.patterns.showLoadingImage({
+						strElementSelector: "div.modal-body"
+					});
+				},
+				complete: function() {
+					psi.patterns.bindEssentials();
+					$(".modal-body-container .generated-report").hide().show();
+					psi.patterns.removeLoadingImage({
+						strElementSelector: "div.modal-body"
+					});
+					$( '.save-schedule' ).html( __( 'Save As New' ) );
+					if( false !== $.isNumeric( $('.saved-filter-list').val() ) ) {
+						$( '.update-filter-set' ).removeClass( 'hide' );
+					}
+					$( '.view-edit-schedules' ).removeClass( 'hide' );
+					setTimeout(	function() {
+						psi.patterns.setEqualHeights({
+							elementSelector: ".modal-body-container .equal-heights"
+						});
+					}, 500);
+				},
+				onCloseCallback: function() {
+					$dataGroupMap = {};
+				}
+			});
+		}
+	})
+	// To handle the report options div
+	.on('click', '.report-options', function() {
+		$('.report-options').not(this).actiontip( 'hide' );
+	})
+	.on('beforeShow.actiontip', '.report-options', function() {
+		var $menu = $('.report-menu-content'),
+			$report = $(this).parent().prev(),
+			reportTypeId = $report.data('report-type-id'),
+			isSchedulable = $report.data('is-schedulable'),
+			isLatest = $report.data('is-latest'),
+			isQuickLink = JSON.parse( $report.attr('data-is-quick-link') ),
+			isUpdateAvailable = $report.data('update-available');
+
+		ReportSystem.intCurrentReportId = $report.data( 'report-id' );
+
+		// Hide option for schedulable if report is not schedulable
+		if( true == isSchedulable ) {
+			$menu.find( '#report_options_scheduled_report' ).show().removeClass( 'hide' );
+		} else {
+			$menu.find( '#report_options_scheduled_report' ).hide().addClass( 'hide' );
+		}
+
+		if( isQuickLink ) {
+			$menu.find( '.report-quick-link-menu' ).html( __( 'Remove from Quick Links' ) );
+		} else {
+			$menu.find( '.report-quick-link-menu' ).html( __( 'Add to Quick Links' ) );
+		}
+
+		// Hide option for report histories if report is not schedulable or no history found
+		if( true == isSchedulable || 0 < $(this).data('report-histories-count') ) {
+			$menu.find( '#report_options_report_history' ).show().removeClass( 'hide' );
+		} else {
+			$menu.find( '#report_options_report_history' ).hide().addClass( 'hide' );
+		}
+
+		// Hide upgrade section for reports that are already up-to-date
+		if( true == isLatest || false == isUpdateAvailable ) {
+			$menu.find('hr').hide();
+			$menu.find('#report_option_view_newest_version').hide().addClass( 'hide' );
+			$menu.find('#report_option_update_to_newest_version').hide().addClass( 'hide' );
+		} else {
+			$menu.find('hr').show();
+			$menu.find('#report_option_view_newest_version').show().removeClass( 'hide' );
+			$menu.find('#report_option_update_to_newest_version').show().removeClass( 'hide' );
+		}
+
+		// Hide option for editing a report for non-SAP reports
+		if( 2 == reportTypeId ) {
+			$menu.find( '#report_options_saved_filter' ).hide().addClass( 'hide' );
+			$menu.find( '#report_options_report_description' ).hide().addClass( 'hide' );
+			$menu.find( '#edit_sap_report').show().removeClass( 'hide' );
+		} else {
+			$menu.find( '#report_options_saved_filter' ).show().removeClass( 'hide' );
+			$menu.find( '#report_options_report_description' ).show().removeClass( 'hide' );
+			$menu.find( '#edit_sap_report').hide().addClass( 'hide' );
+		}
+
+		$menu.find( 'li:not(.hide)' ).removeClass( 'pad15-top' ).removeClass( 'pad5-top' ).each( function() {
+			var $prev = $(this).prev();
+			while( 0 < $prev.length && $prev.hasClass( 'hide' ) ) {
+				$prev = $prev.prev();
+			}
+
+			if( 0 == $prev.length || 'LI' != $prev.prop( 'tagName' ) ) {
+				$(this).addClass( 'pad5-top' );
+			} else {
+				$(this).addClass( 'pad15-top' );
+			}
+		} );
+	})
+	.on('show.actiontip', '.report-options', function () {
+		var $report = $(this).parent().prev(),
+		strReportTitle = $report.data('report-title');
+
+		ReportSystem.strCurrentReportName		= $report.data('report-name');
+		ReportSystem.strCurrentReportVersion	= $report.data('report-version');
+		ReportSystem.intCurrentReportTypeId		= parseInt( $report.data('report-type-id') );
+		//We need to show only Report name on report menu titles, so removed report_group_name and >> signs.
+		ReportSystem.strCurrentReportTitle		= strReportTitle.substring( strReportTitle.indexOf( ">" ) + 2 );
+		ReportSystem.strCurrentReportUrl		= $report.data('report-url');
+		ReportSystem.intCurrentReportInstanceId	= $report.data('report-instance-id');
+		ReportSystem.intCurrentReportModuleId	= $report.data('module-id');
+		ReportSystem.strNewestReportVersion 	= $report.data('newest-report-version');
+	})
+	// Handle delete report click
+	.on('click', '.delete-report-link', function () {
+		ReportSystem.strDeletedReportIds = ReportSystem.strDeletedReportIds + '&report_instance[id][]='+ $( this ).attr( 'id' );
+		$( this ).closest( 'b' ).hide();
+	})
+	.on( 'click', '.report-view-newest-version', function() {
+		var url = ReportSystem.strCurrentReportUrl.replace( /&version=[^&]*/, '' );
+		$( '.report-options' ).actiontip( 'hide' );
+		psi.patterns.loadLargeDialog( { strUrl: url + '&version=' + ReportSystem.strNewestReportVersion, title: ReportSystem.strCurrentReportTitle, boolBookmark: true} );
+	})
+	.on( 'click', '.report-update-to-newest-version', function() {
+		var selector = '#report_link_' + ReportSystem.intCurrentReportInstanceId,
+			$report = $(selector),
+			$messageHolder = $( '#common_error_msgs' );
+
+		$( '.report-options' ).actiontip( 'hide' );
+		psi.patterns.showLoadingImage( {
+			strElementSelector: selector
+		} );
+
+		$.ajax( {
+			url: '/?module=report_instancesxxx&action=update_report_instance&report_instance_id=' + ReportSystem.intCurrentReportInstanceId,
+			dataType: 'json',
+			method: 'post',
+			complete: function() {
+				psi.patterns.removeLoadingImage( {
+					strElementSelector: selector
+				} );
+			},
+			success: function( response ) {
+				if( response.hasOwnProperty( 'isLatest' ) ) {
+					$report.data( 'is-latest', response.isLatest );
+					if( true == response.isLatest ) {
+						$report.find('.js-update-available').remove();
+					}
+				}
+				if( response.hasOwnProperty( 'url' ) ) $report.data( 'report-url', response.url );
+				if( response.hasOwnProperty( 'version' ) ) {
+					$report.find('.js-version').html( response.version );
+					$report.data( 'report-version', response.version )
+				}
+
+				if( response.hasOwnProperty( 'message' ) ) {
+					$messageHolder.html( '<p class="alert success slim" id="error_msg"><span class="success text-green font15 "><i></i>' + response.message + '</span></p>' );
+				} else if( response.hasOwnProperty( 'error' ) ) {
+					$messageHolder.html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 "><i></i>' + response.error + '</span></p>' );
+				}
+
+				$messageHolder.find('p').delay( 2500 ).fadeOut( 1000, function() {
+					$( this ).remove();
+				} );
+			},
+			error: function( xhr, status, error ) {
+				// This happens if the server has an error, or the response is not json
+				$messageHolder.html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 "><i></i>' + error + '</span></p>' );
+
+				$messageHolder.find('p').delay( 2500 ).fadeOut( 1000, function() {
+					$( this ).remove();
+				} );
+			}
+		} );
+	})
+	.on( 'click', '#report-quick-link-menu', function() {
+		var selector = '#report_link_' + ReportSystem.intCurrentReportInstanceId,
+			$report = $(selector),
+			isQuickLink = $report.attr('data-is-quick-link'),
+			$messageHolder = $( '#common_error_msgs' );
+
+		$( '.report-options' ).actiontip( 'hide' );
+		psi.patterns.showLoadingImage( {
+			strElementSelector: selector
+		} );
+
+		$.ajax( {
+			url: '/?module=favorite_reportsxxx&action=manage_quick_link&report_instance_id=' + ReportSystem.intCurrentReportInstanceId + '&is_quick_link=' + isQuickLink,
+			dataType: 'json',
+			method: 'post',
+			success: function( response ) {
+				psi.patterns.removeLoadingImage( {
+					strElementSelector: selector
+				} );
+
+				if( response.hasOwnProperty( 'isQuickLink' ) ) {
+					$report.attr( 'data-is-quick-link', response.isQuickLink );
+				}
+				if( response.hasOwnProperty( 'message' ) ) {
+					$messageHolder.html( '<p class="alert success slim" id="error_msg"><span class="success text-green font15 "><i></i>' + response.message + '</span></p>' );
+				}
+
+				$messageHolder.find('p').delay( 2500 ).fadeOut( 1000, function() {
+					$( this ).remove();
+				} );
+			},
+			error: function( xhr, status, error ) {
+				// This happens if the server has an error, or the response is not json
+				$messageHolder.html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 "><i></i>' + error + '</span></p>' );
+
+				$messageHolder.find('p').delay( 2500 ).fadeOut( 1000, function() {
+					$( this ).remove();
+				} );
+			}
+		} );
+	})
+	.on( 'click', '.js-view-user-and-group-permission', function() {
+		ReportSystem.loadReportMenuOptions( 580, 400, '/?module=report_instancesxxx&action=view_report_permissions&module_id=' +  ReportSystem.intCurrentReportModuleId + '', __( 'Permissions' ) + ': ' + ReportSystem.strCurrentReportTitle );
+	})
+	.on( 'click', '.js-update-user-permission-btn', function(e) {
+		// Handle Save after updating report groups and user permissions.
+		psi.patterns.ajaxRequest({
+			url: '/?module=report_instancesxxx&action=update_report_permissions',
+			strElementSelector: 'div#js-user-group-permissions',
+			data: $( '#report_user_permissions_form' ).serialize(),
+			success: function( response ) {
+				try {
+					var strResponseMessage = $.isPlainObject( response ) ? response : $.parseJSON( response );
+					if( true == strResponseMessage['success'] ) {
+						psi.patterns.showLoadingImage({
+							strElementSelector: 'div#js-user-group-permissions'
+						});
+						location.reload();
+					} else {
+						psi.patterns.removeLoadingImage({
+							strElementSelector: 'div#js-user-group-permissions'
+						});
+						$( '#common_error_msgs' ).html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 ">' + strResponseMessage['error'] + '</span></p>' );
+					}
+				} catch(e) {
+					// This occurs when the response is a string that is not valid JSON
+					psi.patterns.removeLoadingImage({
+						strElementSelector: 'div#js-user-group-permissions'
+					});
+					$( '#common_error_msgs' ).html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 ">' + response + '</span></p>' );
+				}
+			}
+		});
+	})
+	.on( 'click', '.js-cancel-user-permission-btn', function() {
+		psi.patterns.showLoadingImage({
+			strElementSelector: 'div#js-user-group-permissions'
+		});
+		location.reload();
+	})
+	.on('click', '.edit-report-link', function () {
+		ReportSystem.ShowReportInstance( $( this ).attr( 'id' ) );
+	})
+	.on('click', '.delete-report-group', function(){
+		ReportSystem.strDeletedReportGroupIds = ReportSystem.strDeletedReportGroupIds + '&delete_report_group[ids][]=' + $( this ).data( 'report-group-id' );
+		$( this ).closest( 'b' ).hide();
+	})
+	.on('click', '#build-report', function(){
+		ReportSystem.BuildReport();
+	})
+	.on('click', '#add_report_instance', function(){
+		ReportSystem.AddReportInstance();
+	})
+	.on('click', '#add-report-group', function(){
+		ReportSystem.AddReportGroup();
+	})
+	.on('click', '#manage-report-groups', function(){
+		ReportSystem.loadEditReportGroups();
+	})
+	.on('click', '#manage-permission', function(){
+		psi.patterns.showLoadingImage({
+			strElementSelector: 'div#report-system'
+		});
+		window.location.href= '/?module=users_and_groupsxxx';
+	})
+	.on( 'click', '#create-sap-report', function(){
+		psi.patterns.loadDialog( {
+			strUrl: '/?module=sap_reportsxxx&action=create_report&tab=' + ReportSystem.request_module,
+			title: __( 'Design Custom Report' ),
+			width: 600,
+			height: 400
+		} );
+	})
+	.on( 'click', '.js-create-sap-report .form-submit', function() {
+		psi.patterns.ajaxRequest( {
+			url: '/?module=sap_reportsxxx&action=insert_report',
+			strElementSelector: '.js-create-sap-report-container',
+			data: $('.js-create-sap-report').serialize()
+		} );
+	})
+	.on( 'click', '#sap-service-test', function(){
+		psi.patterns.loadLargeDialog( { strUrl: '/?module=sap_reportsxxx&action=service_test', title: __( 'SAP Service Test' ), boolBookmark: true } );
+	})
+	.on( 'click', '#turn-sap-on', function(){
+		psi.patterns.loadLargeDialog( { strUrl: '/?module=sap_reportsxxx&action=service_test&test=add_entrata_insights', title: __( 'Turn SAP On' ), boolBookmark: true } );
+	})
+	.on( 'click', '.saved-filters', function() {
+		ReportSystem.loadReportMenuOptions( 700, 600, '/?module=report_filtersxxx&action=view_report_filters&is_from_report_group=1', __( 'Saved Filter' ) + ': ' + ReportSystem.strCurrentReportTitle );
+	})
+	.on( 'click', '.scheduled-reports', function() {
+		ReportSystem.loadReportMenuOptions( 990, 600, '/?module=scheduled_reportsxxx&action=view_scheduled_reports', __( 'Schedule' ) + ': ' + ReportSystem.strCurrentReportTitle );
+	})
+	.on( 'click', '.report-history', function() {
+		ReportSystem.loadReportMenuOptions( 'auto', 600, '/?module=report_historiesxxx&report_id=' + ReportSystem.intCurrentReportId, __( 'History' ) + ': ' + ReportSystem.strCurrentReportTitle );
+	})
+	.on( 'click', '.report-add-to-favorites', function() {
+		ReportSystem.loadReportMenuOptions( 775, 600, '/?module=report_instancesxxx&action=add_report_instance&add_report_instance_in=favorite_reportsxxx&report_instance_id=' + ReportSystem.intCurrentReportInstanceId, __( 'Add to Favorites' ) );
+	})
+	.on( 'click', '.edit-report', function() {
+		$( '.report-options' ).actiontip( 'hide' );
+		psi.patterns.loadLargeDialog( { strUrl: '/?module=user_defined_reportsxxx&report[id]=' + ReportSystem.intCurrentReportId, title: __( 'Edit Report' ) } );
+	})
+	.on( 'click', '.edit-sap-report', function() {
+		$( '.report-options' ).actiontip( 'hide' );
+
+		psi.patterns.loadLargeDialog( {
+			strUrl: '/?module=sap_reportsxxx&action=edit_report&report[id]=' + ReportSystem.intCurrentReportId,
+			title: __( 'Edit' ) + ReportSystem.strCurrentReportTitle,
+			boolBookmark: true
+		} );
+	})
+	.on( 'click', '.report-description-menu', function() {
+		var url = ReportSystem.strCurrentReportUrl.replace( /module=[^&]*/, 'module=reportsxxx' );
+		ReportSystem.loadReportMenuOptions( 'auto', 750, url + '&action=report_details&show_print_option=' + true, __( 'Description' ) + ': ' + ReportSystem.strCurrentReportTitle );
+	})
+	.on( 'click', '#update-report-groups', function(e) {
+		ReportSystem.updateReportGroupsAndReports(e);
+	})
+	.on( 'click', '#cancel-report-group-update', function() {
+		psi.patterns.showLoadingImage({
+			strElementSelector: 'div#report-system'
+		});
+		location.reload();
+	})
+	.on( 'click', '.smalledit', function() {
+		$(this).hide();
+		$(this).siblings().not('.delete').toggle();
+	})
+	.on( 'click', '.new-report-group', function() {
+		$('.js-reportGroupList').toggle();
+	})
+	// Handle the tab clicks on 'Description' menu option
+	.on( 'click', '.tab-report-description', function() {
+		$(this).addClass('selected').siblings().removeClass('selected');
+		$('.js-desc').fadeIn();
+		$('.js-versions').hide();
+	})
+	.on( 'click', '.tab-report-versions', function() {
+		$(this).addClass('selected').siblings().removeClass('selected');
+		$('.js-versions').fadeIn();
+		$('.js-desc').hide();
+	});
+
+$('.scroll-y').css('height', ($(window).height() - 215) + 'px');
+
+$(window).resize(function () {
+	$('.scroll-y').css('height', ($(window).height() - 215) + 'px');
+	psi.patterns.setEqualHeights({ elementSelector: ".modal-body-container .equal-heights" });
+});
+
+$(function() {
+	$(".js-bucket").sortable({
+		connectWith: ".js-bucket"
+	});
+
+	// load FusionCharts.js
+	if ( typeof FusionCharts === "undefined" ) {
+		setTimeout( function() {
+			var fusionChartScriptFile = document.createElement( "script" );
+			fusionChartScriptFile.src = ReportSystem.strConfigCommonPath + "/javascript/fusioncharts/fusioncharts_3.14/fusioncharts.js";
+			jQuery("head").append( fusionChartScriptFile );
+		}, 300 );
+	}
+});
+
+ReportSystem.loadEditReportGroups = function() {
+
+	psi.patterns.ajaxRequest({
+		url: '/?module=report_groupsxxx',
+		strElementSelector: 'div#report-system',
+		data: '&edit_report_groups=1&selected_module=' + ReportSystem.request_module,
+		success: function( response ) {
+			$( '#report-system' ).html( response );
+			$( '.manage-report-system' ).hide();
+			$(".js-bucket").sortable({
+				connectWith: ".js-bucket"
+			})
+		}
+	});
+};
+
+// Handle Save after updating report groups and reports.2
+ReportSystem.updateReportGroupsAndReports = function(e) {
+
+	ReportSystem.submitReportGroupReorder();
+	ReportSystem.validateReportGroupNames( e );
+	if( true == ReportSystem.boolIsValid ) {
+		psi.patterns.ajaxRequest({
+			url: '/?module=report_groupsxxx&action=update_report_groups_and_report_instances',
+			strElementSelector: 'div#report-system',
+			data: ReportSystem.strDeletedReportGroupIds + ReportSystem.strDeletedReportIds + '&' + ReportSystem.strReportGroupPositions + ReportSystem.strUpdatedReportGroupNames + ReportSystem.strUpdatedReportsName,
+			success: function( response ) {
+				try {
+					var strResponseMessage = $.isPlainObject( response ) ? response : $.parseJSON( response );
+					if( true == strResponseMessage['success'] ) {
+						psi.patterns.showLoadingImage({
+							strElementSelector: 'div#report-system'
+						});
+						location.reload();
+					} else {
+						psi.patterns.removeLoadingImage({
+							strElementSelector: 'div#report-system'
+						});
+						$( '#common_error_msgs' ).html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 ">' + strResponseMessage['error'] + '</span></p>' );
+					}
+				} catch(e) {
+					// This occurs when the response is a string that is not valid JSON
+					psi.patterns.removeLoadingImage({
+						strElementSelector: 'div#report-system'
+					});
+					$( '#common_error_msgs' ).html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 ">' + response + '</span></p>' );
+
+				}
+			}
+		});
+	}
+};
+
+//Validate report group name.
+$('.form-field').blur( function(){
+	ReportSystem.arrstrNameCount = '';
+	ReportSystem.boolIsValid = true;
+	ReportSystem.strPreviousText = $(this).prev().val();
+	var arrstrReportGroupNames = [];
+	$('.head .old-report-group').each( function(){
+		arrstrReportGroupNames.push( $(this).val().toUpperCase() );
+	});
+
+	ReportSystem.strUpdatedName = $.trim($(this).val()).toUpperCase();
+	if( '' == $.trim( ReportSystem.strUpdatedName ) ) {
+		ReportSystem.boolIsValid = false;
+		ReportSystem.showErrorMessage( __( 'Report group name is missing.' ), this );
+	}
+	if( ReportSystem.strPreviousText.toUpperCase() != ReportSystem.strUpdatedName ) {
+
+		if( ( -1 != $.inArray( ReportSystem.strUpdatedName,arrstrReportGroupNames ) ) ) {
+			ReportSystem.boolIsValid = false;
+			ReportSystem.intValid = 0;
+			$(this).val( ReportSystem.strPreviousText );
+			ReportSystem.showErrorMessage( __( 'Report group name already exists.' ), this );
+		}
+	}
+
+	if( false == ReportSystem.boolIsValid ) {
+		return false;
+	}
+} );
+
+//Validate report group names
+ReportSystem.validateReportGroupNames = ( function(e) {
+	var $formFields = $( '.form-field' );
+	if( 0 == ReportSystem.intValid ) {
+		ReportSystem.intValid = 1;
+		e.preventDefault();
+	} else {
+		ReportSystem.CustomReportGroupNames	= '';
+		ReportSystem.arrstrNameCount		= '';
+		ReportSystem.boolIsValid			= true;
+
+		$formFields.each( function() {
+			ReportSystem.CustomReportGroupNames += $( this ).val().toUpperCase() + ' ';
+		});
+
+		$formFields.each( function() {
+			ReportSystem.strPreviousText	= $( this ).prev().text();
+			ReportSystem.strUpdatedName		= $.trim($(this).val()).toUpperCase();
+			if( true == $( this ).is( ':visible' ) ) {
+				if( 50 < ReportSystem.strUpdatedName.length ) {
+					ReportSystem.boolIsValid = false;
+					if( $(this).hasClass( 'report-group' ) ) {
+						ReportSystem.showErrorMessage( __( 'Report group name exceeds max character limit of 50.' ), this );
+					} else {
+						ReportSystem.showErrorMessage( __( 'Report name exceeds max character limit of 50.' ), this );
+					}
+				} else if( ReportSystem.strPreviousText.toUpperCase() != ReportSystem.strUpdatedName ) {
+					if( -1 != $.inArray( ReportSystem.strUpdatedName, ReportSystem.CustomReportGroupNames ) ){
+						ReportSystem.boolIsValid = false;
+						$(this).val( ReportSystem.strPreviousText );
+						if( $(this).hasClass( 'report-group' ) ) {
+							ReportSystem.showErrorMessage( __( 'Report group name should be unique.' ), this );
+						} else {
+							ReportSystem.showErrorMessage( __( 'Report name should be unique.' ), this );
+						}
+					}
+				}
+			}
+		});
+		if( false == ReportSystem.boolIsValid ) {
+			e.preventDefault();
+		}
+	}
+});
+
+// To handle the report menu clicks
+ReportSystem.loadReportMenuOptions = function( intWidth, intHeight, strUrl, strTitle, strContentId ) {
+	strUrl += '&name=' + ReportSystem.strCurrentReportName;
+	strUrl += ReportSystem.strCurrentReportVersion ? '&version=' + ReportSystem.strCurrentReportVersion : '';
+	strUrl += ReportSystem.intCurrentReportTypeId === 1 ? '' : '&type=' + ReportSystem.intCurrentReportTypeId;
+
+	psi.patterns.loadDialog({ width:intWidth, height:intHeight, strUrl:strUrl, strContentId:strContentId, title:strTitle});
+	$( '.report-options' ).actiontip( 'hide' );
+};
+
+ReportSystem.showErrorMessage = function( strMessage, obj ) {
+	if( !$( obj ).next().is( 'span.error' ) ) {
+		$( obj ).after( '<span class="error text-red font15 pad10-top">' + strMessage + '</span>' );
+		$( 'span.error' ).delay( 2500 ).fadeOut( 1000, function(){
+			$( this ).remove();
+		});
+	}
+};
+
+// This utility allows us to create callback functions that will fire once and only once.
+function once( fn, context ) {
+	var returnValue;
+	return function() {
+		if( fn ) {
+			returnValue = fn.apply( context || this, arguments );
+			fn = null;
+		}
+		return returnValue;
+	}
+}
+
+//# sourceURL=Entrata/js/module/report_system/report_system.js

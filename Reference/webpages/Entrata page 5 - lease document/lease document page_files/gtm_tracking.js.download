@@ -1,0 +1,82 @@
+var GtmTracking = {};
+
+GtmTracking.addError = function( strErrorType, strComponentName, strStepName, strModalName, strErrorMessage ) {
+	if( 'undefined' !== typeof dataLayer ) {
+		dataLayer.push( {
+			'event'             : 'e_error',
+			'errorType'         : strErrorType,
+			'componentName'     : strComponentName,
+			'stepName'          : strStepName,
+			'modalName'         : strModalName,
+			'errorMessage'      : strErrorMessage
+		} );
+	}
+}
+
+GtmTracking.addModalTimestampStart = function( strStepName, strModalName ) {
+	if( 'undefined' !== typeof dataLayer ) {
+		dataLayer.push( {
+			'event'             : 'e_modalTimeStampStart',
+			'stepName'          : strStepName,
+			'modalName'         : strModalName
+		} );
+	}
+}
+
+GtmTracking.addModalTimestampComplete = function( strStepName, strComponentName, strModalName ) {
+	if( 'undefined' !== typeof dataLayer ) {
+		dataLayer.push( {
+			'event'             : 'e_modalTimeStampComplete',
+			'stepName'          : strStepName,
+			'componentName'     : strComponentName,
+			'modalName'         : strModalName
+		} );
+	}
+}
+
+GtmTracking.addStep = function( strStepNumber, strStepName, strModalName, strComponentType, strComponentName, strToggleStatus, strTabClick ) {
+	if( 'undefined' !== typeof dataLayer ) {
+		dataLayer.push( {
+			'event'             : 'e_modalInteraction',
+			'stepNumber'        : strStepNumber,
+			'stepName'          : strStepName,
+			'modalName'         : strModalName,
+			'componentType'     : strComponentType,
+			'componentName'     : strComponentName,
+			'toggleStatus'      : strToggleStatus,
+			'tabClick'          : strTabClick
+		} );
+	}
+}
+
+GtmTracking.addNavigation = function( strMenuName, strMenuType ) {
+	if( 'undefined' !== typeof dataLayer ) {
+		dataLayer.push( {
+			'event'             : 'e_navigation',
+			'menuName'          : strMenuName,
+			'menuType'          : strMenuType
+		} );
+	}
+}
+
+GtmTracking.addComponentInteraction = function( strComponentName, strComponentType ) {
+	if( 'undefined' !== typeof dataLayer ) {
+		dataLayer.push( {
+			'event'                     : 'e_componentInteraction',
+			'componentName'             : strComponentName,
+			'componentType'             : strComponentType
+		} );
+	}
+}
+
+GtmTracking.addGlobalDataLayer = function( strSection, strSubSection, intUserId, boolIsLoggedIn ) {
+	if( 'undefined' !== typeof dataLayer ) {
+		window.dataLayer = window.dataLayer || [];
+		dataLayer = [{
+			'section': strSection,
+			'sub_section': strSubSection,
+			'userId': intUserId,
+			'logged_in': boolIsLoggedIn
+		}];
+	}
+}

@@ -1,0 +1,7 @@
+{
+  "values": [
+    ["First Name", "Last Name", "Lease Type"],
+    ["Jane", "Doe", "Renewal"],
+    ["John", "Smith", "New"]
+  ]
+}

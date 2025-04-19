@@ -1,5 +1,9 @@
 // src/js/sheets.js
 async function getAuthToken() {
+  if (typeof globalThis !== 'undefined' && globalThis.__E2E_TEST__) {
+    // E2E test mode: return a fake token
+    return 'fake-e2e-token';
+  }
   return new Promise((resolve, reject) => {
     chrome.identity.getAuthToken({ interactive: true }, (token) => {
       if (chrome.runtime.lastError) {

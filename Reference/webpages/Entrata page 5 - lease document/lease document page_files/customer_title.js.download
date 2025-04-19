@@ -1,0 +1,58 @@
+var objCustomerTitle = function() {
+	function createCustomerMessage( objElement, intMessageAggregatorId, intPropertyId ) {
+		$(objElement).siblings('.toolbar-modal-arrow').remove();
+		var strElementSelector = '.sms-modal-text';
+		if( true == $(objElement).hasClass('sms-modal-whatsapp') ) {
+			strElementSelector = '.sms-modal-whatsapp';
+		}
+		var MESSAGE_AGGREGATOR_WHATSAPP = 3;
+		var strErrorElementSelector = '#js-sms-chat-error';
+
+		if( "undefined" === typeof objEntrataXmppChat.getIsUserOnline() || false === objEntrataXmppChat.getIsUserOnline() ) {
+			if( MESSAGE_AGGREGATOR_WHATSAPP == intMessageAggregatorId ) {
+				var strErrorMessage = '<p id="smsChatErrorMessage" class="alert error slim">' + objCustomerTitle.strUserNotAvailableMsg + '</p>';
+				$( strErrorElementSelector ).html( strErrorMessage );
+				$( strErrorElementSelector ).show().delay( 7000 ).fadeOut();
+				return false;
+			}
+			$( objElement ).after( '<i class="toolbar-modal-arrow"></i>' );
+			$( '#sms-modal' ).show();
+
+			if( '' == $.trim( $('#toolbarTextContainer').html() ) ) {
+				psi.patterns.ajaxRequest({
+					url					: objCustomerTitle.create_customer_message,
+					strElementSelector	: '#toolbarTextContainer',
+				});
+			}
+		} else {
+			if( false === objEntrataXmppChat.getIsUserOnline() || false == objChatPanel.checkIfPropertyExists( intPropertyId ) ) {
+				var strErrorMessage = '<p id="smsChatErrorMessage" class="alert error slim">' + objCustomerTitle.strUserNotAvailableMsg + '</p>';
+				$( strErrorElementSelector ).html( strErrorMessage );
+				$( strErrorElementSelector ).show().delay( 7000 ).fadeOut();
+				return false;
+			}
+
+			objCustomerTitle.initiateChatRequest( objElement, strElementSelector, strErrorElementSelector, intMessageAggregatorId );
+		}
+	}
+
+	function initiateChatRequest( objElement, strElementSelector, strErrorElementSelector, intMessageAggregatorId ) {
+		objChatPanel.handleInitiateResidentChat( {
+			intCustomerId: objCustomerTitle.intCustomerId,
+			intPropertyId: objCustomerTitle.intPropertyId,
+			intLeaseId: objCustomerTitle.intLeaseId,
+			intMessageAggregatorId: intMessageAggregatorId,
+			strElementSelector: strElementSelector,
+			strErrorSelector: strErrorElementSelector,
+			strWeChatOpenId: $(objElement).data('wechat_open_id'),
+			onSuccess: function() {
+				$(objElement).removeClass( 'icon-active' );
+			}
+		} );
+	}
+
+	return {
+		createCustomerMessage: createCustomerMessage,
+		initiateChatRequest: initiateChatRequest
+	};
+}();

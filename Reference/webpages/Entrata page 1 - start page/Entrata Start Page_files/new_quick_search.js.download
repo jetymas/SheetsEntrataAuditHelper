@@ -1,0 +1,969 @@
+const nqs = ( function($, window){
+
+	// local variable available only in object
+	const defaultRequestTimeout		= 400;
+	const nqsSearchTabAll				= 'all';
+	const params = { hideNqsFilterTooltip: false };
+
+	let objXhr;
+	let resultActiveTab					= null;
+
+	let intTimeout 						= null;
+	let strPreviousText 					= '';
+	let strDocumentActiveInactiveStatus	= 'all';
+	let currentQsTab						= nqsSearchTabAll;
+
+	let nqsMainContainerWindowDiv		= "#quick-search-new-window";
+	let nqsSearchBoxInputId				= "#quick-search-new-form-field";
+
+	var strRefineOption1;
+	var strRefineOption2;
+	var strRefineOption3;
+	var strRefineOption4;
+
+	let arrFilterMapping = {
+		"resident_name":["name_refined","email_address","id","phone_number"],
+		"unit_number":["building_unit","unit"],
+		"unit":["building_unit"],
+		"vehicle":["license_plate"],
+		"input#test" : ["property"]
+	};
+
+	let arrAdvancedFilters = ["unit_number", "vehicle"];
+
+	const maxNQSTooltipDisplayLimitCount	= 'maxNQSTooltipDisplayLimitCount';
+
+	let objGlobalTimeout = null;
+	// Private Functions
+
+	function getToken()	{
+		let characters	= 'abcdefghijklmnopqrstuvwxyz0123456789';
+		let result		= "";
+		let charactersLength = characters.length;
+
+		for( let i = 0; i < 15; i++ ) {
+			result += characters.charAt(Math.floor(Math.random() * charactersLength));
+		}
+		return Date.now()+result;
+	}
+
+	function createCookie(name, value, days) {
+		let expires;
+		if( days ) {
+			var date = new Date();
+			date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+			expires = "; expires=" + date.toGMTString();
+		} else {
+			expires = "";
+		}
+		document.cookie = name + "=" + value + expires + "; path=/";
+	}
+
+	function setFilterInUse( intVal ) {
+		$("#is_refine_filter_in_use").val( intVal ?? 0 );
+	}
+	function changeTabs( tabName ) {
+		$( ".quicksearch-tab" ).removeClass( "selected" );
+		$( "." + tabName + "_btn" ).addClass( "selected" );
+		$( "#" + tabName + "_results" ).show();
+		currentQsTab = tabName;
+	}
+	function closeResponseBox( $boolIsKeepSearchText ) {
+		$("#quick-search-new-window").addClass("hide");
+		$("#quick-search-new-search-field #clear-search-btn").addClass("hide");
+		$(".js-filter-status option:selected").removeClass( 'selected');
+		if( !$boolIsKeepSearchText ) {
+			$("#quick-search-new-form-field").val("");
+		}
+		$( ".quicksearch-tab" ).removeClass( "selected" );
+		$("#qs_status_filter").prop('selectedIndex',1);
+		$("#refine_option1").prop('selectedIndex',0);
+		$("#refine_option2").prop('selectedIndex',0);
+		$("#refine_option3").prop('selectedIndex',0);
+		$("#refine_option4").prop('selectedIndex',0);
+		currentQsTab = 'all';
+		sessionStorage.removeItem('search_session');
+	}
+	function resetResponseBox( searchKeywords ){
+		let quickSearchNewFormFieldValue = searchKeywords ? searchKeywords : $("#quick-search-new-form-field").val();
+
+		$("#quick-search-new-window").removeClass("hide");
+		$("#quick-search-new-search-field #clear-search-btn").removeClass("hide");
+		$("#quick-search-new-form-field").val(quickSearchNewFormFieldValue);
+		$( "." + resultActiveTab + "_btn" ).addClass( "selected" );
+		('' !== strRefineOption1) ? $('#refine_option1 option[value="' + strRefineOption1 + '"]').prop( "selected", true) : $("#refine_option1").prop('selectedIndex',0 );
+		('' !== strRefineOption2) ? $('#refine_option2 option[value="' + strRefineOption2 + '"]').prop( "selected", true) : $("#refine_option2").prop('selectedIndex',0 );
+		('' !== strRefineOption3) ? $('#refine_option3 option[value="' + strRefineOption3 + '"]').prop( "selected", true) : $("#refine_option3").prop('selectedIndex',0 );
+		('' !== strRefineOption4) ? $('#refine_option4 option[value="' + strRefineOption4 + '"]').prop( "selected", true) : $("#refine_option4").prop('selectedIndex',0 );
+		('' !== strDocumentActiveInactiveStatus) ? $('#qs_status_filter option[value="' + strDocumentActiveInactiveStatus +'"]').prop("selected", true) : $("#qs_status_filter").prop('selectedIndex',1 );
+	}
+	function fetchResponseData( event, boolIsFullReload, intActiveTabCount = null, isResetFilter = false, arrMixOptions = {} ) {
+
+		const boolIsSearchTextChange = ( arrMixOptions.hasOwnProperty('is_search_text_change') ) ? arrMixOptions['is_search_text_change'] : 0;
+		objNqsMainContainerWindowDiv = $(nqsMainContainerWindowDiv);
+		objNqsMainContainerWindowDiv.removeClass("hide");
+		$("#quick-search-new-search-field #clear-search-btn").removeClass("hide");
+		let nqsSearchBoxInput = $(nqsSearchBoxInputId);
+		arrquickSearchNewFormFieldValues = nqsSearchBoxInput.val().trim().replace(/\s\s+/g, ' ').split(" ");
+		resultActiveTab = currentQsTab;
+
+		let strElementSelector = ( boolIsFullReload ) ? '#quick-search-new-results-container' : '#quick_search_content';
+
+		if( 1 > nqsSearchBoxInput.val().trim().length && 'keyup' == event.type ) {
+			closeResponseBox();
+			return;
+		}
+
+		keydown = false;
+
+		clearTimeout( intTimeout );
+		intTimeout = setTimeout( function(){
+
+			if( 'undefined' != typeof objXhr ) {
+				objXhr.abort();
+				objNqsMainContainerWindowDiv.removeClass('ajax_in_process');
+			}
+
+			//do not process if any ajax call is still in progress
+			if( objNqsMainContainerWindowDiv.hasClass('ajax_in_process') ) {
+				return;
+			}
+
+			let activeInactiveFiltersChecked = $("#div-nqs-filter input:checkbox:checked");
+			strDocumentActiveInactiveStatus = "all";
+			if( 1 === activeInactiveFiltersChecked.length ) {
+				strDocumentActiveInactiveStatus = activeInactiveFiltersChecked[0].value;
+			}
+
+			strRefineOption1 = ( arrquickSearchNewFormFieldValues[0] && $("#refine_option1").val() && !isResetFilter ) ? $("#refine_option1").val() : '';
+			strRefineOption2 = ( arrquickSearchNewFormFieldValues[1] && $("#refine_option2").val() && !isResetFilter ) ? $("#refine_option2").val() : '';
+			strRefineOption3 = ( arrquickSearchNewFormFieldValues[2] && $("#refine_option3").val() && !isResetFilter ) ? $("#refine_option3").val() : '';
+			strRefineOption4 = ( arrquickSearchNewFormFieldValues[3] && $("#refine_option4").val() && !isResetFilter ) ? $("#refine_option4").val() : '';
+
+			if( '' !== strRefineOption1 || '' !== strRefineOption2 || '' !== strRefineOption3 || '' !== strRefineOption4 ) {
+				$("#is_refine_filter_in_use").val('1');
+			}
+
+			if( !nqsSearchBoxInput.val().length ) {
+				closeResponseBox();
+				return;
+			}
+
+			if( null === sessionStorage.getItem('search_session') ) {
+				sessionStorage.setItem( 'search_session', getToken() );
+			}
+
+			const arrRequestData = {
+				"search_string": nqsSearchBoxInput.val(),
+				"active_search_type": currentQsTab,
+				"refine_options[document_status]": strDocumentActiveInactiveStatus,
+				"refine_options[1]": strRefineOption1,
+				"refine_options[2]": strRefineOption2,
+				"refine_options[3]": strRefineOption3,
+				"refine_options[4]": strRefineOption4,
+				"is_refine_filter_in_use": $( "#is_refine_filter_in_use" ).val(),
+				"is_full_reload": boolIsFullReload ? 1 : 0,
+				'is_search_text_change' : boolIsSearchTextChange,
+				"user_search_session": sessionStorage.getItem( 'search_session' )
+			};
+
+			if( intActiveTabCount ) arrRequestData['active_tab_count'] = intActiveTabCount;
+
+			//this class is being used to check if any previos ajax call is still in progress.
+			objNqsMainContainerWindowDiv.addClass('ajax_in_process');
+
+			objXhr = psi.patterns.ajaxRequest({
+				type: "post",
+				url: nqsSearchBoxInput.data('url'),
+				data: arrRequestData,
+				strElementSelector: strElementSelector,
+				complete: function( ) {
+					if( params.hasOwnProperty( 'accessibleTabs') ) {
+						displayFooterLinks( params.accessibleTabs, currentQsTab );
+					}
+				}
+			});
+		}, defaultRequestTimeout );
+	}
+
+	function displayFooterLinks( accessibleTabs, strActiveTab ) {
+		let accessibleTabsLink = '';
+		let strPreFooterLinkText = '';
+
+		let boolShowAccesibleTabsLink = false;
+
+		const arrAcceesibleLinkTabs = {
+			'lead' : 'prospect_systemxxx',
+			'applicant' : 'applicantsxxx&action=view_applicants',
+			'resident' : 'customers_systemxxx',
+			'tenant' : 'commercial_tenantsxxx'
+		};
+
+		if( accessibleTabs ) {
+			for( let key in accessibleTabs ) {
+				if( arrAcceesibleLinkTabs.hasOwnProperty( key ) ) {
+					if( strActiveTab && 'all' !== strActiveTab && key !== strActiveTab ) continue;
+					if( !boolShowAccesibleTabsLink ) { boolShowAccesibleTabsLink = true; }
+					if( accessibleTabsLink ) {
+						accessibleTabsLink += ( ( key === 'tenant' ) ? ' <strong>or</strong> ' : ', ');
+					}
+
+					if( params.hasOwnProperty('search_types') && params['search_types'].hasOwnProperty( key ) ) {
+						accessibleTabsLink += `<a id="nqs-${key}-filter" class="nqs-filter" data-url="/?module=${arrAcceesibleLinkTabs[key]}">${params['search_types'][key]}</a>`;
+					}
+				}
+			}
+		}
+
+		if( boolShowAccesibleTabsLink && accessibleTabsLink ) {
+			strPreFooterLinkText = __( '<strong id="nqs-link-show">Looking for an INACTIVE account older than 24 months? Continue searching in &nbsp;</strong>{%s,0}', [accessibleTabsLink]);
+		}
+		$('#quick-search-new-window .nqs-footer-links').html( `${strPreFooterLinkText}` );
+	}
+	//public functions
+
+	function replaceHyphenWithUnderscore(string) {
+		return string.replace( /-/g , '_' );
+	}
+	function fetchAndSetFilterValues(strFilterId, identifier) {
+		//fetch checkbox value
+		let arrObj = {};
+		strFilterId = replaceHyphenWithUnderscore(strFilterId);
+		arrObj = {};
+		$("input[type=checkbox]:checked").each(function () {
+			arrObj[ $(this).attr('name') + '_' + $(this).attr('value') ] = $(this).is(":checked");
+		});
+
+		let arrFilterObj = {};
+
+		$("#div-search-term-filters .refine-options-filter").each(function (index){
+			let filterText = $(this).children("span").attr('data-selected-search-string');
+			let filterKey = $(this).children("input").val();
+
+			if( filterKey !== '' ) {
+				for ( let key in arrFilterMapping ) {
+					if( arrFilterMapping[key].includes(filterKey) ) {
+						arrFilterObj[key] = ( arrFilterObj[key] !== undefined ? arrFilterObj[key] + ' ' : '' ) + filterText;
+					}
+				}
+			}
+
+		});
+
+		arrObj['filters'] = arrFilterObj;
+
+		//filtering all data to map it in resident_name
+		let arrFiltersToCheck = [];
+		if ( Object.keys(arrFilterObj).length > 0 ) {
+			//combining all filter data
+			for (const strFilterKey in arrFilterObj) {
+				if( strFilterKey !== 'resident_name' ) {
+					arrFiltersToCheck = arrFiltersToCheck.concat(arrFilterObj[strFilterKey].split( ' ' ));
+				}
+			}
+		}
+
+		let strSearchBoxText = $("#quick-search-new-form-field").val();
+		let arrSearchBoxText = strSearchBoxText.split( ' ' ).map(function (text){ return text.trim(); });
+		let arrSearchBox = arrSearchBoxText.filter(i => arrFiltersToCheck.indexOf(i) === -1);
+
+		arrObj['filters']['resident_name'] = arrSearchBox.join( ' ' );
+		arrObj['nqs_user_type'] = strFilterId;
+
+		//set nqs data with unique identifier
+		let jsonFilters = JSON.stringify( arrObj );
+		sessionStorage.setItem( identifier, jsonFilters ); //assigning new filters
+
+		setTimeout(function(){
+			sessionStorage.removeItem( identifier );
+		}, 10000);
+	}
+
+	function getUserTypeFromUrl() {
+		let arrLinks = {
+			"nqs_lead_filter" : "applicationsxxx",
+			"nqs_applicant_filter" : "applicantsxxx",
+			"nqs_resident_filter" : "customers_systemxxx",
+			"nqs_tenant_filter" : "commercial_tenantsxxx"
+		}
+
+		let strWindowUrl = window.location.href;
+		let urlParams = new URLSearchParams(strWindowUrl);
+		let arrLinkKeys = Object.keys(arrLinks);
+		let objUserType = {};
+		for (const strWindowUrlKey in arrLinkKeys) {
+			let strLinkKey = arrLinks[strWindowUrlKey];
+			if ( strLinkKey == urlParams.get('module') ) {
+				objUserType.user_type = strWindowUrlKey;
+				objUserType.user_type_identifier = urlParams.get('nqs_user_type');
+			}
+		}
+		return objUserType;
+
+	}
+
+	function mapFilters() {
+
+		let objLocalStorageUserType = getUserTypeFromUrl();
+		if( 0 === objLocalStorageUserType.length ) {
+			return false; //apply no filters if no user type value set
+		}
+		let strUserTypeIdentifier = objLocalStorageUserType.user_type_identifier;
+		//fetch local storage
+		let strLocalStorageFilters = JSON.parse( sessionStorage.getItem( strUserTypeIdentifier ) );
+
+		let arrLocalStorageFilters = null;
+
+		if( strUserTypeIdentifier && strLocalStorageFilters && strLocalStorageFilters.hasOwnProperty( 'filters' ) ) {
+			arrLocalStorageFilters = strLocalStorageFilters.filters;
+		}
+
+		let intTriggerCount = 0;
+		let boolOnlyResidentAdvancedFilter = true;
+
+		if ( strLocalStorageFilters == null ) {
+			return;
+		}
+
+		if ( Object.keys(arrLocalStorageFilters).length > 0 ) {
+
+			for ( let strKey in arrLocalStorageFilters ) {
+				if( arrAdvancedFilters.includes(strKey) ) {
+					intTriggerCount++;
+					if( strLocalStorageFilters.nqs_user_type !== 'nqs_resident_filter' && strKey === 'vehicle' ) {
+						boolOnlyResidentAdvancedFilter = false;
+					}
+				}
+				if( strKey === 'input#test' ) {
+					$(".addbutton").trigger( 'click' );
+					$("#report_filterproperty_group_ids").find("ul").children("li").children("label").children(".delete").trigger("click");
+					$(strKey).val( arrLocalStorageFilters[strKey] );
+					$(strKey).trigger('keyup');
+				} else {
+					$('#'+strKey).val( arrLocalStorageFilters[strKey] );
+				}
+			}
+
+		}
+
+		if (intTriggerCount > 0 && boolOnlyResidentAdvancedFilter) {
+			$('.view-data-adv-search').trigger('click');
+		}
+
+		let strActivestatus = strLocalStorageFilters[ 'refine_options[document_status]_active' ] !== null ? strLocalStorageFilters[ 'refine_options[document_status]_active' ] : false;
+		let strInactivestatus = strLocalStorageFilters[ 'refine_options[document_status]_inactive' ] !== null ? strLocalStorageFilters[ 'refine_options[document_status]_inactive' ] : false;
+
+		if( !strInactivestatus && strActivestatus ) {
+			$( "#status_filter #status_filter_items ul:first li:nth-child(1)" ).children("label").children("input[type=checkbox]").prop( "checked", true );
+			$( "#status_filter #status_filter_items ul:first li:nth-child(2)" ).children("label").children("input[type=checkbox]").prop( "checked", false );
+		} else {
+			$( "#status_filter #status_filter_items ul:first li:nth-child(1)" ).children("label").children("input[type=checkbox]").prop( "checked", false );
+			$( "#status_filter #status_filter_items ul:first li:nth-child(2)" ).children("label").children("input[type=checkbox]").prop( "checked", true );
+		}
+
+		sessionStorage.removeItem( strUserTypeIdentifier );
+	}
+
+	function init( environment ) {
+
+		const objThisRef = this;
+
+		window.addEventListener('load',function() {
+			sessionStorage.removeItem('search_session');
+		});
+
+		objThisRef.environment = environment;
+
+		const minRequiredChars = 1;
+		const textBox = $(nqsSearchBoxInputId);
+
+		let strSearchKeyword = ( getCookie( 'user_search_keyword' ) ) ? decodeURIComponent( getCookie('user_search_keyword') ).replaceAll('%20', ' ') : '';
+		let expirationDate   = new Date("June 5, 2010");
+
+		textBox.on( "click", function(e) {
+			keydown    = false;
+		}).on( "paste", function( e ) {
+			setTimeout( function( ){
+				$(e.target).keyup();
+			}, 50 );
+		} );
+
+		textBox.on( "keydown", function(e) {
+			strPreviousText = $(this).val();
+			if( ( 9 === e.which || 13 === e.which ) && !keydown ) {
+				e.preventDefault();
+				keydown    = true;
+			}
+		});
+
+		if( 1 < strSearchKeyword.trim().length && textBox.length ) {
+			$( window ).load(function(e) {
+				textBox.val( strSearchKeyword );
+				fetchResponseData( e, true );
+			});
+			setCookie( 'user_search_keyword', null, expirationDate );
+		}
+
+		textBox.on( "keyup", function(e) {
+			switch( e.which) {
+
+				case 27: closeResponseBox(); // Key Esc
+					break;
+				case 8:
+				case 46:
+					if( minRequiredChars > $(this).val().trim().length ) {
+						closeResponseBox( true );
+					} else {
+						const arrMixOptions = { 'is_search_text_change' : 1 };
+						fetchResponseData( e, true, null, true, arrMixOptions );
+					}
+					break;
+
+				default:
+
+					if( minRequiredChars > $(this).val().trim().length ) {
+						return;
+					}
+
+					if( strPreviousText.trim() == $(this).val().trim() ) {
+						return;
+					}
+
+					if( 0 == $(this).val().trim().length ) {
+						closeResponseBox();
+						return;
+					}
+					const arrMixOptions = { 'is_search_text_change' : 1 };
+					fetchResponseData( e, true , null, true, arrMixOptions );
+			}
+
+		});
+
+		textBox.on("click", ".js-clear-search-field", function(){
+			closeResponseBox();
+		});
+		$('html').on( 'click', function(e) {
+			const container		= $("#quick-search-new-window");
+			const searchField	= $("#quick-search-new-form-field");
+			const resultPopup	= $(".responsive-large-dialog");
+			const toolTipContent	= $(".nqs-tooltip-action");
+			const divNeedHelpParentDiv	= $("#need-help-parent-div");
+
+			// Hide when click outside
+			if( ( !container.is(e.target) && container.has(e.target).length === 0 )
+				&& ( !searchField.is(e.target) && searchField.has(e.target).length === 0 )
+				&& ( !resultPopup.is(e.target) && resultPopup.has(e.target).length === 0 )
+				&& ( !divNeedHelpParentDiv.is(e.target) && divNeedHelpParentDiv.has(e.target).length === 0 )
+			) {
+				closeResponseBox();
+
+				if( toolTipContent.length ) {
+					checkAndHideTooltip( objThisRef );
+				}
+			}
+
+		});
+
+		$("#quick-search-new-results-container").on("click", ".nqs-filter", function() {
+			let strId = $(this).attr('id');
+			let strUrl = $(this).attr('data-url');
+			setCookie( strId, strId );
+			setCookie( 'search_string', textBox.val() );
+			let strUniqueUserIdentifier = replaceHyphenWithUnderscore(strId) + '_' + Math.random().toString().substr(2, 6);
+			fetchAndSetFilterValues(strId, strUniqueUserIdentifier);
+			strUrl += '&nqs_user_type=' + strUniqueUserIdentifier;
+			window.open( strUrl,'_blank');
+
+		});
+
+		let objLocalStorageUserType = getUserTypeFromUrl();
+		let strUniqueIdentifier = objLocalStorageUserType.user_type_identifier;
+		let strLocalStorageFilters = JSON.parse(sessionStorage.getItem( strUniqueIdentifier ));
+
+		if( strUniqueIdentifier && strLocalStorageFilters && strLocalStorageFilters.hasOwnProperty( 'nqs_user_type' ) ) {
+			retriveFilterPopup( strLocalStorageFilters.nqs_user_type );
+		}
+		function retriveFilterPopup( strUserType ) {
+			setTimeout(function () {
+				if( strUserType === 'nqs_tenant_filter' ){
+
+					$("document").ready(function() {
+						$('#tenant_listing').trigger('click');
+						//made a custom watcher to monitor loading of tenant screen to open filter box
+						let objFilterInterval = setInterval( function () {
+							let objTenant = document.getElementById( "div-customers" );
+							if (objTenant) {
+								$('#open-filter-by-default').trigger('click');
+								mapFilters(); //mapping data and opening filter box
+								clearInterval( objFilterInterval );
+							}
+						}, 1000 );
+					});
+
+				} else {
+					$('#open-filter-by-default').trigger('click');
+
+					mapFilters(); //mapping data and opening filter box
+
+				}
+			}, 2000);
+		}
+
+		$('.explore-new-search-link a').click( function() {
+			psi.patterns.loadOverlay( {
+				width: 578,
+				height: 360,
+				strContentId: 'overlay_modal_new-quicksearch',
+				sourceDivId: 'explore-new-quicksearch-dialog'
+			} );
+		});
+
+		$("#explore-new-quicksearch-dialog .close").click( function() {
+			$('#nqs_training_video').trigger('pause');
+			$('#overlay_modal_new-quicksearch').dialog('close');
+		});
+
+		$("#explore-new-quicksearch-btn").click( function() {
+			let strSearchString = $('#entraraQuickSearch').val();
+			$('#nqs_training_video').trigger('pause');
+			psi.patterns.ajaxRequest({
+				beforeSend: showLoadingImage({ strElementSelector: '#explore-new-quicksearch-dialog' }),
+				url: '?module=entrata_new_quick_searchxxx&action=quick_search_banner&enable_new_quick_search=1&user_search_string=' + encodeURIComponent(strSearchString.replace(/ /g, '%20')),
+				complete: function() { window.location.reload(); }
+			})
+		});
+
+		$("#view-quick-search-info-link").click( function() {
+			strUrl = $(this).data('url');
+			psi.patterns.loadMeridianDialog( {
+				width:'780',
+				height:'650',
+				strUrl:strUrl,
+				strContentId:'need-help-parent-div',
+				data : { 'isFromOldQuickSearch' : true },
+				title: __( 'Quick Search Help' )
+			}) ;
+			$('#nqs_training_video').trigger('pause');
+		});
+
+	}
+
+	function loadFilters( ) {
+
+		const objThisRef = this;
+
+		$(".refine-options-filter").on( 'change', function(e) {
+			let activeInactiveFiltersChecked = $("#div-nqs-filter input:checkbox:checked");
+
+			if( !$("#div-nqs-filter input:checkbox:checked").length ) {
+				$(this).prop('checked', true );
+			} else {
+				setFilterInUse( 1 );
+				fetchResponseData(e, true);
+			}
+		});
+
+		$(".what-is-filter").find("li").on( "click",function(e) {
+			e.stopPropagation();
+			let objThis = $(this);
+			let spanVal = objThis
+				.closest(".what-is-filter")
+				.find(".val");
+			spanVal.html( __('<strong>"{%s,0}"is </strong>: {%s,1}',[spanVal.data("selected-search-string"),objThis.text()] ) );
+
+			setTimeout(function( ) {
+				fetchResponseData( e, true );
+			}, 100 );
+
+		});
+	}
+	function loadNqsWindow( loadApplication ) {
+		const objThisRef = this;
+
+		// Resize NQS container
+		$( nqsMainContainerWindowDiv ).resizable({
+			handles: "sw",
+			minHeight: 614,
+			minWidth: 1069
+		});
+		$('.ui-resizable-se').css( {'height': '32px', 'width': '32px'} );
+
+		const strTabDivClass = '.quicksearch-tab';
+		$( nqsMainContainerWindowDiv ).off( 'click', strTabDivClass ).on( 'click', strTabDivClass, function(e){
+
+			let strCurrentQsTab = $( this ).data( "tb" );
+			const intActiveTabCount = $( this ).data( "tab-count" );
+			$(this).find(".search-tab-text").removeClass("text-dark-gray");
+
+			let boolIsPrvTabReport = ('report' === currentQsTab );
+			changeTabs( strCurrentQsTab );
+
+			const intCheckNumberSelected = $('.quicksearch-refineoption').filter( ( fieldId, field ) => { return ( 'check_number' === field.value ) ? true : false; } );
+
+			if( !['all', 'ar_payment'].includes( strCurrentQsTab ) ) {
+				$('.what-is-filter li[val="check_number"]').removeClass('hide').addClass('hide');
+			} else {
+				$('.what-is-filter li[val="check_number"]').removeClass('hide');
+			}
+			if( false == boolIsPrvTabReport && (
+					 'report' === strCurrentQsTab
+					|| 'all' === strCurrentQsTab ) )  {
+				if( 'report' === strCurrentQsTab ) {
+					$('input[name="refine_options[document_status]"]').map(function( key, value) {
+						$(this).prop( 'checked', ( value.value === 'active' ) ? true : false );
+					});
+					$( "#is_refine_filter_in_use" ).val( '1' );
+				}
+				fetchResponseData( e, true );
+			} else if( boolIsPrvTabReport || ( !['all', 'ar_payment'].includes( strCurrentQsTab ) && intCheckNumberSelected.length ) ) {
+				if( boolIsPrvTabReport ) {
+					$('.nqs-document-status').prop( 'checked', true );
+					$( "#is_refine_filter_in_use" ).val( '1' );
+				}
+				fetchResponseData( e, true, null, true );
+			} else {
+				fetchResponseData( e, false, intActiveTabCount );
+			}
+
+		});
+
+		$( nqsMainContainerWindowDiv ).off( 'click', '#link-need-help').on( 'click', '#link-need-help', function() {
+			const searchKeyword = $("#quick-search-new-form-field").val();
+			const strUrl = $(this).data('url');
+			psi.patterns.loadDialog( {
+				width: '780',
+				height: '650',
+				strUrl: strUrl,
+				strContentId: 'need-help-parent-div',
+				title: __( 'Quick Search Help' ),
+				onCloseCallback: function() { resetResponseBox( searchKeyword ) }
+			} );
+		});
+
+		function handleNqsClickEventLog( element ) {
+			const strSearchType = element.data( 'search_type' );
+			const intRowId = element.data( 'row_id' );
+			const strResultId = element.data( 'result_id' );
+			const textBox = $(nqsSearchBoxInputId);
+
+			if( null === sessionStorage.getItem('search_session') ) {
+				sessionStorage.setItem( 'search_session', getToken() );
+			}
+
+			const arrRequestClickEventData = {
+				"search_string": textBox.val(),
+				"active_search_type": currentQsTab,
+				"user_search_session": sessionStorage.getItem('search_session'),
+				"version": 1,
+				"event_type": "nqs_click_event",
+				"clicked_data_type": strSearchType,
+				"clicked_result_id": strResultId,
+				"clicked_result_position": intRowId
+			};
+
+			createCookie('UserClickEvent', JSON.stringify(arrRequestClickEventData));
+		}
+
+		$( nqsMainContainerWindowDiv ).off( 'click', ".js_data_row" ).on('click', ".js_data_row", function(e) {
+			handleNqsClickEventLog( $( this ) );
+			const searchKeyword = $("#quick-search-new-form-field").val();
+			const strSearchType = $( this ).data( 'search_type' );
+
+			if( 'undefined' !== strSearchType ) {
+
+				$("#quick-search-new-window").addClass("hide");
+				$("#quick-search-new-search-field #clear-search-btn").addClass("hide");
+				switch( strSearchType ) {
+
+					case 'lead':
+					case 'applicant':
+
+						if( 'lead' === strSearchType ) {
+							loadApplication( $( this ).data( 'application_id' ), { onCloseCallback:function() { resetResponseBox( searchKeyword ); } }, $( this ).data( 'property_id' ) );
+							break;
+						}
+
+						loadApplication( $( this ).data( 'application_id' ), { onCloseCallback:function() { resetResponseBox( searchKeyword ); } } );
+						break;
+
+					case 'resident':
+					case 'tenant':
+						psi.patterns.loadLargeDialog({
+							strUrl: '/?module=customerxxx&lease_customer[id]=' + $( this ).data( 'lease_customer_id' ),
+							onCloseCallback: function() {
+								resetResponseBox( searchKeyword );
+							}
+						});
+						break;
+
+					case 'work-order':
+						const strParentWorkOrderId = $( this ).data( 'parent-work-order-id' );
+						if( strParentWorkOrderId ) {
+							psi.patterns.loadLargeDialog({
+								strUrl: '/?module=customer_work_order_newxxx&is_resident_system=1&is_sub_task=1&is_ignore_load_sub_tasks=1&maintenance_request[id]=' + $( this ).data( 'work-order-id' ) + '&popup=1',
+								title: __('View Work Order'),
+								onCloseCallback: function() {
+									resetResponseBox( searchKeyword );
+								}
+							});
+						} else {
+							psi.patterns.loadLargeDialog({
+								strUrl: '/?module=customer_work_order_newxxx&is_resident_system=1&maintenance_request[id]=' + $( this ).data( 'work-order-id' ) + '&popup=1',
+								title: __('View Work Order'),
+								onCloseCallback: function() {
+									resetResponseBox( searchKeyword );
+								}
+							});
+						}
+
+						break;
+
+					case 'vendor':
+						psi.patterns.loadLargeDialog({
+							strUrl: '/?module=ap_payee_systemxxx&ap_payee[id]=' + $( this ).data( 'ap-payee-id' ) + '&popup=1',
+							title: __('View Vendor'),
+							onCloseCallback: function() {
+								resetResponseBox( searchKeyword );
+							}
+						});
+						break;
+
+					case 'report':
+							const strUrl = '/?module=company_reports_newxxx';
+							const arrParams = {
+								report_instance_nqs: {
+									intReportNewInstanceId: $(this).data('report-new-instance-id'),
+									intReportId: $(this).data('report-id'),
+									intReportVersionId: $(this).data('report-version-id'),
+									strReportTitle: $(this).data('report-title'),
+									intReportType: $( this ).data( 'report-type-id' ),
+									intModuleId: $(this).data('module-id'),
+									strReportName: $(this).data('report-name')
+								}
+							};
+							openNewTabWithPost(strUrl, arrParams);
+						break;
+
+					case 'ar_payment':
+						if( 'undefined' == typeof ($( this ).data( 'lease_customer_id' )) || 0 == $( this ).data( 'lease_customer_id' ) ) {
+							dialog = psi.patterns.loadDialog({
+								width: 1250,
+								height: 607,
+								strUrl: '/?module=update_ar_paymentxxx&action=view_ar_payment&source=payments&ar_payment[id]=' + $(this).data( 'ar_payment_id' ),
+								strContentId: 'ar_transaction',
+								title: __( 'Payment' ),
+								onCloseCallback: function() {
+									resetResponseBox( searchKeyword );
+								}});
+							dialog.bind( "dialogclose", function(event, ui) {
+								$('.bt-popup').btOff();
+								if( 1 == reloadLedger ) {
+									psi.patterns.ajaxRequest({ strElementSelector: '#div-view-listing', url: '/?module=ar_paymentsxxx&action=view_ar_payments' } );
+									reloadLedger = 0;
+								}
+								return true;
+							});
+						} else {
+							psi.patterns.loadLargeDialog({
+								strUrl: '/?module=customerxxx&lease_customer[id]=' + $( this ).data( 'lease_customer_id' ) + '&view_full_ledger=1&ar_payment[id]=' + $( this ).data( 'ar_payment_id' ),
+								onCloseCallback: function() {
+									resetResponseBox( searchKeyword );
+								}
+							});
+						}
+						break;
+				}
+			}
+
+		} );
+
+		$( nqsMainContainerWindowDiv ).off( 'click', ".centralize-profile-icon" ).on('click', ".centralize-profile-icon", function(e) {
+			handleNqsClickEventLog( $( this ).closest('tr.js_data_row') );
+			e.stopPropagation();
+			const intApplicantId = $( this ).data( 'applicant_id' );
+			window.location = "/?module=centralized_gc_profilexxx&applicant_id=" + intApplicantId;
+		});
+
+		$( nqsMainContainerWindowDiv ).off('click', "#reset_filter_to_all").on('click', "#reset_filter_to_all", function(e) {
+			$('.nqs-document-status').prop( "checked", true );
+			$( "#is_refine_filter_in_use" ).val( '1' );
+			fetchResponseData(e, true );
+		});
+
+		$( '#help_guide_link' ).on( 'click', function(e) {
+			let tempIsHelpEnabled = isHelpEnabled;
+			isHelpEnabled = false;
+			psi.patterns.loadMeridianDialog({
+				width:780,
+				height:650,
+				strUrl: objThisRef.exitTags.viewNeedHelp,
+				strContentId:'need-help-parent-div',
+				title:__( 'Help Guide' ),
+				showHeader: true});
+			isHelpEnabled = tempIsHelpEnabled;
+		});
+
+	}
+	function hideNqsFilterTooltip(){
+		this.params.hideNqsFilterTooltip = true;
+	};
+
+	function loadNqsRefineFilters( searchTerm, dropDownId ) {
+
+		let objThisRef = this;
+		if( 1 === searchTerm.length) {
+			let objFilter = $( "#" + dropDownId );
+			const objFilterId = objFilter.data('id');
+			const objFilterValue = $('#refine_option' + objFilterId ).val();
+			if( !objThisRef.params.hideNqsFilterTooltip
+				&& 'building_unit' === objFilterValue
+				&& objFilter
+				&& !objFilter.hasClass("disabled") ) {
+				objFilter.actiontip('show');
+			}
+
+			$( nqsMainContainerWindowDiv ).off( "click", "#action_" + dropDownId ).on( "click", "#action_" + dropDownId ,function( e ) {
+				e.stopPropagation();
+				objFilter.not( this ).actiontip( 'hide' );
+				psi.patterns.ajaxRequest( {
+					type: "post",
+					url: objThisRef.exitTags.hideNQSFilterTooltip,
+					complete: function( res ) {
+						const response = JSON.parse( res.responseText )
+						if(response.data.success) objThisRef.hideNqsFilterTooltip();
+					}
+				} );
+			} );
+		}
+	}
+
+	function checkAndHideTooltip( objThisRef ) {
+		const tooltipCount = parseInt( localStorage.getItem(maxNQSTooltipDisplayLimitCount ) ?? 0 );
+		if( !objThisRef.params.hideNqsFilterTooltip ) {
+			if( 2 === tooltipCount ) {
+				psi.patterns.ajaxRequest( {
+					type: "post",
+					url: objThisRef.exitTags.hideNQSFilterTooltip,
+					complete: function( res ) {
+						const response = JSON.parse( res.responseText )
+						if( response.data.success ) objThisRef.hideNqsFilterTooltip();
+						localStorage.removeItem( maxNQSTooltipDisplayLimitCount );
+					}
+				} );
+			} else {
+				localStorage.setItem( maxNQSTooltipDisplayLimitCount, tooltipCount + 1 );
+			}
+		}
+	}
+
+	function handleReportsTab() {
+		$.each( $( ".report-description-content" ), function() {
+			let intReportInstanceId = $( this ).data( 'report_instance_id' );
+			$( ".report-description-" + intReportInstanceId ).psiTooltip( {
+				trigger: 'hover',
+				width: '351px',
+				contentSelector: $( ".report-tooltip-" + intReportInstanceId ),
+				items: ".report-description-" + intReportInstanceId,
+				open: function( event, ui ) {
+					$( '.ui-tooltip' ).addClass( 'quick-search-report-tooltip' );
+				}
+			} );
+		} );
+	}
+
+	function needHelpDialog() {
+
+		$("div[aria-describedby=\"need-help-parent-div\"]").find(".js-notification-panel-toggle").addClass("hide");
+
+		const objThisRef = this;
+		const objNeedHelpParentDiv = $('#need-help-parent-div');
+
+		const strNeedHelpDlgCloseBtn = '#need-help-dlg-close-btn';
+
+		objNeedHelpParentDiv.off( 'click', strNeedHelpDlgCloseBtn ).on( "click", strNeedHelpDlgCloseBtn, function() {
+			const searchKeyword = $('#quick-search-new-form-field').val();
+			$('#need-help-parent-div').dialog('close');
+			setTimeout( function() {
+				objThisRef.resetResponseBox(searchKeyword);
+			}, 500 );
+		});
+
+		const strNqsRevertSurvey = '.new-quick-search-survey';
+		objNeedHelpParentDiv.off('click', strNqsRevertSurvey) .on( 'click', strNqsRevertSurvey,  function() {
+			let strSearchKeyword = $('#quick-search-new-form-field').val();
+			sessionStorage.setItem( 'revert_search_term', strSearchKeyword );
+			objNeedHelpParentDiv.dialog( 'close' );
+
+		} );
+
+		objNeedHelpParentDiv.off( 'click', '.help-menu-link' ).on( 'click', '.help-menu-link', function( e ) {
+			e.preventDefault()
+			const refDivId = $(this).data('ref-div-id');
+			objNeedHelpParentDiv.scrollTo('#' + refDivId );
+		});
+
+	}
+
+	function openNewTabWithPost( strUrl, arrParams ) {
+		const form = document.createElement('form');
+		form.method = 'POST';
+		form.action = strUrl;
+		form.target = '_blank';
+
+		for (const key in arrParams) {
+			if (arrParams.hasOwnProperty(key)) {
+				const value = arrParams[key];
+				if (typeof value === 'object') { // Handle nested objects
+					for (const subKey in value) {
+						if (value.hasOwnProperty(subKey)) {
+							const input = document.createElement('input');
+							input.type = 'hidden';
+							input.name = `${key}[${subKey}]`;
+							input.value = value[subKey];
+							form.appendChild(input);
+						}
+					}
+				} else {
+					const input = document.createElement('input');
+					input.type = 'hidden';
+					input.name = key;
+					input.value = value;
+					form.appendChild(input);
+				}
+			}
+		}
+
+		document.body.appendChild(form);
+		form.submit();
+		document.body.removeChild(form);
+	}
+
+	function getCookie(name) {
+		const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+		return v ? v[2] : null;
+	}
+	function setCookie( strCookieName, strCookieValue, strExpirationDate, strPath, strDomain, IsSecure ) {
+		const mixCookie = strCookieName + "=" + escape( strCookieValue )
+			+ (( strExpirationDate ) ? "; expires=" + strExpirationDate.toGMTString() : "")
+			+ (( strPath ) ? "; path=" + strPath : "") + (( strDomain ) ? "; domain=" +  strDomain : "")
+			+ (( IsSecure ) ? "; secure" : "");
+		document.cookie = mixCookie;
+	}
+
+	// @todo in return function we should add a property which used in various page load.
+	const nqsData = {
+		init: init,
+		loadFilters: loadFilters,
+		loadNqsWindow: loadNqsWindow,
+		environment: null,
+		exitTags: {},
+		params: params,
+		resetResponseBox: resetResponseBox,
+		closeResponseBox: closeResponseBox,
+		loadNqsRefineFilters: loadNqsRefineFilters,
+		hideNqsFilterTooltip: hideNqsFilterTooltip,
+		handleReportsTab: handleReportsTab,
+		needHelpDialog: needHelpDialog
+	};
+	return nqsData;
+})( jQuery, window );

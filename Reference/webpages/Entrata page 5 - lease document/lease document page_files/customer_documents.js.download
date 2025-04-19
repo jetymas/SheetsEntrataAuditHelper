@@ -1,0 +1,182 @@
+/**
+ *
+ */
+
+	function checkAllPageResidentDocuments( objCheckbox ){
+		$("#checkboxOptions").hide();
+		if( $(objCheckbox).is(":checked") == true ) {
+			$( ".document-checkbox" ).prop( "checked", true );
+			$( objCheckbox ).prop( "checked", true );
+		} else {
+			$( ".document-checkbox" ).prop( "checked", false );
+			$( objCheckbox ).prop( "checked", false );
+		}
+	}
+
+	function toggleCheckAllPageDocuments( objCheckbox ) {
+		var intTotalDocumentCheckbox 		= $('.document-checkbox').length;
+		var intTotalDocumentCheckedCheckbox	= $('.document-checkbox:checked').length;
+		if( $(objCheckbox).is(":checked") == false ) {
+			if ( $( ".js-checkall-documents" ).is( ":checked" ) === true ) {
+				$( ".js-checkall-documents" ).prop( "checked", false );
+			}
+		} else {
+			if( intTotalDocumentCheckbox == intTotalDocumentCheckedCheckbox  ) {
+				$( ".js-checkall-documents" ).prop( "checked", true );
+			}
+		}
+	}
+
+	function downloadDetailedResidentDocuments( strUrl ) {
+		 if ( false == $(".document-checkbox").is(":checked") ) {
+			 alert("Please select at least one record.");
+			 return false;
+		 }
+		 $("#documents_requests").html('');
+
+		 var selectedDocs = $( ".document-checkbox:checked" ).map( function() { return $( this ).attr('data-file-id');}) .get();
+		 var fileGenetaionType = $( ".document-checkbox:checked" ).map( function() { return  $( this ).attr('data-file-generation-type');}) .get();
+		 var fileSigned= $( ".document-checkbox:checked" ).map( function() { return  $( this ).attr('data-file-signed');}) .get();
+		 var isIncludeDeletedFile= $( ".document-checkbox:checked" ).map( function() { return  $( this ).attr('data-is-include-deleted-file');}) .get();
+		 var childFilesIds= $( ".document-checkbox:checked" ).map( function() { return  $( this ).attr('data-child-files-id');}) .get();
+		 var childFilesSigneds= $( ".document-checkbox:checked" ).map( function() { return  $( this ).attr('data-child-files-signed');}) .get();
+		 for (selectedDoc in  selectedDocs){
+
+		 	if( 0 == childFilesIds[selectedDoc] ) {
+
+				 $("#documents_requests").attr('action',strUrl + '&file[id]=' + selectedDocs[selectedDoc] + '&file_generation_type='+fileGenetaionType[selectedDoc] + '&file_signed='+fileSigned[selectedDoc] + '&is_include_deleted_file=' + isIncludeDeletedFile[selectedDoc]);
+				 $('#documents_requests').submit();
+
+		 	}else{
+
+		 		var childFilesIdsArr	 = childFilesIds[selectedDoc].split(",");
+		 		var childFilesSignedsArr = childFilesSigneds[selectedDoc].split(",");
+
+		 		for( childFilesId in childFilesIdsArr ) {
+			 		if( '' != childFilesIdsArr[childFilesId] ) {
+			  			$("#documents_requests").attr('action',strUrl + '&file[id]=' + childFilesIdsArr[childFilesId] + '&file_signed=' + childFilesSignedsArr[childFilesId]);
+						$('#documents_requests').submit();
+			 		}
+		 		}
+		 	}
+		 }
+	}
+
+	function createDocumentEmail( strUrl ) {
+		 if ( false == $(".document-checkbox").is(":checked") ) {
+			 alert("Please select at least one record.");
+			 return false;
+		 }
+
+		var selectedDocs 	= $( ".document-checkbox:checked" ).map( function() { return $( this ).attr('data-file-id');}).get();
+		var childFilesIds	= $( ".document-checkbox:checked" ).map( function() { return $( this ).attr('data-child-files-id');}) .get();
+		var SelectedfileIds	= "";
+
+		for( selectedDoc in  selectedDocs ) {
+
+		 	if( 0 == childFilesIds[selectedDoc]){
+		 		if( "" == SelectedfileIds ) {
+		 			SelectedfileIds	= selectedDocs[selectedDoc];
+		 		} else {
+		 			SelectedfileIds	= SelectedfileIds + "," + selectedDocs[selectedDoc];
+		 		}
+
+		 	}else{
+
+		 		var childFilesIdsArr	 = childFilesIds[selectedDoc].split(",");
+
+		 		for( childFilesId in childFilesIdsArr ) {
+		 			if( '' != childFilesIdsArr[childFilesId] ) {
+		 				if( "" == SelectedfileIds ) {
+		 					SelectedfileIds	= childFilesIdsArr[childFilesId];
+		 				} else {
+		 					SelectedfileIds	= SelectedfileIds + "," + childFilesIdsArr[childFilesId];
+		 				}
+		 			}
+		 		}
+		 	}
+		}
+
+		psi.patterns.addDialogContent({
+			strUrl					: strUrl + '&file[ids]=' + SelectedfileIds + '&is_file_attached='+1,
+			strElementSelector	: '#toolbarEmailContainer',
+			title: __('Create Email')
+		});
+	}
+
+	$(".subTabsContent").on("click", ".document-checkbox", function() {
+		toggleCheckAllPageDocuments(this,'subTabsContent');
+	});
+
+	$(".subTabsContent").on("click", ".js-checkall-documents", function() {
+		checkAllPageResidentDocuments(this);
+	});
+
+	$(".subTabsContent").on("click", ".js-download", function() {
+		if ( false == $(".document-checkbox").is(":checked") ) {
+			alert("Please select at least one record.");
+			return false;
+		}
+
+		var fileIds = [];
+		var fileGenerationTypes = [];
+		var filesSigned = [];
+		var isIncludeDeletedFile = []
+		var intLeaseId = parseInt( objCustomerTitle.intLeaseId );
+
+		$( ".document-checkbox:checked" ).each( function() {
+
+			fileIds.push( $(this).attr('data-file-id') );
+			fileGenerationTypes.push( $(this).attr('data-file-generation-type') );
+			filesSigned.push( $(this).attr('data-file-signed') );
+			isIncludeDeletedFile.push( $(this).attr('data-is-include-deleted-file') );
+
+			if( '0' != $(this).attr('data-child-files-id') ) {
+
+				var childFileIds = $(this).attr('data-child-files-id').split(',');
+				var childFilesSigned = $( this ).attr('data-child-files-signed').split(',');
+				for( var i=0; i<childFileIds.length; i++ ){
+					fileIds.push( childFileIds[i] );
+					filesSigned.push( childFilesSigned[i] );
+					fileGenerationTypes.push( null );
+					isIncludeDeletedFile.push( null );
+				}
+
+			}
+
+		} );
+
+		$("#documents_requests").attr('action', '/?module=customer_documentsxxx&action=download_selected_documents&file_ids='+fileIds+'&file_generation_types='+fileGenerationTypes+'&files_signed='+filesSigned+'&is_include_deleted_file='+isIncludeDeletedFile+'&lease_id='+intLeaseId);
+		$('#documents_requests').submit();
+
+	});
+
+	$('.minimize-modal-doc, .close-modal').click( function() {
+		$('.toolbar-wrapper').slideUp(250);
+		$('.toolbar-modal-arrow, .responses-box').hide();
+	});
+
+	$(".subTabsContent").on("click", ".js-email", function() {
+		if( false == createDocumentEmail( $(this).data( 'url' ) ) ) {
+			if($('.responses-box').is(':visible')) {
+				$( '.responses-box' ).hide();
+				$( '.responsesBtn i' ).addClass( 'slideout' );
+				$( '.responsesBtn i' ).removeClass( 'slidein' );
+			}
+		}
+	});
+
+$( '.js-customer-documents-list' ).on( 'click','.js-preview-document',function() {
+	var intFileId = $( this ).data( 'file_id' );
+	var fileGenerationType = ( typeof  $( this ).data( 'file-generation-type' ) !== 'undefined'  ) ? $( this ).data( 'file-generation-type'  ) : '';
+	var fileSigned = ( typeof  $( this ).data( 'file-signed'  ) !== 'undefined' ) ? $( this ).data( 'file-signed'  ) : '';
+	var isIncludeDeletedFile = ( typeof  $( this ).data( 'is-include-deleted-file' ) !== 'undefined'  ) ? $( this ).data( 'is-include-deleted-file'  ) : '';
+	var isAllowDownloadDocument = ( typeof  $( this ).data( 'is-allow-download-document' ) !== 'undefined'  ) ? $( this ).data( 'is-allow-download-document'  ) : '';
+	var fileTitle =  ( typeof  $( this ).data( 'file-name' ) !== 'undefined'  ) ? $( this ).data( 'file-name' ) :  $(this).html();
+	var strTitle = ( typeof  $( this ).data( 'file-type-name' ) !== 'undefined'  ) ? $( this ).data( 'file-type-name' ) + '<i></i>' + fileTitle : fileTitle;
+
+	psi.patterns.addDialogContent( {
+		strUrl: '/?module=customer_documentsxxx&action=preview_document&file[id]=' + intFileId + '&file_generation_type=' + fileGenerationType + '&file_signed=' + fileSigned + '&is_include_deleted_file=' + isIncludeDeletedFile +'&preview_only=1',
+		title: strTitle
+	} );
+});

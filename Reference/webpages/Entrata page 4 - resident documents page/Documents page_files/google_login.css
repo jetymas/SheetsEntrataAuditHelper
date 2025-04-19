@@ -1,0 +1,10 @@
+.googleloginmessage, .office365LoginMessage {
+	background: none repeat scroll 0 0 #F1F1F1;
+	border: 1px solid #CCCCCC;
+	padding:25px;
+	z-index: 1;
+	margin:15px auto;
+	width:400px;
+	text-align: center;
+	-moz-transition: border 1s ease-out 0s;
+} 

@@ -1,0 +1,372 @@
+/**
+ * This JS is cross browser, cross application compatible. Don't use jQuery in this file.
+ *
+ * This JS is created to show the Country and Administrative Area on Forms depending on arrFieldFormat Array
+ * Input Example:
+ * 		arrFieldFormat : [ 'country', 'administrativeArea' ]
+ * 		strWrapperId : ID of [data-ui-fieldset="administrative-areas"]
+ * 
+ */
+ // administrativeAreas
+ var administrativeAreasProto = (function() {
+
+	var administrativeAreaFields = [
+		'country',
+		'administrativeArea'
+	];
+	
+	function init( strWrapperId, arrFieldFormat ) {
+
+		var administrativeAreaBlock = document.querySelector( strWrapperId );
+
+		if( "undefined" === typeof administrativeAreaBlock ) {
+			console.error( 'Administrative Area: Block not found with selector #' + strWrapperId );
+			return;
+		}
+
+		if( "undefined" !== typeof arrFieldFormat ) {
+			arrFieldFormat = JSON.parse( arrFieldFormat ); 
+		} else {
+			arrFieldFormat = administrativeAreaFields;
+		}
+		
+		var countryInput = administrativeAreaBlock.querySelector( ' .country' );
+
+		if( "undefined" === typeof countryInput ) {
+			console.error( 'Administrative Area: Country not found with selector #' + strWrapperId );
+			return;
+		}
+
+		// Check if its already inited
+		if( null !== administrativeAreaBlock.getAttribute( 'data-inited' ) ) {
+			return;
+		}
+
+		// Add onChange listener for country drop down
+		countryInput.addEventListener( "change", function( e ) {
+			handleCountryChange( administrativeAreaBlock, countryInput, arrFieldFormat );
+		} );
+
+		administrativeAreaBlock.setAttribute( 'data-inited', '' );
+	}
+
+	function handleCountryChange( administrativeAreaBlock, countryInput, arrFieldFormat ) {
+
+		var countryDefinition = JSON.parse( postalAddressesCountryDefinitions )[countryInput.value];
+
+		if( 'undefined' === countryDefinition ) {
+			console.error( 'Administrative Area: Definitions not loaded.' );
+		}
+
+		if( -1 !== countryDefinition.format.indexOf( 'administrativeArea' ) ) {
+			assertAdministrativeAreas( administrativeAreaBlock, countryDefinition );
+		} else {
+			removeAdministrativeAreas( administrativeAreaBlock );
+		}
+
+		triggerChangeEvent( administrativeAreaBlock.querySelector( "[data-ui-rel='administrativeArea'] select" ) );
+		
+		reorderAddressLines( administrativeAreaBlock, countryDefinition, arrFieldFormat );
+
+		applyLabels( administrativeAreaBlock, countryDefinition );
+
+		// Put required attribute only if wrapper has that attribute.
+		if( null !== administrativeAreaBlock.getAttribute( 'data-required' ) ) {
+			updateRequiredFields( administrativeAreaBlock, countryDefinition );
+		}
+
+	}
+	
+	function removeAdministrativeAreas( administrativeAreaBlock ) {
+		var administrativeAreaDiv = administrativeAreaBlock.querySelector( "[data-ui-rel='administrativeArea']" );
+
+		// If current country doesn't have administrativeAreaDiv and new country also doesn't have it,
+		// we don't want to do anything here. i.e.: Changing from UK to FR.
+		if( administrativeAreaDiv ) {
+			var administrativeAreaField = administrativeAreaDiv.querySelector( "select, input" );
+			hideElement( administrativeAreaDiv );
+			emptyField( administrativeAreaField );
+		}
+
+	}
+	
+	function reorderAddressLines( administrativeAreaBlock, countryDefinition, arrFieldFormat ) {
+		var arrRequiredOrder = countryDefinition.format.split( /[ \n,]+/ ).filter( function( item ) {
+			return arrFieldFormat.indexOf( item.replace( '%', '' ) ) !== -1;
+		} );
+		
+		// Move country at top
+		arrRequiredOrder.unshift( '%country' );
+
+		var currentAddressLineDivs = administrativeAreaBlock.querySelectorAll( '[data-ui-rel]' );
+
+		var currentAddressLine, strAddressFieldName;
+		var currentAddressLines = [];
+
+		// collect address lines and remove it from DOM
+		for( var line = 0; line < currentAddressLineDivs.length; line++ ) {
+			currentAddressLine = currentAddressLineDivs[line];
+			strAddressFieldName = currentAddressLine.getAttribute( 'data-ui-rel' );
+
+			currentAddressLines[strAddressFieldName] = currentAddressLine;
+			hideElement( currentAddressLineDivs[line] );
+		}
+
+		// re-order
+		var sortedLines = [];
+
+		for( line = 0; line < arrRequiredOrder.length; line++ ) {
+			var fieldName = arrRequiredOrder[line].replace( '%', '' );
+
+			if( 'undefined' === typeof (currentAddressLines[fieldName]) ) {
+				// This line was not present earlier, but new format has it.
+				sortedLines[fieldName] = cloneAddressFieldDiv( administrativeAreaBlock, fieldName, 'country' );
+			} else {
+				sortedLines[fieldName] = currentAddressLines[fieldName];
+			}
+		}
+
+		Object.keys( sortedLines ).forEach( function( fieldName ) {
+			administrativeAreaBlock.querySelector( 'fieldset' ).appendChild( sortedLines[fieldName] );
+			showField( sortedLines[fieldName] );
+		} );
+
+		// Empty fields that are not present in current format
+		Object.keys( currentAddressLines ).forEach( function( fieldName ) {
+
+			if( undefined === sortedLines[fieldName] ) {
+				var addressField = administrativeAreaBlock.querySelector( "[data-ui-rel='" + fieldName + "'] .address-field" );
+				emptyField( addressField );
+			}
+		} );
+
+	}
+	
+	function cloneAddressFieldDiv( administrativeAreaBlock, cloneFor, cloneFrom ) {
+
+		var cloneFromDiv = administrativeAreaBlock.querySelector( "[data-ui-rel='" + cloneFrom + "']" );
+
+		var clonedDiv = cloneFromDiv.cloneNode( true );
+		clonedDiv.setAttribute( 'data-ui-rel', cloneFor );
+
+		clonedDiv.querySelectorAll( 'select, input, div' ).forEach( function( el ) {
+			if( el.getAttribute( 'name' ) ) {
+				el.setAttribute( 'name', el.getAttribute( 'name' ).replace( cloneFrom, cloneFor ) );
+			}
+
+			if( el.getAttribute( 'class' ) ) {
+				el.setAttribute( 'class', el.getAttribute( 'class' ).replace( cloneFrom, cloneFor ) );
+			}
+
+			emptyField( el )
+
+			// @FIXME: PP Customisaton
+			el.classList.remove( 'has-focus' );
+
+		} );
+
+		return clonedDiv;
+	}
+	
+	function applyLabels( administrativeAreaBlock, countryDefinition ) {
+
+		var jsonLabels = {};
+		jsonLabels.administrativeArea = getTranslatedValue( countryDefinition.administrative_area_type );
+		jsonLabels.country = getTranslatedValue( 'country' );
+
+		for( var fieldName in jsonLabels ) {
+			if( jsonLabels.hasOwnProperty( fieldName ) ) {
+				var labelElement = administrativeAreaBlock.querySelector( "[data-ui-rel='" + fieldName + "'] label" );
+				if( null !== labelElement ) {
+					labelElement.innerHTML = jsonLabels[fieldName] + ':';
+				}
+			}
+		}
+
+	}
+	
+	function updateRequiredFields( administrativeAreaBlock, countryDefinition ) {
+
+		var requiredFields = countryDefinition.required_fields;
+
+		// Remove existing data attributes
+		administrativeAreaBlock.querySelectorAll( '[data-required]' ).forEach( function( element ) {
+				element.removeAttribute( 'data-required' );
+			}
+		);
+
+		// Apply new ones
+		for( var i = 0; i < requiredFields.length; i++ ) {
+			var addressField = administrativeAreaBlock.querySelector( "[data-ui-rel='" + requiredFields[i] + "'] .address-field" );
+			if( addressField ) {
+				addressField.setAttribute( 'data-required', '' );
+			}
+
+			var addressLabel = administrativeAreaBlock.querySelector( "[data-ui-rel='" + requiredFields[i] + "'] label" );
+			if( addressLabel ) {
+				addressLabel.innerHTML = '<i>*</i>' + addressLabel.innerHTML;
+				addressLabel.classList.add( 'req' );
+			}
+		}
+	}
+
+	function assertAdministrativeAreas( administrativeAreaBlock, countryDefinition ) {
+		var administrativeAreas = countryDefinition.administrative_areas,
+			administrativeAreaFieldDiv, newAdministrativeAreaFieldDiv;
+
+		administrativeAreaFieldDiv = administrativeAreaBlock.querySelector( "[data-ui-rel='administrativeArea']" );
+
+		newAdministrativeAreaFieldDiv = createAdministrativeAreaDiv( administrativeAreaBlock, administrativeAreas );
+
+		if( null === administrativeAreaFieldDiv ) {
+			administrativeAreaBlock.querySelector( 'fieldset' ).appendChild( newAdministrativeAreaFieldDiv );
+		} else {
+			administrativeAreaFieldDiv.replaceWith( newAdministrativeAreaFieldDiv );
+		}
+	}
+
+	function createAdministrativeAreaDiv( administrativeAreaBlock, administrativeAreas ) {
+
+		var administrativeAreaDiv, currentAdministrativeAreaField, newAdministrativeAreaField;
+
+		administrativeAreaDiv = cloneAddressFieldDiv( administrativeAreaBlock, 'administrativeArea', 'country' );
+		currentAdministrativeAreaField = administrativeAreaDiv.querySelector( 'select' );
+
+		if( 0 !== administrativeAreas.length ) {
+			newAdministrativeAreaField = document.createElement( 'select' );
+		} else {			
+			newAdministrativeAreaField = document.createElement( 'input' );
+			newAdministrativeAreaField.setAttribute( 'type', 'text' );
+		}
+
+		// copy all attributes.
+		for( var i = currentAdministrativeAreaField.attributes.length - 1; i > -1; --i ) {
+			var attribute = currentAdministrativeAreaField.attributes[i];
+			newAdministrativeAreaField.setAttribute( attribute.name, attribute.value );
+		}
+
+		// Recreate all options
+		if( 0 !== administrativeAreas.length ) {
+			newAdministrativeAreaField.innerHTML = '';
+			newAdministrativeAreaField.appendChild( new Option( 'Select One', '' ) );
+			for( i = 0; i < administrativeAreas.length; i++ ) {
+				newAdministrativeAreaField.appendChild( new Option( administrativeAreas[i].name, administrativeAreas[i].code ) );
+			}
+		}
+		
+		enableField( newAdministrativeAreaField );
+		showField( newAdministrativeAreaField );
+		
+		if( 0 !== administrativeAreas.length ) {
+			currentAdministrativeAreaField.replaceWith( newAdministrativeAreaField );
+		} else {
+
+			if( currentAdministrativeAreaField.parentElement.classList.contains('select-menu') ) {
+				currentAdministrativeAreaField.parentElement.replaceWith( newAdministrativeAreaField )
+			} else {
+				// Customized For Entrata Basic info > Secure Info step
+				newAdministrativeAreaField.classList.add( 'form-field' );
+				newAdministrativeAreaField.classList.remove('form-select');
+
+				currentAdministrativeAreaField.replaceWith( newAdministrativeAreaField );
+			}
+		}
+		
+		return administrativeAreaDiv;
+	}
+	
+	function getTranslatedValue( strValue ) {
+		switch( strValue ) {
+
+			// Adminitrative Area fields
+			case 'administrativeArea':
+				return __( 'Administrative Area' );
+			case 'country':
+				return __( 'Country' );
+
+			// All CAdministrativeAreaTypes
+			case 'area':
+				return __( 'Area' );
+			case 'county':
+				return __( 'County' );
+			case 'department':
+				return __( 'Department' );
+			case 'do_si':// Korea
+				return __( 'Do/Si' );
+			case 'emirate':// UAE
+				return __( 'Emirate' );
+			case 'island':
+				return __( 'Island' );
+			case 'oblast':// Russia
+				return __( 'Oblast' );
+			case 'parish':// Ireland, Australia
+				return __( 'Parish' );
+			case 'prefecture':// Japan, France
+				return __( 'Prefecture' );
+			case 'province':// Canada
+				return __( 'Province' );
+			case 'state':// US, India
+				return __( 'State' );
+
+			default:
+				return strValue;
+		}
+	}
+	
+	function triggerChangeEvent( element ) {
+		if( null === element ) {
+			return;
+		}
+
+		var event;
+
+		if( typeof (Event) === 'function' ) {
+			event = new Event( 'change', { bubbles: true } );
+		} else {
+			event = document.createEvent( 'Event' );
+			event.initEvent( 'change', true, true );
+		}
+
+		element.dispatchEvent( event );
+	}
+
+	function hideElement( element ) {
+		element.classList.add( 'hide', 'is-hidden' );
+	}
+
+	function showField( element ) {
+		element.classList.remove( 'hide', 'is-hidden' );
+	}
+
+	function enableField( element ) {
+		element.classList.remove( 'disabled' );
+		element.removeAttribute( 'disabled' );
+	}
+	
+	function emptyField( element ) {
+
+		// for input
+		if( element.getAttribute( 'value' ) ) {
+			element.setAttribute( 'value', '' );
+		}
+
+		// for select
+		if( element.selectedIndex ) {
+			element.options[element.selectedIndex].removeAttribute( 'selected' );
+		}
+	}
+
+	function triggerCountryChange( strWrapperId ) {
+		var administrativeAreaBlock = document.querySelector( strWrapperId );
+		triggerChangeEvent( administrativeAreaBlock.querySelector( "[data-ui-rel='country'] select" ) );
+	}
+
+	return {
+		init: init,
+		triggerCountryChange: triggerCountryChange
+	};
+
+})();
+if( 'undefined' === typeof window.administrativeAreas ) {
+	window.administrativeAreas = administrativeAreasProto;
+}

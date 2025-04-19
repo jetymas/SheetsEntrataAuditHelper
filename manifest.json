@@ -57,8 +57,15 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/css/*", "src/images/*"],
-      "matches": ["https://*.entrata.com/*"]
+      "resources": [
+        "src/css/*",
+        "src/images/*",
+        "src/js/*",
+        "src/popup.html",
+        "src/background.html",
+        "src/column-modules/*"
+      ],
+      "matches": ["https://*.entrata.com/*", "<all_urls>"]
     }
   ]
 }

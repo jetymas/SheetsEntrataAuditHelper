@@ -1,4 +1,6 @@
 import { getCookie, setCookie } from './cookieHelper.js';
+import LeaseAudit from './audit-types/lease-audit.js';
+import RenewalAudit from './audit-types/renewal-audit.js';
 
 // Example: Read and set Entrata sessionId cookie
 getCookie('https://www.entrata.com', 'sessionId')
@@ -13,44 +15,6 @@ setCookie({
 })
   .then(cookie => console.log('Cookie set:', cookie))
   .catch(err => console.error('Error setting cookie:', err));
-
-// Import audit types - try with both relative and root-relative paths
-let LeaseAudit, RenewalAudit;
-
-// Dynamic imports to handle potential path resolution issues
-async function importAuditTypes() {
-  try {
-    // First try with extension root-relative paths
-    console.log('Importing audit types with root-relative paths...');
-    const leaseModule = await import('/src/js/audit-types/lease-audit.js');
-    const renewalModule = await import('/src/js/audit-types/renewal-audit.js');
-    
-    LeaseAudit = leaseModule.default;
-    RenewalAudit = renewalModule.default;
-    console.log('Successfully imported audit types with root-relative paths');
-  } catch (error) {
-    console.error('Error importing with root-relative paths:', error);
-    
-    try {
-      // Fallback to relative paths
-      console.log('Trying relative paths...');
-      const leaseModule = await import('./audit-types/lease-audit.js');
-      const renewalModule = await import('./audit-types/renewal-audit.js');
-      
-      LeaseAudit = leaseModule.default;
-      RenewalAudit = renewalModule.default;
-      console.log('Successfully imported audit types with relative paths');
-    } catch (fallbackError) {
-      console.error('Error importing with relative paths:', fallbackError);
-      throw new Error('Failed to import audit types: ' + fallbackError.message);
-    }
-  }
-}
-
-// Import immediately
-importAuditTypes().catch(error => {
-  console.error('Fatal error importing audit types:', error);
-});
 
 // Global state variables
 let auditState = {
@@ -76,6 +40,7 @@ function updateStatus(message, progress = null, status = 'in_progress', details 
     error: details.error || null
   });
 }
+
 
 // Get OAuth token for Google Sheets API
 async function getAuthToken() {
@@ -914,10 +879,27 @@ async function processField(column, module, record) {
           if (message.action === 'fieldVerified' && message.result) {
             // Remove the listener once we get a response
             chrome.runtime.onMessage.removeListener(listener);
+            
+            // Check if the field requires user confirmation
+            if (message.result.requiresUserConfirmation) {
+              // Send a 'fieldVerificationPrompt' message to the popup
+              chrome.runtime.sendMessage({
+                type: 'fieldVerificationPrompt',
+                promptData: {
+                  fieldName: module.name,
+                  pdfValue: message.result.pdfValue,
+                  expectedValue: record[module.sheetColumn],
+                  message: message.result.message,
+                  column: column,
+                  ...message.result.displayData
+                }
+              });
+            }
+            
             resolve(message.result);
           }
         };
-        
+
         chrome.runtime.onMessage.addListener(listener);
         
         // Send message to content script to verify the field

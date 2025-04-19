@@ -1,0 +1,789 @@
+// Defining variables to suppress errors in editor.
+// var Strophe = {},
+// 	objLeadAlterChat = {},
+// 	$pres = function( options ) {
+// 	},
+// 	$msg = function( options ) {
+// 	},
+// 	console = window.console;
+
+function triggerEvent( eventName, data ) {
+	var params = { detail: data, bubbles: false, cancelable: false },
+		event = new CustomEvent( eventName, params );
+	document.dispatchEvent( event );
+
+	console.log( eventName + " with data: ", data, event );
+}
+
+function getCurrentUtcTime() {
+	var intCurrentTime = Date.now(),
+		intUtcTimestamp = new Date( ( new Date( intCurrentTime ) ).toUTCString() ).getTime();
+	return intUtcTimestamp / 1000; // return seconds instead of milliseconds
+}
+
+function getLocalTime( intTimestamp ) {
+	var myDate = new Date( intTimestamp * 1000 );
+	return myDate.toLocaleString();
+}
+
+function parseJson( strContent ) {
+	var objDiv = document.createElement( "div" );
+	objDiv.innerHTML = strContent;
+
+	return JSON.parse( objDiv.innerText );
+}
+
+var objEntrataXmppChat = (function() {
+
+	var objXmpp,
+		objConnection,
+		strSenderName,
+		intCid,
+		arrobjHandlers = [],
+		arrfunCallbacks = [],
+		boolIsUserOnline = false;
+		boolDebug = false;
+
+	var boolIsLegacyServer = true;
+
+	function setCid( intTempCid ) {
+		intCid = intTempCid;
+	}
+
+	function setSenderName( strTempSenderName ) {
+		strSenderName = strTempSenderName;
+	}
+
+	function registerCallbackFunction( type, callback ) {
+		arrfunCallbacks[type] = callback;
+	}
+
+	function unregisterCallbackFunction( type ) {
+		delete arrfunCallbacks[type];
+
+		// @TODO: Alternate code
+		// var i = arrfunCallbacks.indexOf( type );
+		// if( i >= 0 ) {
+		//   arrfunCallbacks.splice( i, 1 );
+		// }
+	}
+
+	function callUserFunction( type, data ) {
+		var handler = arrfunCallbacks[type];
+
+		if( "function" === typeof handler ) {
+			arrfunCallbacks[type]( data );
+		}
+	}
+
+	function setIsUserOnline( boolValue  ) {
+		objEntrataXmppChat.boolIsUserOnline = boolValue;
+	}
+
+	function getIsUserOnline() {
+		return objEntrataXmppChat.boolIsUserOnline;
+	}
+
+	function init( strXmppUrl, strUsername, strPassword, boolUseSasl ) {
+
+		showLogs();
+
+		objXmpp = new Xmpp( strXmppUrl, strUsername, strPassword );
+		objXmpp.addHandlers( arrobjHandlers );
+		arrobjHandlers = [];
+		objXmpp.connect( boolUseSasl );
+	}
+
+	function showLogs() {
+		if(!boolDebug) return;
+		Strophe.log = function( a, b ) {
+			logRawData();
+		};
+	}
+
+	function logRawData() {
+		objConnection.rawInput = function( data ) {
+			console.log( 'RECV: ' + data );
+		};
+		objConnection.rawOutput = function( data ) {
+			console.log( 'SEND: ' + data );
+		};
+	}
+
+	/**
+	 * Cache handlers to be bind with XMPP connection
+	 *
+	 * @param handler - The user callback.
+	 * @param ns - The namespace to match.
+	 * @param name - The stanza name to match.
+	 * @param type - The stanza type (or types if an array) to match.
+	 * @param id - The stanza id attribute to match.
+	 * @param from - The stanza from attribute to match.
+	 * @param options - The handler options
+	 */
+	function addHandler( handler, ns, name, type, id, from, options ) {
+		if( objXmpp ) {
+			objXmpp.objXmppHandler.addHandler( handler, ns, name, type, id, from, options );
+		} else {
+			var objHandler = {
+				"handler": handler,
+				"ns": ns,
+				"name": name,
+				"type": type,
+				"id": id,
+				"from": from,
+				"options": options
+			};
+			arrobjHandlers.push( objHandler );
+		}
+	}
+
+	/**
+	 * Chat Processing functions
+	 */
+
+	/**
+	 *
+	 * @returns string ( e.g. username@domain )
+	 */
+	function getConnectionUser() {
+		return objConnection.authzid;
+	}
+
+	/**
+	 * Get client specific chat-room id
+	 * @returns {string}
+	 */
+	function getEntrataChatRoom() {
+		return getFullJid( 'entrata_' + intCid );
+	}
+
+	/**
+	 * @param strBareJid
+	 * @returns {string}
+	 *
+	 * e.g.
+	 * Input - entrata_235, prospect_123_456_789
+	 * Output - entrata_235@conference.ejabberd.entrata.com, prospect_123_456_789@conference.ejabberd.entrata.com
+	 */
+	function getFullJid( strBareJid ) {
+		return strBareJid + '@conference.' + objConnection.domain;
+	}
+
+	/**
+	 * set user Online/Offline for Chat
+	 * @param boolAvailable
+	 */
+	function setAvailableForChat( boolAvailable ) {
+		objXmpp.objEntrataChat.setAvailability( getEntrataChatRoom(), boolAvailable );
+		// send message to other opened tabs
+		var strMsg = ( boolAvailable ) ? 'available' : 'unavailable';
+		objXmpp.objEntrataChat.sendMsg( getConnectionUser(), strMsg, 'available_for_chat' );
+
+		triggerEvent('onChatAvailabilityChange', { available: boolAvailable });
+	}
+
+	function setIsUserOnline( boolValue ) {
+		objEntrataXmppChat.boolIsUserOnline = boolValue;
+	}
+
+	function getIsUserOnline() {
+		return objEntrataXmppChat.boolIsUserOnline;
+	}
+
+	function acceptChat( strChatRoomJid, boolIsFromAddToChat, strAgentsToAddToChat ) {
+		objXmpp.objEntrataChat.acceptChat( strChatRoomJid, boolIsFromAddToChat, strAgentsToAddToChat );
+	}
+
+	function joinOrLeaveChat( strChatRoomJid, strAction, endAll ) {
+		objXmpp.objEntrataChat.joinOrLeaveChat( strChatRoomJid,strAction, endAll );
+	}
+
+	function endChat( strChatRoomJid ) {
+		objXmpp.objEntrataChat.endChat( strChatRoomJid );
+	}
+
+	function transferChat( strChatRoomJid, arrstrLeasingAgentJids, objReason ) {
+		return objXmpp.objEntrataChat.transferChat( strChatRoomJid, arrstrLeasingAgentJids, objReason );
+	}
+
+	function addToChatRequest( strToLeasingAgents, strChatRoomFullJid, strStatus, strSerializedData ) {
+		objXmpp.objEntrataChat.addToChatRequest( strToLeasingAgents, strChatRoomFullJid, strStatus, strSerializedData );
+	}
+
+	/**
+	 * This
+	 * @param strTo
+	 * @param strStatus
+	 */
+	function sendChatStatusMessage( strTo, strStatus ) {
+		objXmpp.objEntrataChat.sendChatStatusMessage( strTo, strStatus );
+	}
+
+	function sendPaused( strChatRoomJid ) {
+		objConnection.chatstates.sendPaused( getFullJid( strChatRoomJid ), 'groupchat' );
+	}
+
+	function sendComposing( strChatRoomJid ) {
+		objConnection.chatstates.sendComposing( getFullJid( strChatRoomJid ), 'groupchat' );
+	}
+
+	function sendReceived( strChatRoomJid, strMsgId ) {
+		objXmpp.objEntrataChat.sendReceived( strChatRoomJid, strMsgId );
+		return true;
+	}
+
+	function sendRead( strChatRoomJid, strMsgId ) {
+		objXmpp.objEntrataChat.sendRead( strChatRoomJid, strMsgId );
+		return true;
+	}
+
+	function sendMsg( strTo, strMsg, strType, boolRequestReceipt ) {
+		objXmpp.objEntrataChat.sendMsg( strTo, strMsg, strType, boolRequestReceipt );
+	}
+
+	function getConnection() {
+		return objConnection;
+	}
+
+	/**
+	 * This class will take care of XMPP connection and binding required handlers
+	 *
+	 * @param strXmppUrl
+	 * @param strUsername
+	 * @param strPassword
+	 * @constructor
+	 */
+	function Xmpp( strXmppUrl, strUsername, strPassword ) {
+		this.connection = null;
+		this.objXmppHandler = null;
+		this.objEntrataChat = null;
+		this.arrobjHandlers = [];
+		this.strXmppUrl = strXmppUrl;
+		this.strUsername = strUsername;
+		this.strPassword = strPassword;
+		this.init();
+	}
+
+	Xmpp.prototype = {
+		init: function() {
+			this.addOauthPlugin();
+		},
+
+		addOauthPlugin: function() {
+			Strophe.addNamespace( 'RECEIPTS', 'urn:xmpp:receipts' );
+			Strophe.SASLXOAuth2 = function() {
+			};
+			Strophe.SASLXOAuth2.prototype = new Strophe.SASLMechanism( "X-OAUTH2", true, 10 );
+
+			Strophe.SASLXOAuth2.prototype.test = function( connection ) {
+				return null !== connection.authcid;
+			};
+
+			Strophe.SASLXOAuth2.prototype.onChallenge = function( connection ) {
+				var strAuthRequest = "\0";
+				strAuthRequest += connection.authcid;
+				strAuthRequest += "\0";
+				strAuthRequest += connection.pass;
+				return strAuthRequest;
+			};
+		},
+
+		connect: function( boolUseSasl ) {
+			if( true === boolUseSasl ) {
+				objConnection = new Strophe.Connection( this.strXmppUrl, { mechanisms: [Strophe.SASLXOAuth2] } );
+			} else {
+				objConnection = new Strophe.Connection( this.strXmppUrl );
+			}
+
+			var objXmpp = this;
+			var hasConnectionFailed = false;
+			xmppConnectionCount++;
+
+			objConnection.connect( this.strUsername, this.strPassword, function( strStatus, condition ) {
+				console.log( xmppConnectionCount + "_strophe_res: " + strStatus );
+				console.log( xmppConnectionCount + "_condition: "+ condition );
+
+				if( strStatus == Strophe.Status.CONNECTED ) {
+					objXmpp.onConnect( strStatus, this );
+					xmppConnectionCount = 0;
+				}
+
+				if( strStatus == Strophe.Status.ERROR
+					|| strStatus == Strophe.Status.CONNFAIL
+					|| strStatus == Strophe.Status.AUTHFAIL
+					|| strStatus == Strophe.Status.CONNTIMEOUT ) {
+					hasConnectionFailed = true;
+				}
+
+				if( strStatus == Strophe.Status.DISCONNECTED && true === hasConnectionFailed ) {
+					if( 2 < xmppConnectionCount ) {
+						console.log( 'Multiple attempt to websocket connection, try refreshing page.' );
+					} else {
+						console.log('Resetting connection.');
+						this.reset();
+						triggerEvent( 'onFailure' );
+					}
+				}
+			} );
+
+			this.objXmppHandler = new XmppHandlers();
+			this.objEntrataChat = new EntrataChat();
+		},
+
+		// callback function to be called from strophe.js
+		onConnect: function( strStatus, connection ) {
+			if( strStatus == Strophe.Status.CONNECTED ) {
+				connection.send( $pres().tree() );
+				this.processHandlers();
+
+				triggerEvent( 'onConnect', objConnection );
+			}
+		},
+
+		processHandlers: function() {
+			var objXmpp = this;
+
+			var strType = 'chat';
+
+			// add common handlers
+			this.objXmppHandler.addHandler( function( objMessage ) { objXmpp.objEntrataChat.onMessage( objMessage ); return true; }, null, 'message', strType, null, null );
+			this.objXmppHandler.addHandler( function( objMessage ) { objXmpp.objEntrataChat.onRequest( objMessage ); return true; }, 'jabber:x:conference', 'message', null, null, null );
+
+			this.objXmppHandler.addHandler( function( objMessage ) { objXmpp.objEntrataChat.onAvailable( objMessage ); return true; }, null, 'message', "available_for_chat", null, Strophe.getBareJidFromJid( objConnection.jid ), { matchBareFromJid: true } );
+
+			this.objXmppHandler.addHandler( function( objMessage ) { objXmpp.objEntrataChat.onChat( objMessage ); return true; }, null, 'message', "groupchat", null, null );
+			this.objXmppHandler.addHandler( function( objMessage ) { objXmpp.objEntrataChat.onReceipt( objMessage ); return true; }, Strophe.NS.RECEIPTS, "message" );
+
+			this.objXmppHandler.addHandler( function( objMessage ) { objXmpp.objEntrataChat.onJoinChat( objMessage ); return true; }, null, 'message', "join_chat", null, Strophe.getBareJidFromJid( objConnection.jid ), { matchBareFromJid: true } );
+			 this.objXmppHandler.addHandler( objLeadAlterChat.cacheChatHistory, null, 'message', "groupchat", null, null );
+
+			// add custom handlers provided from application
+			var intLength = this.arrobjHandlers.length;
+			for( i = 0; i < intLength; i++ ) {
+				var objHandler = this.arrobjHandlers.pop();
+				this.objXmppHandler.addHandler( objHandler.handler, objHandler.ns, objHandler.name, objHandler.type, objHandler.id, objHandler.from, objHandler.options );
+			}
+		},
+
+		addHandlers: function( addHandlers ) {
+			this.arrobjHandlers = addHandlers;
+		}
+
+	};
+
+	/**
+	 * To manage XMPP handlers
+	 */
+
+	function XmppHandlers() { }
+
+	XmppHandlers.prototype = {
+		/**
+		 * params same as addHandler of strophe.js
+		 */
+		addHandler: function( handler, ns, name, type, id, from, options ) {
+			return objConnection.addHandler( handler, ns, name, type, id, from, options );
+		}
+	};
+
+	function EntrataChat() { }
+
+	EntrataChat.prototype = {
+
+		onMessage: function( objMessage ) {
+			console.log( 'EntrataChat.onMessage' );
+			try {
+				var content = objMessage.getElementsByTagName( "body" )[0],
+					objMessageDetails = JSON.parse( content.innerHTML );
+					triggerEvent( 'onMessage', objMessageDetails );
+			} catch( e ) {
+				console.log( "Error while parsing message: " + e.message );
+			}
+
+			// callUserFunction( 'onMessage', objMessageDetails );
+			return true;
+		},
+
+		onRequest: function( objMessage ) {
+			var objX = objMessage.getElementsByTagName( "x" )[0],
+				strReason = objX.getAttribute( 'reason' );
+			try {
+				var objReason = JSON.parse( strReason );
+				triggerEvent( "onRequest", objReason );
+			} catch( e ) {
+				console.log( "Error while parsing Chat Request message: " + e.message );
+			}
+
+			return true;
+		},
+
+		onAvailable: function( objMessage ) {
+			if( objConnection.jid !== objMessage.getAttribute( 'from' ) ) {
+				this.setAvailability( getEntrataChatRoom(), true );
+				triggerEvent( 'onAvailable', objMessage );
+			}
+			return true;
+		},
+
+		// will be triggered to notify other tabs to accept the chat-request.
+		onJoinChat: function( objMessage ) {
+			var objBodyElement = objMessage.getElementsByTagName( 'body' ),
+				options = parseJson( Strophe.getText( objBodyElement[0] ) );
+
+			// start caching chat-history
+			if( options.join ) {
+				// objLeadAlterChat.initChatHistory( options.chat_room_jid );
+			}
+
+			// trigger event to Join-chat for other tabs
+			if( objConnection.jid !== objMessage.getAttribute( 'from' ) ) {
+				this.setAvailability( getFullJid( options.chat_room_jid ), options.join );
+				triggerEvent( 'onJoinChat', options );
+			}
+
+			return true;
+		},
+
+		onChat: function( objMessage ) {
+			var strFrom = objMessage.getAttribute( 'from' ),
+				objConversation = objMessage.getElementsByTagName( 'conversation' )[0],
+				objBodyElement = objMessage.getElementsByTagName( 'body' ),
+				strNick = strFrom.split( '/' )[1],
+				selected_leasing_agents = objMessage.getAttribute( 'selected_leasing_agents' );
+
+			if( objConversation && getEntrataChatRoom() === Strophe.getBareJidFromJid( strFrom ) ) {
+				if( 'remove_request' === Strophe.getText( objConversation ) && strNick !== objConnection.authcid ) {
+					triggerEvent( 'onRemoveRequest', { chat_room_jid: objConversation.getAttribute( 'chat_room_jid' ), senderJid: strNick, sender: objConversation.getAttribute( 'sender' ), 'is_end_chat': objConversation.getAttribute( 'is_end_chat' ), 'is_joined_chat': objConversation.getAttribute( 'is_joined_chat' ), 'end_all': objConversation.getAttribute( 'end_all'), 'is_add_to_chat': objConversation.getAttribute( 'is_add_to_chat'), 'selected_leasing_agents': objConversation.getAttribute( 'selected_leasing_agents'), 'is_agent_left': objConversation.getAttribute( 'is_agent_left'), 'is_from_add_to_chat':  objConversation.getAttribute( 'is_from_add_to_chat'), 'chat_room_data':  objConversation.getAttribute( 'chat_room_data') } );
+					return true;
+				}
+			}
+
+			if( 1 > objBodyElement.length ) {
+				return true;
+			}
+
+			triggerEvent( 'onChat', objMessage );
+			return true;
+		},
+
+		onReceipt: function( objMessage ) {
+			var request = objMessage.getElementsByTagName( "request" )[0];
+			if( !request ) {
+				triggerEvent( 'onReceipt', objMessage );
+			}
+
+			// @TODO: We can trigger onRead, onReceived separately, with message-id & time
+
+			return true;
+		},
+
+		setAvailability: function( strRoomJid, boolAvailable ) {
+			var strUserJid = objConnection.jid,
+				strUserName = Strophe.getNodeFromJid( strUserJid ),
+				strPresenceString = '',
+				strTo = strRoomJid + '/' + strUserName;
+
+			if( true === boolAvailable ) {
+				strPresenceString = { 'from': strUserJid, 'to': strTo };
+			} else {
+				strPresenceString = { type: 'unavailable', from: strUserJid, to: strTo };
+			}
+
+			var presence = $pres( strPresenceString );
+			objConnection.send( presence.tree() );
+		},
+
+		acceptChat: function( strChatRoomJid, boolIsFromAddToChat, strAgentsToAddToChat ) {
+
+			this.removeOtherUserChatRequest( strChatRoomJid, null, true, null, null, strAgentsToAddToChat, null, boolIsFromAddToChat );
+			this.startOrEndChatFromOtherTabs( strChatRoomJid, true );
+
+			this.setAvailability( getFullJid( strChatRoomJid ), true );
+		},
+
+		joinOrLeaveChat: function( strChatRoomJid, strStatus, endAll ) {
+			if( 'join' == strStatus ) {
+				this.setAvailability( getFullJid( strChatRoomJid ), true );
+				this.sendChatStatusMessage( strChatRoomJid, strStatus );
+				this.removeOtherUserChatRequest( strChatRoomJid, false, true );
+			} else {
+				this.sendChatStatusMessage( strChatRoomJid, strStatus );
+				this.setAvailability( getFullJid( strChatRoomJid ), false );
+				this.removeOtherUserChatRequest( strChatRoomJid, false, false, endAll, false, '', true );
+			}
+		},
+
+		endChat: function( strChatRoomJid ) {
+			this.removeOtherUserChatRequest( strChatRoomJid, true, null, null, null, null, true );
+			this.sendChatStatusMessage( strChatRoomJid, 'end' );
+			this.leaveChat( strChatRoomJid, false );
+		},
+
+		/**
+		 * @param strChatRoomJid Chat-room name which you want to transfer
+		 * @param arrstrLeasingAgentJids array - leasing agent ejaberred ids, e.g. {"201825":"entrata_235_201825","199995":"entrata_235_199995"}
+		 * @param objReason - json object with required details
+		 */
+		transferChat: function( strChatRoomJid, arrstrLeasingAgentJids, objReason ) {
+			this.sendChatStatusMessage( strChatRoomJid, 'transfer' );
+
+			for( var key in arrstrLeasingAgentJids ) {
+				if( arrstrLeasingAgentJids.hasOwnProperty( key ) ) {
+					var strUserJid = arrstrLeasingAgentJids[key],
+						strTo = strUserJid + '@' + objConnection.domain;
+					this.sendDirectInvitation( strTo, getFullJid( strChatRoomJid ), JSON.stringify( objReason ) );
+				}
+			}
+
+			var boolTransferRequest = true;
+			this.leaveChat( strChatRoomJid, boolTransferRequest );
+
+			return true;
+		},
+
+		sendDirectInvitation: function( strTo, strChatRoomFullJid, strReason ) {
+			var objMsg = $msg( {
+				to: strTo,
+				from: objConnection.jid
+			} ).c( "x", { xmlns: 'jabber:x:conference', jid: strChatRoomFullJid, reason: strReason } );
+			objConnection.send( objMsg.tree() );
+		},
+
+		leaveChat: function( strChatRoomJid, boolTransferRequest ) {
+			this.setAvailability( getFullJid( strChatRoomJid ), false );
+			// leave chat from all other opened tabs
+			this.startOrEndChatFromOtherTabs( strChatRoomJid, false, boolTransferRequest );
+		},
+
+		// once chat is accepted by any user, the same request need to be removed from other user's screen
+		removeOtherUserChatRequest: function( strChatRoomJid, boolIsEnd, boolIsJoinedChat, endAll, boolIsAddToChat, strToLeasingAgents, boolIsAgentLeft, boolIsFromAddToChat, strSerializedData ) {
+			var strToRoomJid = getEntrataChatRoom(),
+				out = $msg( {
+					to: strToRoomJid,
+					type: 'groupchat',
+					from: objConnection.jid,
+					id: objConnection.getUniqueId(),
+					time: getCurrentUtcTime()
+				} ).c( "conversation", { 'chat_room_jid': strChatRoomJid, 'sender': strSenderName, 'is_end_chat': boolIsEnd, 'is_joined_chat': boolIsJoinedChat, 'end_all': endAll, 'is_add_to_chat':boolIsAddToChat, 'selected_leasing_agents': strToLeasingAgents, 'is_agent_left': boolIsAgentLeft, 'is_from_add_to_chat': boolIsFromAddToChat, 'chat_room_data' : strSerializedData } ).t( 'remove_request' );
+			objConnection.send( out.tree() );
+		},
+
+		// to accept/remove the chat in other resources of the same user, if accepted/removed in one resource
+		startOrEndChatFromOtherTabs: function( strChatRoomJid, boolJoinChat, boolTransferRequest ) {
+			this.sendMsg( objConnection.authzid, JSON.stringify( {
+				chat_room_jid: strChatRoomJid,
+				join: boolJoinChat,
+				transfer_request: ( true === boolTransferRequest )
+			} ), 'join_chat' );
+		},
+
+		sendMsg: function( strTo, strMsg, strType, boolRequestReceipt ) {
+
+			var objMsg = $msg( {
+				to: strTo,
+				from: objConnection.jid,
+				sender: strSenderName,
+				type: strType,
+				id: objConnection.getUniqueId(),
+				time: getCurrentUtcTime()
+			} ).c( "body" ).t( strMsg );
+
+			if( true === boolRequestReceipt ) {
+				var request = Strophe.xmlElement( 'request', { 'xmlns': Strophe.NS.RECEIPTS } );
+				objMsg.tree().appendChild( request );
+			}
+
+			var requestParameter = Strophe.xmlElement( 'parameter', {
+				'time': getCurrentUtcTime(),
+				'sender': strSenderName,
+				'event_id': objEntrataXmppChat.boolEventId
+			} );
+			objMsg.tree().appendChild( requestParameter );
+
+			objConnection.send( objMsg.tree() );
+		},
+
+		// strStatus: end, transfer
+		sendChatStatusMessage: function( strChatRoomJid, strStatus ) {
+			var objMsg = $msg( {
+				to: getFullJid( strChatRoomJid ),
+				from: objConnection.jid,
+				type: 'groupchat',
+				id: objConnection.getUniqueId(),
+				time: getCurrentUtcTime(),
+				sender: strSenderName,
+				status: strStatus
+			} ).c( "body" );
+
+			var requestParameter = Strophe.xmlElement( 'parameter',
+				{
+					'time': getCurrentUtcTime(),
+					'sender': strSenderName,
+					'status': strStatus,
+					'event_id': objEntrataXmppChat.boolEventId
+				} );
+			objMsg.tree().appendChild( requestParameter );
+
+			objConnection.send( objMsg.tree() );
+		},
+
+		addToChatRequest: function( strToLeasingAgents, strChatRoomJid, strStatus, strSerializedData ) {
+			this.removeOtherUserChatRequest( strChatRoomJid, false, false, false, true, strToLeasingAgents, false, true, strSerializedData );
+		},
+
+		sendRead: function( strChatRoomJid, strMsgId ) {
+			var out = $msg( {
+					to: getFullJid( strChatRoomJid ),
+					type: 'groupchat',
+					from: objConnection.jid,
+					id: objConnection.getUniqueId(),
+					time: getCurrentUtcTime()
+				} ).c( "body" ),
+				request = Strophe.xmlElement( 'read', { 'xmlns': Strophe.NS.RECEIPTS, 'id': strMsgId, 'time' :getCurrentUtcTime() } );
+			out.tree().appendChild( request );
+			objConnection.send( out.tree() );
+		},
+
+		sendReceived: function( strChatRoomJid, strMsgId ) {
+			var out = $msg( {
+					to: getFullJid( strChatRoomJid ),
+					type: 'groupchat',
+					from: objConnection.jid,
+					id: objConnection.getUniqueId(),
+					time: getCurrentUtcTime()
+				} ).c( "body" ),
+				request = Strophe.xmlElement( 'received', { 'xmlns': Strophe.NS.RECEIPTS, 'id': strMsgId, 'time' :getCurrentUtcTime() } );
+
+			out.tree().appendChild( request );
+			objConnection.send( out.tree() );
+		}
+
+	};
+
+	function loadScript( src, callback ) {
+		var head = document.getElementsByTagName( "head" )[0];
+		var script = document.createElement( "script" );
+		script.src = src;
+		script.onload = script.onreadystatechange = function() {
+			// attach to both events for cross browser finish detection:
+			if( !this.readyState || "loaded" === this.readyState || "complete" === this.readyState ) {
+				if( "function" === typeof callback ) {
+					callback();
+				}
+				script.onload = script.onreadystatechange = null;
+			}
+		};
+		head.appendChild( script );
+	}
+
+	return {
+		init: init,
+		addHandler: addHandler,
+		registerCallbackFunction: registerCallbackFunction,
+		unregisterCallbackFunction: unregisterCallbackFunction,
+
+		setCid: setCid,
+		setSenderName: setSenderName,
+		setAvailableForChat: setAvailableForChat,
+
+		sendMsg: sendMsg,
+		sendRead: sendRead,
+		sendReceived: sendReceived,
+		sendComposing: sendComposing,
+		sendPaused: sendPaused,
+		sendChatStatusMessage: sendChatStatusMessage,
+		acceptChat: acceptChat,
+		joinOrLeaveChat: joinOrLeaveChat,
+		endChat: endChat,
+		transferChat: transferChat,
+
+		getFullJid: getFullJid,
+		getJid: function() {
+			return objConnection.jid;
+		},
+		getText: function( element ) {
+			return Strophe.getText( element );
+		},
+		getChatHistory: function( strUserChatRoom ) {
+			return objLeadAlterChat.getChatHistory( strUserChatRoom );
+		},
+		getConnection: getConnection,
+		setIsUserOnline: setIsUserOnline,
+		getIsUserOnline: getIsUserOnline,
+		addToChatRequest: addToChatRequest
+	};
+})();
+
+function addStrophePlugin() {
+	/**
+	 * Chat state notifications (XEP 0085) plugin
+	 * @see http://xmpp.org/extensions/xep-0085.html
+	 */
+	Strophe.addConnectionPlugin( 'chatstates',
+		{
+			init: function( connection ) {
+				this._connection = connection;
+
+				Strophe.addNamespace( 'CHATSTATES', 'http://jabber.org/protocol/chatstates' );
+			},
+
+			statusChanged: function( status ) {
+				if( status === Strophe.Status.CONNECTED || status === Strophe.Status.ATTACHED ) {
+					this._connection.addHandler( this._notificationReceived.bind( this ),
+						Strophe.NS.CHATSTATES, "message" );
+				}
+			},
+
+			addActive: function( message ) {
+				return message.c( 'active', { xmlns: Strophe.NS.CHATSTATES } ).up();
+			},
+
+			_notificationReceived: function( objMessage ) {
+
+				var composing = objMessage.getElementsByTagName( 'composing' ),
+					paused = objMessage.getElementsByTagName( 'paused' ),
+					active = objMessage.getElementsByTagName( 'active' ),
+					jid = objMessage.getAttribute( 'from' );
+				if( composing.length > 0 ) {
+					triggerEvent( 'composing.chatstates', jid );
+				}
+
+				if( paused.length > 0 ) {
+					triggerEvent( 'paused.chatstates', jid );
+				}
+
+				if( active.length > 0 ) {
+					triggerEvent( 'active.chatstates', jid );
+				}
+
+				return true;
+			},
+
+			sendActive: function( jid, type ) {
+				this._sendNotification( jid, type, 'active' );
+			},
+
+			sendComposing: function( jid, type ) {
+				this._sendNotification( jid, type, 'composing' );
+			},
+
+			sendPaused: function( jid, type ) {
+				this._sendNotification( jid, type, 'paused' );
+			},
+
+			_sendNotification: function( jid, type, notification ) {
+				if( !type ) {
+					type = 'chat';
+				}
+
+				this._connection.send( $msg(
+					{
+						to: jid,
+						type: type
+					} )
+					.c( notification, { xmlns: Strophe.NS.CHATSTATES } ) );
+			}
+		}
+	);
+}

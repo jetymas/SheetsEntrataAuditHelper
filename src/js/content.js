@@ -1122,3 +1122,115 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   console.warn('Unknown message action:', message.action);
   return false;
 });
+
+// === Column Modules Loader ===
+// Dynamically import all column modules A–AO and expose by column letter
+const columnModules = {};
+const columnModuleLetters = [
+  'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+  'AA','AB','AC','AD','AE','AF','AG','AH','AI','AJ','AK','AL','AM','AN','AO'
+];
+
+async function loadColumnModules() {
+  for (const letter of columnModuleLetters) {
+    try {
+      // Use dynamic import for ESM support
+      const mod = await import(`./column-modules/${letter}.js`);
+      columnModules[letter] = mod.default;
+    } catch (err) {
+      console.error(`Failed to load column module ${letter}:`, err);
+    }
+  }
+}
+
+// Call loader at script start
+loadColumnModules();
+
+// ... (rest of content.js)
+
+// Patch verifyField to use dynamic modules and handle user confirmation UI
+async function verifyField(column, module, expectedValue, sheetColumn) {
+  contentState.currentModule = module;
+  contentState.currentColumn = column;
+  contentState.expectedValue = expectedValue;
+  contentState.sheetColumn = sheetColumn;
+
+  // Make sure we're on the PDF viewer page
+  if (getCurrentPageType() !== 'pdfViewer') {
+    chrome.runtime.sendMessage({
+      action: 'fieldVerified',
+      result: {
+        action: 'skip',
+        comment: 'Not on PDF viewer page',
+        column,
+        field: module,
+        pdfValue: null,
+        sheetValue: expectedValue
+      }
+    });
+    return;
+  }
+
+  // If PDF text wasn't extracted yet, do it now
+  if (!contentState.pdfText) {
+    contentState.pdfText = extractPdfText();
+  }
+
+  // --- Use the dynamically loaded column module ---
+  let colMod = columnModules[column];
+  if (!colMod) {
+    // Fallback: use provided module (from background)
+    colMod = module;
+  }
+  // Run the column's extraction/validation logic
+  let result = {};
+  if (colMod && typeof colMod.run === 'function') {
+    result = await colMod.run(null, column, { record: contentState.currentRecord });
+  } else {
+    // Fallback to old logic
+    const pdfValue = findValueInPdf(module.pdfSelector, contentState.pdfText);
+    result = {
+      pdfValue,
+      expectedValue,
+      match: pdfValue && expectedValue && normalizeValue(pdfValue) === normalizeValue(expectedValue),
+      requiresUserConfirmation: false
+    };
+  }
+  contentState.pdfValue = result.pdfValue;
+
+  // If user confirmation is required, show the dialog using displayData
+  if (result.requiresUserConfirmation && typeof colMod.displayData === 'function') {
+    const display = colMod.displayData(null, column, { result });
+    createVerificationDialog(
+      display.fieldName || module.name,
+      display.pdfValue || result.pdfValue,
+      display.expectedValue || expectedValue,
+      display.match !== undefined ? display.match : result.match
+    );
+    return;
+  }
+
+  // Otherwise, auto-complete verification and send result
+  chrome.runtime.sendMessage({
+    action: 'fieldVerified',
+    result: {
+      action: result.match ? 'confirm' : 'flag',
+      comment: '',
+      column,
+      field: module,
+      pdfValue: result.pdfValue,
+      sheetValue: expectedValue
+    }
+  });
+}
+
+// Export content helpers for Node.js testing
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    extractPdfText,
+    findValueInPdf,
+    scrollToPdfText,
+    findAndClickResident,
+    clickNextPageButton
+  };
+}

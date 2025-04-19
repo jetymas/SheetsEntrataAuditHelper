@@ -1,0 +1,28 @@
+<communication>
+    1. My name is Jesse
+    2. It's always good vibes over here :)
+    3. If I type 'c', it means please continue!
+</communication>
+
+<code>
+    1. Use JavaScript
+    2. Use Jest and Puppeteer for testing
+    3. Utilize test-driven development
+    4. Always utilize best practices
+    5. Use a wsl prefix in the terminal where necessary, as Powershell is loaded by default
+</code>
+
+<project>
+    1. Project name: Entrata Lease Audit Assistant
+    2. Project description: Chrome extension to streamline lease audits for Entrata property management system
+</project>
+
+<workflow>
+    1. Carefully examine the problem
+    2. Set goals to solve the problem
+    3. Break down the problem into smaller tasks
+    4. Track tasks and progress in the TODO.md file. Track relevant filenames and paths for tasks in TODO.md
+    5. Write notes on each task in a corresponding file in the notes directory
+    6. Continue working on tasks until the problem is solved or there is a major decision point
+    7. Update the TODO.md file and notes directory regularly
+</workflow>

@@ -1,0 +1,216 @@
+// Js file for Centralized unknown Text Potential Leads
+if( typeof psi.objCntPotentialLead == 'undefined' ) {
+
+	psi.objCntPotentialLead = ( function() {
+
+		var arrstrExitTags = {};
+		var init = function() {
+
+			psi.objCntPotentialLead.validateUserAccessForTwoWayText();
+
+			$( '#cnt-add-potential-lead-button' ).off( 'click' ).on( 'click', function() {
+				var strDialogId = $( '.ui-dialog-content' ).attr( 'id' );
+				var intFollowupEventResultId = $( '#cnt_followup_event_result_id' ).val();
+
+				if( 0 == intFollowupEventResultId ) {
+					var objResponse = {};
+					objResponse["status"] = false;
+					objResponse["data"] = {};
+					objResponse["messages"] = 'Please Select Result of Contact';
+					psi.cntToastResponse.addResponseMessage( objResponse, __( 'Warning' ) );
+					return false;
+				}
+				var arrmixData = JSON.parse( localStorage.getItem( 'potentialLead' ) );
+				var intEventTypeId = $( '#event_type_id' ).val();
+				psi.patterns.loadMeridianDialog( {
+					width: '100%',
+					height: 1800,
+					title: __( 'Add Lead' ),
+					strContentId: 'centralization_form_add_lead',
+					showHeader: false,
+					ckeditor: true,
+					open: function( event, ui ) {
+						$( '#centralization_form_add_lead' ).html( $( '#centralization_empty_add_lead' ).html() );
+						$( "body" ).css( "overflow", "hidden" );
+						psi.patterns.ajaxRequest( {
+							url: psi.objCntPotentialLead.arrstrExitTags['add_potential_lead'],
+							data: {
+								'potential_lead[property_id]': arrmixData['property_id'],
+								'potential_lead[primary_phone_number]': arrmixData['phone_number'],
+								'potential_lead[applicant_username]': arrmixData['email_address'],
+								'potential_lead[campaign_target_id]': arrmixData['campaign_target_id'],
+								'potential_lead[event_type_id]': intEventTypeId,
+								'potential_lead[system_email_id]': arrmixData['system_email_id'],
+								'potential_lead[call_id]': arrmixData['call_id'],
+								'potential_lead[event_id]': arrmixData['event_id'],
+								'event[event_result_id]': intFollowupEventResultId,
+							},
+							success: function( response ) {
+								$( '#centralization_form_add_lead' ).html( response );
+								$( '#'+strDialogId ).dialog( 'close' );
+							}
+						} );
+					}
+				} );
+			} );
+
+			$( '#cnt-chat-controls #cnt-chat-send' ).off( 'click' ).on( 'click', function( e ) {
+				e.preventDefault();
+				var objChatControl = $( "#cnt-chat-controls" );
+
+				var strMessage = objChatControl.find( '#cnt-chat-input' ).val();
+				if( !strMessage.length ) {
+					return;
+				}
+
+				var objElm = $( '#cnt-unknown-potential-lead-frm' );
+
+				var intCampaignTargetId = objElm.find( '#campaign_target_id' ).val();
+				var intPropertyId = objElm.find( '#property_id' ).val();
+				var cid = objElm.find( '#cid' ).val();
+
+				var strChatRoomJid = "smsc_" + cid + "_" + intPropertyId + "_" + intCampaignTargetId;
+
+				var objData = {
+					campaign_target_id: intCampaignTargetId,
+					chat_room: strChatRoomJid,
+					chat_message: strMessage,
+					unique_id: psi.objCntPotentialLead.getMessageId(),
+					message_aggregator_id: MESSAGE_AGGREGATOR_SMS,
+					is_whatsapp_template_message: false,
+					wechat_open_id: null,
+					whatsapp_message_originator_id: '',
+					intTime: ( new Date().getTime() / 1000 ),
+				};
+
+				psi.patterns.ajaxRequest( {
+					url: '/?module=sms_chatxxx&action=send_chat_sms',
+					data: objData,
+					success: function( response ) {
+						var objElement = $( "#cnt-unknown-potential-lead-content-section" );
+
+						if( true == response.data.success ) {
+							if( true === response.data.is_sent_with_warning ) {
+								$( "#cnt-potential-lead-chat-msg" ).html( '<p class="alert warning slim failed-message margin20-right margin10-left"><i></i>' + response.data.message + '</p>' );
+								$( '.failed-message' ).delay( 10000 ).fadeOut();
+							}
+
+						} else {
+							var strErrorTitle = __( "Message warning." );
+							objElement.find( '#cnt-potential-lead-sms-warning-title' ).text( strErrorTitle );
+							objElement.find( '#cnt-potential-lead-sms-warning-description' ).text( response.data.message );
+							objElement.find( '#cnt-potential-lead-chat-unavailable' ).css( 'display', 'flex' );
+						}
+					}
+				} );
+
+				psi.objCntPotentialLead.postMessageInConversationDiv( objData );
+				objChatControl.find( '#cnt-chat-input' ).val( '' );
+			} );
+		};
+
+		var closeDialogBox = function( strDialogId ) {
+			$( '.cnt-pt-cancel' ).on( 'click', function() {
+				$( '#' + strDialogId ).dialog( 'close' );
+			} );
+		};
+
+		return {
+			MESSAGE_AGGREGATOR_SMS:MESSAGE_AGGREGATOR_SMS,
+			init: init,
+			closeDialogBox: closeDialogBox,
+			arrstrExitTags: arrstrExitTags,
+			validateUserAccessForTwoWayText: function() {
+				var boolIsValid = true;
+				var strErrorTitle = '';
+				var strErrorDescription = '';
+				var objElement = $( "#cnt-unknown-potential-lead-content-section" );
+
+				//Check user SMS chat permission & chatPanel is enabled
+				objElement.find( '#cnt-potential-lead-chat-unavailable' ).css( 'display', 'none' );
+				objElement.find( '.cnt-chat-element-disabled' ).prop( "disabled", false );
+
+				if( false == sessionStorage.getItem( 'is_allow_texting' ) ) {
+					strErrorTitle = __( "Two-way texting not Enabled." );
+					strErrorDescription = __( "User don't have permission for Two-way texting." );
+					boolIsValid = false;
+				}
+				if( true == sessionStorage.getItem( 'is_allow_texting' ) && false == sessionStorage.getItem( 'is_available_for_chat' ) ) {
+					strErrorTitle = __( "Log into Chat Panel to respond." );
+					strErrorDescription = __( "You must be logged into and available on the Chat Panel to use this chat." );
+					boolIsValid = false;
+				}
+
+				if( false == boolIsValid ) {
+					objElement.find( '#cnt-potential-lead-chat-unavailable' ).css( 'display', 'flex' );
+					objElement.find( '.cnt-chat-element-disabled' ).prop( "disabled", true );
+					objElement.find( '#cnt-potential-lead-sms-warning-title' ).text( strErrorTitle );
+					objElement.find( '#cnt-potential-lead-sms-warning-description' ).text( strErrorDescription );
+				}
+
+				return boolIsValid;
+			},
+			postMessageInConversationDiv: function( options ) {
+				var objConversationElement = $( '#cnt-unknown-potential-lead-sms-history-' + options.campaign_target_id ).find( '#cnt-chat-sms-messages' );
+				var objElm = $( '#cnt-unknown-potential-lead-frm' );
+				var strCompanyUserName = objElm.find( '#company_user_name' ).val();
+				var strTitleCompanyUserName = objElm.find( '#title_company_user_name' ).val();
+
+				var strDateTimeLabel = psi.objCntPotentialLead.calculateTime( options.intTime );
+
+				var htmlContent = '<div class="cnt-chat-message inbound">' +
+					'<div title="' + strTitleCompanyUserName + '" class="cnt-chat-avatar">' + strCompanyUserName + '</div>' +
+					'<div>' +
+					'<div class="cnt-chat-sent">' + strDateTimeLabel + '</div>' +
+					'<div class="cnt-chat-body">' + options.chat_message + '</div>' +
+					'</div></div>';
+
+				objConversationElement.append( htmlContent );
+			},
+			handleIncomingChatMessage: function( options ) {
+				if( !options.campaign_target_id ) {
+					return false;
+				}
+				var objElement = $( "#cnt-unknown-potential-lead-sms-history-" + options.campaign_target_id );
+
+				if( !objElement.length ) {
+					return false;
+				}
+				var objConversationElement = objElement.find( '#cnt-chat-sms-messages' );
+				var strDateTimeLabel = psi.objCntPotentialLead.calculateTime( options.intTime );
+				var htmlContent = '<div class="cnt-chat-message">' +
+					'<div class="cnt-chat-avatar">' +
+					'<svg viewBox="0 0 24 24" class="entrata-svg-icon default cnt-icons"><use xlink:href="/Common/assets/components/patterns/svg/line_sprite.svg#person-icon"></use></svg>' +
+					'</div>' +
+					'<div>' +
+					'<div class="cnt-chat-sent">' + strDateTimeLabel + '</div>' +
+					'<div class="cnt-chat-body">' + options.strMessage + '</div>' +
+					'</div></div>';
+
+				objConversationElement.append( htmlContent );
+
+				return true;
+			},
+			getMessageId: function() {
+				var randomId = function() {
+					return (((1 + Math.random()) * 0x10000) | 0).toString( 16 ).substring( 1 );
+				};
+				return (randomId() + randomId() + randomId() + randomId() + randomId());
+			},
+			calculateTime: function( intTime ) {
+				var intCurrentDateTime = new Date();
+				var intMessageDateTime = new Date( intTime * 1000 );
+				var strDateTimeLabel = '';
+				if( intCurrentDateTime.getFullYear() === intMessageDateTime.getFullYear() && intCurrentDateTime.getMonth() === intMessageDateTime.getMonth() && intCurrentDateTime.getDate() === intMessageDateTime.getDate() ) {
+					strDateTimeLabel = __( '{%t,0,TIME_SHORT}', [intMessageDateTime] );
+				} else if( intCurrentDateTime.getFullYear() === intMessageDateTime.getFullYear() && intCurrentDateTime.getMonth() === intMessageDateTime.getMonth() && intCurrentDateTime.getDate() === (intMessageDateTime.getDate() + 1) ) {
+					strDateTimeLabel = __( 'Yesterday, {%t,0,TIME_SHORT}', [intMessageDateTime] );
+				} else {
+					strDateTimeLabel = __( '{%t,0,DATETIME_ALPHA_SHORT}', [intMessageDateTime] );
+				}
+
+				return strDateTimeLabel;
+			},
+		};
+	})();
+}

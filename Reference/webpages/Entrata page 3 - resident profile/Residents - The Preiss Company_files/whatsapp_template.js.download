@@ -1,0 +1,193 @@
+var arrintWrapUpTimeIntervalIds = [];
+
+var objChatPanelWhatsappTemplate = {
+	init: function() {
+	},
+
+	loadWhatsAppTemplates: function( strChatRoomJid, intPropertyId, intCustomerId, intApplicantId ) {
+
+		var intCampaignTargetId = null;
+		if( 'smsc' === strChatRoomJid.split( '_' )[0] ) {
+			intCampaignTargetId = strChatRoomJid.split( '_' )[3];
+		}
+		psi.patterns.ajaxRequest( {
+			type: 'POST',
+			url: '/?module=entrata_chat_panelxxx&action=load_whatsapp_teampltes&property_id=' + intPropertyId + '&customer_id=' + intCustomerId + '&campaign_target_id=' + intCampaignTargetId + '&applicant_id=' + intApplicantId,
+			datatype: 'JSON',
+			success: function( objResponse ) {
+				var objElement = $( "#" + strChatRoomJid + ' .js-conversation-history ' );
+				objElement.find( '.whatsapp_template' ).html( objResponse );
+				objElement.find( '.whatsapp_template' ).removeClass( 'hide' );
+				// Initialize search&select template dropdown and on change, load the template content
+				if( objElement.find( '#list_whatsapp_template_dropdown option' ).is( ':selected' ) ) {
+					if( '' !== objElement.find( '#list_whatsapp_template_dropdown' ).val() || null !== objElement.find( '#list_whatsapp_template_dropdown' ).val() ) {
+						objElement.find( '#search_whatsapp_template_dropdown' ).val( objElement.find( '#list_whatsapp_template_dropdown :selected' ).text() );
+					}
+				}
+
+				objElement.find( "#search_whatsapp_template_dropdown" ).psiSearchCombobox( {
+					dataList: objElement.find( '#list_whatsapp_template_dropdown' ),
+					autofocus: true,
+					select: function( event, ui ) {
+						objElement.find( "#whatsapp_templates" ).val( ui.item.data );
+						objElement.find( "#list_whatsapp_template_dropdown" ).val( ui.item.data );
+						var intTemplateId = ui.item.data;
+						if( 0 === intTemplateId.trim().length ) {
+							objElement.find( '.whatsapp_template_content' ).empty().addClass( 'hide' );
+							objElement.find( '.chat-text-area' ).css( 'display', 'block' ).val( '' ).attr( 'disabled', true );
+							if( 'no' == objElement.find( '.is_whatsapp_session_expired' ).val() ) {
+								objElement.find( '.chat-text-area' ).attr( 'disabled', false );
+							}
+						} else {
+							psi.patterns.showLoadingImage( {
+								strElementSelector: "#" + strChatRoomJid
+							} );
+							psi.patterns.ajaxRequest( {
+								type: 'POST',
+								url: '/?module=entrata_chat_panelxxx&action=load_whatsapp_template_content&messaging_custom_template_id=' + intTemplateId,
+								datatype: 'JSON',
+								success: function( objResponse ) {
+									psi.patterns.removeLoadingImage( {
+										strElementSelector: "#" + strChatRoomJid
+									} );
+									objElement.find( '.chat-text-area' ).val( objResponse.data.content ).hide();
+									objElement.find( '.whatsapp_template_content' ).html( objResponse.data.content ).removeClass( 'hide' );
+								}
+							} );
+						}
+					}
+				} );
+			}
+		} );
+	},
+
+	getMixRemainingTime: function( intCountDownTime, format ) {
+
+		format = ('undefined' != typeof format) ? format : 'h:m:s';
+
+		var arrmixFormats = format.split( ':' ),
+			boolIsRequiredHours = (arrmixFormats.includes( 'h' ) || arrmixFormats.includes( 'H' )),
+			boolIsRequiredMinutes = (arrmixFormats.includes( 'm' ) || arrmixFormats.includes( 'M' )),
+			boolIsRequiredSeconds = (arrmixFormats.includes( 's' ) || arrmixFormats.includes( 'S' )),
+			intCurrentTime = new Date().getTime(),
+
+			intRemainingTime = intCountDownTime - intCurrentTime,
+			intHours = (true == boolIsRequiredHours) ? Math.floor( (intRemainingTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60) ) + '' : '',
+			intMinutes = (true == boolIsRequiredMinutes) ? Math.floor( (intRemainingTime % (1000 * 60 * 60)) / (1000 * 60) ) + '' : '',
+			intSeconds = (true == boolIsRequiredSeconds) ? Math.floor( (intRemainingTime % (1000 * 60)) / 1000 ) + '' : '',
+			strTime = '';
+
+		if( Number( intHours ) ) {
+			strTime = (intHours.length > 1 ? '' : 0) + intHours;
+		}
+
+		if( Number( intMinutes ) ) {
+			strTime = ('' != strTime) ? strTime + ':' : strTime;
+			strTime += (intMinutes.length > 1 ? '' : 0) + intMinutes;
+		}
+
+		if( Number( intSeconds ) ) {
+			strTime = ('' != strTime) ? strTime + ':' : strTime;
+			strTime += (intSeconds.length > 1 ? '' : 0) + intSeconds;
+		}
+
+		return { time_string: strTime, remaining_time: intRemainingTime };
+	},
+
+	setWrapUpTimeInterval: function( strChatRoomJid, callBackMethod, intInterval ) {
+		arrintWrapUpTimeIntervalIds[strChatRoomJid] = setInterval( callBackMethod, intInterval );
+	},
+
+	clearWrapUpTimeInterval: function( strChatRoomJid ) {
+		clearInterval( arrintWrapUpTimeIntervalIds[strChatRoomJid] );
+	},
+
+	handleWrapUpTimeInterval: function( strChatRoomJid ) {
+		objChatPanelWhatsappTemplate.clearWrapUpTimeInterval( strChatRoomJid );
+		var objElm = $( '.sms-text-messages .text-section[data-chat-room=' + strChatRoomJid + ']' );
+		var boolIsChatAccepted = objElm.attr( "data-is-chat-accepted" );
+		if( 'true' == boolIsChatAccepted ) {
+			var intInterval = objElm.attr( "data-wrapup-time-interval" );
+			var intNotificationId = objElm.attr( "data-message-id" );
+			var intCustomerId = objElm.attr( "data-customer-id" );
+			var intApplicantId = objElm.attr( "data-applicant-id" );
+			var intTime = getCurrentUtcTime();
+			var intMessageDateTime = new Date( intTime * 1000 ).getTime();
+			var intCountDownTime = (intMessageDateTime + (parseInt( intInterval ) * 60000));
+			var dateFormat = new Date( intCountDownTime );
+			objChatPanelWhatsappTemplate.setWrapUpTimeInterval( strChatRoomJid, function() {
+				var objRemainingTime = objChatPanelWhatsappTemplate.getMixRemainingTime( intCountDownTime );
+				if( '00:00:00' >= objRemainingTime.time_string ) {
+					objChatPanelWhatsappTemplate.clearWrapUpTimeInterval( strChatRoomJid );
+					/*check whether the Agent replied to message or not*/
+					psi.patterns.ajaxRequest( {
+						url: '/?module=sms_chatxxx&action=check_agent_replied_to_message',
+						type: 'post',
+						datatype: 'json',
+						data: {
+							'company_user_notification_id': intNotificationId,
+							'chat_room_id': strChatRoomJid,
+							'customer_id': intCustomerId,
+							'applicant_id': intApplicantId,
+							'message_aggregator_id': MESSAGE_AGGREGATOR_WHATSAPP
+						},
+						success: function( objResponse ) {
+							if( true == objResponse.status && false == objResponse.data.is_replied_to_message ) {
+								var objChatRoomElement = $( "#" + strChatRoomJid + ' .js-conversation-history' );
+								objChatRoomElement.find( '#end-chat' ).trigger( 'click' );
+								objChatPanelWhatsappTemplate.sendChatNotificationToActiveUsers( strChatRoomJid, intNotificationId );
+							}
+						}
+					} );
+				}
+			}, 1000 );
+		}
+	},
+
+	loadNotificationDetails: function( strChatRoomJid ) {
+		var objElm = $( '.sms-text-messages .text-section[data-chat-room=' + strChatRoomJid + ']' );
+		var attributeElement = objElm.attr( 'data-wrapup-time-interval' );
+		//check attribute is not present to avoid duplicate call
+		if( "undefined" == typeof attributeElement ) {
+			var intNotificationId = objElm.attr( "data-message-id" );
+			var intCustomerId = objElm.attr( 'data-customer-id' );
+			var intApplicationId = strChatRoomJid.split( '_' )[3];
+			var intCampaignTargetId = null;
+			if( 'smsc' == strChatRoomJid.split( '_' )[0] ) {
+				intApplicationId = null;
+				intCampaignTargetId = strChatRoomJid.split( '_' )[3];
+			}
+			var objData = {
+				'notification_id': intNotificationId,
+				'application_id': intApplicationId,
+				'campaign_target_id': intCampaignTargetId,
+				'property_id': strChatRoomJid.split( '_' )[2],
+				'customer_id': intCustomerId,
+				'message_aggregator_id': MESSAGE_AGGREGATOR_WHATSAPP
+			};
+			psi.patterns.ajaxRequest( {
+				url: '/?module=sms_chatxxx&action=load_notification_and_wrapup_time_interval',
+				data: objData,
+				success: function( objResponse ) {
+					objElm.attr( "data-wrapup-time-interval", objResponse.data.wrapup_time_interval );
+					objElm.attr( "data-is-chat-accepted", objResponse.data.is_chat_accepted );
+
+					var strActiveChatRoom = sessionStorage.getItem( 'current_active_sms_chat_room' );
+					if( strChatRoomJid == strActiveChatRoom && false == objResponse.data.is_chat_accepted ) {
+						objElm.attr( "data-is-chat-accepted", 'true' );
+						objChatPanelWhatsappTemplate.handleWrapUpTimeInterval( strChatRoomJid );
+					}
+				}
+			} );
+		}
+	},
+
+	sendChatNotificationToActiveUsers: function( strChatRoomJid, intNotificationId ) {
+		psi.patterns.ajaxRequest( {
+			url: '/?module=sms_chatxxx&action=send_notification_to_agents',
+			type: 'post',
+			datatype: 'json',
+			data: { 'company_user_notification_id': intNotificationId, 'chat_room_id': strChatRoomJid },
+		} );
+	}
+};

@@ -1,0 +1,1426 @@
+psi.reportFilter = (function( $ ) {
+	var boolIsSavedFilterModified			= false,
+		arrmixFilterConfigValues			= {},
+		arrmixFilterConfigValuesForExpr		= {},
+		filterPromises                      = [],
+		exitTags = {
+			viewDisplayOptionsUrl:				'',
+
+			viewSavedFiltersUrl:				'',
+			createReportFilterUrl:				'',
+			insertReportFilterUrl:				'',
+			updateReportFilterUrl:				'',
+			viewReportFilterUrl:				'',
+			editReportFilterUrl:				'',
+			deleteReportFilterUrl:				'',
+
+			editSharedFilterUrl:				'',
+			updateSharedFilterUrl:				'',
+
+			viewReportScheduleUrl:				'',
+			createReportScheduleUrl:			'',
+			editReportScheduleUrl:				'',
+			insertReportScheduleUrl:			'',
+			updateReportScheduleUrl:			'',
+			deleteReportScheduleUrl:			'',
+
+			loadReportScheduleRecipientsUrl:	'',
+
+		},
+
+	init = function() {
+		psi.patterns.bindEssentials();
+
+		$('#close_dialog').on('click', function(){
+			$('.ui-dialog-titlebar-close').trigger('click');
+		});
+
+		$(".js-pdf-switch").click(function() {
+			if( !$(this).hasClass( 'off' ) ) {
+				$('.js-pdf').addClass( "hide" );
+			} else {
+				$('.js-pdf').removeClass( "hide" );
+			}
+		});
+
+		$(".js-xls-switch").click(function() {
+			if( !$(this).hasClass( 'off' ) ) {
+				$('.js-xls').addClass( "hide" );
+			} else {
+				$('.js-xls').removeClass( "hide" );
+			}
+		});
+
+		$('.js-user').change(function(){
+			$('.' + $(this).val()).show();
+			$('.user-type').not('.' + $(this).val()).hide();
+		});
+
+		$(".js-attachment-toggle").off('click').on( 'click', function() {
+			$('.js-attachment').slideToggle();
+			$('.toggle-arrow').toggleClass('down-arrow');
+			$('.toggle-arrow').toggleClass('right-arrow');
+		});
+
+		$('.frequency').change(function(){
+			$('.' + $(this).val()).show();
+			$('.schedule').not('.' + $(this).val()).hide();
+			psi.patterns.stripesPattern( $(this).closest("[data-pattern='stripes']") );
+		});
+
+		$('.js-report-export-switch').click(function(){
+			if( 1 == $( '.js-report-export-switch input[type=hidden][name="report_schedule[is_export]"]' ).val() ) {
+				$( ".js-export-configuration" ).hide();
+				$("#sftp_servers").val( '' );
+			} else {
+				$( ".js-export-configuration" ).show();
+			}
+		});
+
+		$('.launch-view-data-filter').on('click', function() {
+			$('#filters').trigger('click');
+		});
+
+		$(document).on( 'keypress', 'input[data-name=Every]:visible', function (e) {
+			//if the key pressed is not digit then display error and don't type anything
+			if( e.which !== 8 && e.which !== 0 && (e.which < 48 || e.which > 57) ) {
+				return false;
+			}
+		});
+
+	},
+
+	validateSharedFilter = function() {
+		var boolIsValid				= true;
+		var intCountSelectedFields	= 0;
+		var strMessage				= '';
+
+		if( true == $( '.js-share-switch:visible' ).hasClass('on') ) {
+			$("li[data-selected]").each(function() {
+				if( $(this).find('label').hasClass('selected') ) {
+					intCountSelectedFields++;
+				}
+			});
+
+			if( 1 > intCountSelectedFields ) {
+				boolIsValid = false;
+				strMessage = strMessage + ' ' + __( 'Share with is required.' );
+			}
+
+			if( '' != strMessage ) {
+				$( '#modal_id').scrollTop(0);
+				$('#edit_shared_filter_message').html( '<p class="alert error slim"><i>! </i>' + strMessage + '</p>' ).fadeIn(500);
+			}
+		}
+
+		return boolIsValid;
+	},
+
+	createReportFilters = function() {
+		psi.patterns.bindEssentials();
+
+		// Removed showing filters screen in filters code under task id 1280606 - Change default report filter / save filter report execution.
+
+		//Added this code as reports were not working from packet screen.
+		$('.launch-download').off('click').on( 'click', function(e) {
+			e.preventDefault();
+			$( '.view-data-sub-menu' ).css( 'display', 'block' );
+			$(".view-data-sub-menu").hover(function(){
+				$( '.view-data-sub-menu' ).show();
+			},function(){
+				$( '.view-data-sub-menu' ).hide();
+			});
+		} );
+
+		//Added this code as reports were not working from packet screen.
+		$( '.js-view-data-close' ).on( 'click', function(){
+			$(this).parent().parent().hide();
+		} );
+
+		$('#navigation li').off('click').on( 'click', function() {
+			loadFilterTabs( $(this).attr("id") );
+		});
+
+		// Saved filter list
+		$( '.saved-filter-list' ).off( 'change' ).on( 'change', function() {
+			var intReportFilterId	= $( this ).val(),
+				strReportName		= $( this ).data( 'report-name' ),
+				strVersion			= $( this ).data( 'version' ) ? '&version=' + $( this ).data( 'version' ) : '';
+
+			$( '.save-schedule' ).html( __( 'Save As New' ) );
+			$( '.update-filter-set' ).removeClass( 'hide' );
+			$( '.view-edit-schedules' ).removeClass( 'hide' );
+			if( 'saved_filters' === intReportFilterId ) {
+				$( '.reset-report' ).trigger( 'click' );
+			} else {
+				psi.patterns.ajaxRequest({
+					strElementSelector: 'div.load-filters',
+					url: '/?module=report_filtersxxx&action=edit_report_filter&name=' + strReportName + strVersion + '&report_filter_id=' + intReportFilterId + '&load_report=1&refresh_inner_content=1',
+					complete: function() {
+						if( true === boolIsSavedFilterModified ) {
+							$( '.saved-filter-list' ).val($(".saved-filter-list option:eq(0)").val());
+						}
+						if( 0 === $( '.saved-filter-list' ).length || 'saved_filters' === $( '.saved-filter-list' ).val() ) {
+							//Hide generate button options on reset.
+							$( '.save-schedule' ).html( __( 'Save Filter Set' ) );
+							$( '.update-filter-set' ).addClass( 'hide' );
+							$( '.view-edit-schedules' ).addClass( 'hide' );
+							$('.update-filters').addClass('hide');
+						}
+						if( 0 < $( '.saved-filter-list' ).length && 'saved_filters' != $( '.saved-filter-list' ).val() && 0 < $('[dependent_filter_key]').length ) {
+							$( '.saved-filter-list' ).css({
+								'pointer-events' : 'none',
+								'opacity' : '0.4'
+							});
+						}
+					}
+				});
+			}
+		});
+
+	},
+
+	loadFilterTabs = function( intTabId ) {
+		if( 'display_options' == intTabId ) {
+			ReportsModule.clearAllErrors();
+			$( '.view-data-adv-search' ).css('display', 'none');
+			if( false == ReportsModule.validateReportFilter() ) {
+				 $( '#mod').scrollTop(0);
+				setTimeout( function() {
+					$('#filters').trigger('click');
+				}, 5 );
+			} else {
+				ReportsModule.clearAllErrors();
+				$( '#filters_container' ).css( 'display','none' );
+				$( '#filters' ).removeClass('selected');
+				$( '#display_options' ).addClass('selected');
+				if( !$( '#display_options_container' ).parents( '.js-edit_filter_from_packet' ).length ) {
+					$( '#display_options_container' ).css({
+						'display' : 'block',
+						'max-height' : '354px',
+						'overflow-y' : 'scroll'
+					});
+				}
+
+				var $filterContainer = $( '#display_options' ).parents( '.view-data-filters' ),
+					module = $filterContainer.data('module');
+				ReportsModule.saveReportFilter( module, $filterContainer );
+				setTimeout( function() {
+					psi.patterns.ajaxRequest({
+						strElementSelector: '#display_options_container',
+						url: exitTags.viewDisplayOptionsUrl,
+						data: ReportsModule.getRequestData( module ),
+						beforeSend: function() {
+							psi.patterns.showLoadingImage( {
+								strElementSelector: '.view-data-filters'
+							} );
+						},
+						success:function(strResponse){
+							try {
+									var objResponse = $.parseJSON( strResponse );
+									if( true == objResponse['error'] ) {
+										$('#filters').trigger('click');
+										$('.global-error').html( '<p class="alert error slim"><i>! </i>' + JSON.parse( strResponse ).message + '</p>' );
+										$('.global-error').css( 'display', 'block' );
+									}
+								} catch (e) {
+									$('#display_options_container').html( strResponse );
+								}
+							if( true === $( '#display_options' ).hasClass( 'selected' ) ) {
+								$( '.display' ).removeClass( 'hide' );
+							} else {
+								$( '.display' ).addClass( 'hide' );
+							}
+							psi.patterns.removeLoadingImage({
+								strElementSelector: '.view-data-filters'
+							});
+							if( 0 < $('select.current_dataset').length ) {
+								$('select.current_dataset').trigger('change');
+							}
+						}
+					});
+				}, 50 );
+			}
+		} else {
+			$( '.view-data-adv-search' ).css('display', 'block');
+			$( '#filters' ).addClass('selected');
+			$( '#display_options' ).removeClass('selected');
+			$( '#display_options_container' ).hide();
+			$( '#filters_container' ).css( 'display','block' );
+		}
+	},
+
+	viewReportFilters = function() {
+		$('.launch-view-data-save').off( 'click' ).on( 'click', function() {
+			var strReportName = $('.launch-view-data-save').attr('data-report-name');
+			loadAjaxRequest( 'saved_filters_container', exitTags.viewSavedFiltersUrl+'&name='+strReportName + '&is_from_report_group=0', '', '', 'edit_report_filters_message', 0, function() {
+				psi.patterns.bindEssentials();
+			} );
+		});
+	},
+
+	editOrDeleteReportFilter = function() {
+		$(".report-description").on( 'click', function() {
+			$(this).children('.gradient-overlay').toggle();
+			$(this).toggleClass('full-description');
+		});
+
+		$(".edit-filters-btn").on( 'click', function() {
+			var intReportFilterId 	= $(this).attr("value"),
+				intReportId 		= $(this).attr('data-report-id'),
+				strReportName		= $(this).attr('data-report-name');
+
+			if( 0 < $( '#view_data_filter_container' ).html().length ) {
+				$( '#view_data_filter_container' ).html( '' );
+			}
+			loadAjaxRequest(
+				'view_report_filters',
+				exitTags.editReportFilterUrl + '&report_filter_id=' + intReportFilterId + '&name=' + strReportName + '&report_id=' + intReportId ,
+				'',
+				exitTags.viewReportFilterUrl + '&name=' + strReportName + '&report_id=' + intReportId + '&is_from_report_group=0',
+				'view_report_filters_message',
+				100,
+				function() {
+					$( "#saved_filters_container" ).find( "#view_report_filters" ).removeAttr( "style" );
+				}
+			);
+		});
+
+		$('.edit-shared-filter-btn').off( 'click' ).on('click', function() {
+			var intReportFilterId 	= $(this).attr('data-report-filter-id');
+			var strReportName 		= $(this).attr('data-report-name');
+			psi.patterns.loadDialog({
+				width:522,
+				height:600,
+				strUrl:exitTags.editSharedFilterUrl + '&name=' + strReportName +'&report_filter_id=' + intReportFilterId,
+				strContentId:'modal_id',
+				title:'Edit Shared Filter'
+			});
+		});
+
+		$( ".delete-filters-btn" ).on( "click", ".actions-btn", function() {
+			var intReportFilterId		= $(this).parents('span').parents('i').data('value'),
+				strReportName			= $(this).parents('span').parents('i').data('report-name'),
+				boolIsFromReport		= $(this).parents('span').parents('i').data('is-from-report'),
+				boolIsFromReportGroup	= ( true == boolIsFromReport ) ? 0 : 1;
+
+			loadAjaxRequest( 'view_report_filters', exitTags.deleteReportFilterUrl+ '&name=' + strReportName +'&report_filter_id=' + intReportFilterId + '&is_from_report_group=' + boolIsFromReportGroup, '', exitTags.viewReportFilterUrl + '&name=' + strReportName + '&is_from_report_group=' + boolIsFromReportGroup, 'view_report_filters_message', 0 );
+		});
+
+		$(".load-report").on("click", function(event) {
+			event.preventDefault();
+			var intReportFilterId	= $(this).data("report-filter-id"),
+				strReportUrl		= $(this).data("report-url"),
+				thisFilterRef 		= this;
+
+			$(".modal-large").dialog("close");
+
+			psi.patterns.loadLargeDialog({
+				strUrl: strReportUrl + '&report_filter_id=' + intReportFilterId,
+				title: "Current selection : "+ $(thisFilterRef).attr("title"),
+				beforeSend: function() {
+					$( '.ui-button' ).trigger( 'click' );
+					psi.patterns.showLoadingImage({
+						strElementSelector: "div.modal-body"
+					});
+				},
+				complete: function() {
+					// Removed hiding open filter and saved filters code under task id 1280606 - Change default report filter / save filter report execution
+					$(".modal-body-container .generated-report").hide().show();
+					psi.patterns.removeLoadingImage({
+						strElementSelector: "div.modal-body"
+					});
+					$( '.update-filter-set' ).removeClass( 'hide' );
+					setTimeout(function () {
+						psi.patterns.setEqualHeights({
+							elementSelector: ".modal-body-container .equal-heights"
+						});
+					}, 500);
+				}
+			});
+		});
+
+	},
+
+	updateReportFilter = function() {
+		$(".update-filters-btn").on( 'click', function() {
+			var $filterContainer	= $(this).parents('.view-data-filters'),
+				module				= $filterContainer.data('module');
+			ReportsModule.saveReportFilter(module, $filterContainer);
+			ReportsModule.clearAllErrors();
+			setTimeout(function () {
+				if( true === ReportsModule.validateReportFilter( true ) ) {
+					loadAjaxRequest( 'view_report_filters',
+						exitTags.updateReportFilterUrl + '&show_session_message=1',
+						ReportsModule.getRequestData(module),
+						exitTags.viewReportFilterUrl + '&name=' + $('#report_name').val() + '&is_from_report_group=0',
+						'view_report_filters_message',
+						500
+					);
+				}
+			}, 100 );
+		});
+
+		$(".cancel-filters-btn").on( 'click', function() {
+			var intReportId = $(this).attr('data-report-id'),
+				strReportName = $(this).attr('data-report-name');
+			loadAjaxRequest( 'saved_filters_container', exitTags.viewSavedFiltersUrl+'&name=' + strReportName+ '&report_id='+intReportId + '&is_from_report_group=0', '', '', 'edit_report_filters_message', 0 );
+		});
+
+		$(".update-report-filters-from-packets-btn").off( 'click' ).on( 'click', function() {
+			var boolIsNewFilter		= $(this).data('is-new-filter'),
+				intDataRowCount		= $(this).data('row-count'),
+				strReportName		= $('.update-report-filters-from-packets-btn').attr('data-report-name'),
+				$filterContainer	= $(this).parents('#edit_filter_from_packet').find('.view-data-filters'),
+				module				= $filterContainer.data('module');
+
+			ReportsModule.saveReportFilter(module, $filterContainer);
+			ReportsModule.clearAllErrors();
+			if( true === boolIsNewFilter ) {
+				if( true === ReportsModule.validateReportFilter( true ) ) {
+					psi.patterns.ajaxRequest( {
+						url: exitTags.createReportFilterUrl + '&validate_report=1',
+						strElementSelector: '#filters_container',
+						method: 'post',
+						data: ReportsModule.getRequestData(module),
+						success: function( response ) {
+							response = response.replace( /<([^>]+?)([^>]*?)>(.*?)<\/\1>/ig, "" );
+							try {
+								var strResponseMessage = $.parseJSON( response );
+								if( true === strResponseMessage['success'] ) {
+									psi.patterns.removeLoadingImage( {
+										strElementSelector: '#filters_container'
+									} );
+									psi.patterns.loadDialog( {
+										width: 600,
+										height: 300,
+										strUrl: exitTags.createReportFilterUrl + '&name=' + strReportName + '&validate_report=0&is_new_filter=' + boolIsNewFilter + '&data_row_count=' + intDataRowCount + '&report_module=' + module,
+										strContentId: 'save_filters',
+										title: __( 'Save Filter Set' )
+									} );
+								} else {
+									psi.patterns.removeLoadingImage( {
+										strElementSelector: '#filters_container'
+									} );
+									$( '.global-error' ).html( '<p class="alert slim error inline-alert" id="error_msg"><span class="error text-red font12 ">' + JSON.parse( response ).message + '</span>' ).css( 'display', 'block' );
+								}
+							} catch( e ) {
+								$( '#view_data_filter_container' ).html( response );
+							}
+						}
+					} );
+				}
+			} else {
+				setTimeout(function () {
+					if( true === ReportsModule.validateReportFilter() ) {
+						psi.patterns.ajaxRequest({
+							url: exitTags.updateReportFilterUrl,
+							strElementSelector: '#view-data-filters',
+							method: 'post',
+							data: ReportsModule.getRequestData(module),
+							success: function( strResponse ) {
+								try {
+									psi.patterns.removeLoadingImage({
+										strElementSelector: '#view-data-filters'
+									});
+									var objResponse = $.parseJSON( strResponse );
+									if( true === objResponse['success'] ) {
+										psi.patterns.ajaxRequest({
+											strElementSelector: '#view-data-filters',
+											url: exitTags.editReportFilterUrl,
+											data: ReportsModule.getRequestData(module)
+										});
+									}
+									if( true === objResponse['error'] ) {
+										$('.global-error').html( '<p class="alert error slim"><i>! </i>' + JSON.parse( strResponse ).message + '</p>' );
+										$('.global-error').css( 'display', 'block' );
+									}
+								} catch (e) {
+									$('#view-data-filters').html( strResponse );
+								}
+							}
+						});
+					} else {
+						$( '#mod' ).scrollTop(0);
+					}
+				}, 100 );
+			}
+		});
+
+		$(".cancel-report-filters-from-packets-btn").on( 'click', function() {
+			$( this ).parents( 'div .ui-widget-content:first' ).dialog( 'close' );
+		} );
+	},
+
+	validateInsertReportFilter = function() {
+		var boolIsValid				= true;
+		var intMaxCharacters		= 50;
+		var strReportFilterName		= $( '#report_filter_name' ).val();
+		var intScheduleFrequency	= $( '#schedule_frequency' ).val();
+		var strStartOnDate			= $( '.start_on_date' ).val();
+		var boolIsValidDay			= true;
+		var strMessage				= '';
+		var intDays					= '';
+		var strWeekDay				= '';
+		var intCountSelectedFields	= 0;
+		var strNumDaysRegEx         = /^\d+$/;
+
+		if( '' == $.trim( strReportFilterName ) ) {
+			boolIsValid = false;
+			strMessage = __( 'Filter Name is required.' );
+		}
+
+		if( strReportFilterName.length > intMaxCharacters ) {
+			boolIsValid = false;
+			strMessage = strMessage + ' ' +  __( 'Filter Name is exceeding max characters of 50.' );
+		}
+
+		if( true == $( '.js-update-public' ).hasClass( 'off' ) ) {
+
+			$("li[data-selected]").each(function() {
+				if( $(this).find('label').hasClass('selected') ) {
+					intCountSelectedFields++;
+				}
+			});
+
+		} else {
+			$('#alert_error_div').hide();
+		}
+		if( true == $( '.js-schedule-switch' ).hasClass('on') ) {
+			switch( intScheduleFrequency ) {
+				case '1':
+					intDays			= $( '.num-days' ).val();
+					if( '' == $.trim( intDays ) ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Number of Day\'s is required.' );
+					} else if( false === strNumDaysRegEx.test( intDays ) ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Daily range should be numeric.' );
+					} else if( 1 > $( '.num-days' ).val() || 31 < $( '.num-days' ).val() ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Daily range should be between 1 to 31.' );
+					}
+					break;
+
+				case '2':
+					intDays			= $( '.num_weeks' ).val();
+					strWeekDay		= $('[name="schedule_reports[week_day]"]').val();
+
+					if( '' == $.trim( intDays ) ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Number of Week\'s is required.' );
+					} else if( false == strNumDaysRegEx.test( intDays ) ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Weekly range should be numeric.' );
+					} else if( 1 > $( '.num_weeks' ).val() || 4 < $( '.num_weeks' ).val() ) {
+						boolIsValid = false;
+						strMessage = strMessage + __( 'Weekly range should be between 1 to 4.' );
+					}
+
+					if( '' == strWeekDay ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Week day is required.' );
+					}
+
+					break;
+
+				case '3':
+					intDays			= $( '.num_months' ).val();
+
+					if( '' == $.trim( intDays ) ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Number of Month\'s is required.' );
+					} else if( false == strNumDaysRegEx.test( intDays ) ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Monthly range should be numeric.' );
+					} else if( 1 > $( '.num_months' ).val() || 12 < $( '.num_months' ).val() ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Monthly range should be between 1 to 12.' );
+					}
+
+					$("input[name^='schedule_reports[days_of_month]']").each(function () {
+						if( false == $('.binded').hasClass('selected') ) {
+							boolIsValidDay = false;
+						}
+					});
+
+					break;
+
+				case '4':
+					intDays			= $( '.ordinal' ).val();
+					strWeekDay		= $('[name="schedule_reports[weekday]"]').val();
+
+					if( '' == strWeekDay ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Week day is required.' );
+					}
+
+					break;
+
+				case '5':
+					intDays			= $( '.num_years' ).val();
+
+					if( '' == $.trim( intDays ) ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Number of Year\'s is required.' );
+					} else if( false == strNumDaysRegEx.test( intDays ) ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Yearly range should be numeric.' );
+					} else if( 1 > $( '.num_years' ).val() || 10 < $( '.num_years' ).val() ) {
+						boolIsValid = false;
+						strMessage = strMessage + ' ' + __( 'Yearly range should be between 1 to 10.' );
+					}
+					break;
+			}
+
+			if( false == boolIsValidDay ) {
+				boolIsValid = false;
+				strMessage = strMessage + ' ' + __( 'Day(s) of the Month is required.' );
+			}
+
+			if( '' == $.trim( strStartOnDate ) ) {
+				boolIsValid = false;
+				strMessage = strMessage + ' ' + __( 'Start on date is required.' );
+			}
+
+			var month = strStartOnDate.substring(0, 2);
+			var date = strStartOnDate.substring(3, 5);
+			var year = strStartOnDate.substring(6, 10);
+
+			var myDate = new Date(year, month -1, date);
+			myDate.setHours(0, 0, 0, 0);
+
+			var today = new Date();
+			today.setHours(0, 0, 0, 0);
+
+			if( myDate < today ) {
+				boolIsValid = false;
+				strMessage = strMessage + ' ' + __( 'Start on date is invalid.' );
+			}
+
+			$("li[data-selected]").each(function() {
+				if( $(this).find('label').hasClass('selected') ) {
+					intCountSelectedFields++;
+				}
+			});
+
+			if( 1 > intCountSelectedFields ) {
+				boolIsValid = false;
+				strMessage = strMessage + ' ' + __( 'Recipient is required.' );
+			}
+
+			if( true == $( '.js-pdf-switch' ).hasClass( 'off' ) && true == $( '.js-xls-switch' ).hasClass( 'off' ) && true == $( '.js-csv-switch' ).hasClass( 'off' ) ) {
+				boolIsValid = false;
+				strMessage = strMessage + ' ' + __( 'Attachment Preference is required.' );
+			}
+		}
+
+		if( '' != strMessage ) {
+			$( '#save_filters').scrollTop(0);
+			$('#alert_error_div').html( '<p class="alert error slim"><i></i>' + strMessage + '</p>' ).fadeIn(500);
+		}
+
+		 return boolIsValid;
+	},
+
+	loadAjaxRequest = function( strDivId, strSourceUrl, strData, strTargetUrl,strResponseDivId, intTimeOutInterval, callbackfunction ) {
+		setTimeout(function () {
+			psi.patterns.ajaxRequest({
+				strElementSelector: '#'+strDivId,
+				url: strSourceUrl,
+				data: strData,
+				success: function( strResponse ) {
+					psi.patterns.removeLoadingImage({
+						strElementSelector: '#'+strDivId
+					});
+					try {
+						var objResponse = $.parseJSON( strResponse );
+						if( true === objResponse['success'] ) {
+							if( '' != strTargetUrl ) {
+								psi.patterns.ajaxRequest({
+									strElementSelector: '#'+strDivId,
+									url: strTargetUrl
+								});
+							}
+						}
+					} catch (e) {
+						$('#' + strDivId).html( strResponse );
+					}
+				},
+				complete:callbackfunction
+			});
+		}, intTimeOutInterval );
+	},
+
+	saveReportFilters = function() {
+		psi.patterns.bindEssentials();
+
+		$(".js-schedule-switch").on( 'click', function() {
+			if( $(this).hasClass( 'off' ) ) {
+				$('.js-schedule').removeClass( "hide" );
+				loadAjaxRequest( 'schedule_report_container', exitTags.loadReportScheduleRecipientsUrl, '', '', 'schedule_report_container', 0, function() {
+					psi.patterns.bindEssentials();
+				} );
+			} else {
+				$('.js-schedule').addClass( "hide" );
+			}
+		});
+
+		$('#save_filter_btn').off( 'click' ).on( 'click', function() {
+			$( '#alert_error_div>p' ).remove();
+			var boolIsValid			= validateInsertReportFilter(),
+				boolIsNewFilter		= $(this).attr('data-is-new-filter'),
+				intReportId			= $(this).attr('data-report-id'),
+				strReportQuery		= $(this).attr('data-report-query'),
+				intDataRowCount		= $(this).attr('data-row-count'),
+				strSelectId			= $('#report-instance-' + intDataRowCount).find('td.report-instance-filter').find('select.js-report-filter-id'),
+				strErrorMessageSpan = $('#report-instance-' + intDataRowCount).find('td.report-instance-filter').find('select.js-report-filter-id').next().is('span.error'),
+				module				= $(this).attr('data-report-module');
+
+			if( true == boolIsValid ) {
+				psi.patterns.ajaxRequest( {
+					strElementSelector : '#create_report_filter_container',
+					url : exitTags.insertReportFilterUrl,
+					data : ReportsModule.getRequestData(module) + '&' + $('#create_report_filter').serialize(),
+					success : function( strResponse ) {
+						strResponse = strResponse.replace(/<([^>]+?)([^>]*?)>(.*?)<\/\1>/ig, "");
+						$( '.loading-overlay' ).hide();
+						var objResponse = $.parseJSON( strResponse );
+						if( false === objResponse.success ) {
+							$( '#create_report_filter' ).find( '#alert_error_div' ).html( '<i></i>' + objResponse.successMessage ).addClass( 'alert error slim' ).fadeIn(500);
+						} else {
+							$( '#alert_error_div>p' ).remove();
+							$( '#alert_error_div' ).removeClass( 'alert error slim' );
+							$( '#alert_error_div ' ).html( __( '<i></i>Report filter added successfully.' ) ).addClass( 'alert success slim' ).fadeIn( 500 ).fadeOut(5000);
+							$( '#save_filter_btn' ).attr( 'disabled', true );
+							var intReportFilterId	= objResponse.data.report_filter_id,
+								strName				= objResponse.data.name,
+								strVersion			= objResponse.data.is_latest ? '' : '&version=' + objResponse.data.major + '.' + objResponse.data.minor;
+							setTimeout( function() {
+								$( '#cancel' ).trigger( 'click' );
+								strSelectId.html('');
+								if( true == boolIsNewFilter ) {
+									$( '#add_filter_Set' ).dialog("close");
+									// psi.reportPacket.loadReportFilters();
+									psi.patterns.ajaxRequest( {
+										url: '/?module=report_filtersxxx&action=view_report_filters' + strReportQuery + '&is_new_filter=' + boolIsNewFilter,
+										strElementSelector: strSelectId,
+										data: '&report_id=' + intReportId + '&return_json_response=' + true,
+										success: function( response ) {
+											try {
+												var strResponse			= $.parseJSON(response),
+													intNumberOfFilters	= strResponse.length;
+
+												// Append the filters to the filter set drop down.
+												if( 1 <= intNumberOfFilters ) {
+													for( var i=0; i < intNumberOfFilters; i++ ) {
+														strSelectId.append( "<option value='" + strResponse[i]['filter_id'] + "'>" + strResponse[i]['name'] + "</option>" );
+														if( strErrorMessageSpan ) {
+															$('#report-instance-' + intDataRowCount).find('td.report-instance-filter').find('span.error').html('');
+														}
+													}
+												}
+											} catch(e) {
+												$( '#create_report_packet_message' ).html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 ">' + __( 'Failed to load report filters.' ) + '</span>' );
+												$('#error_msg').delay(2500).fadeOut(1000, function() {
+													$(this).remove();
+												} );
+											}
+										}
+									} );
+								} else {
+									psi.patterns.ajaxRequest( {
+										strElementSelector: 'div.load-filters',
+										url: '/?module=report_filtersxxx&action=edit_report_filter&name=' + strName + strVersion + '&report_filter_id=' + intReportFilterId + '&load_report=1&refresh_inner_content=1',
+										complete: function() {
+											$( '.save-schedule' ).html( __( 'Save As New' ) );
+											$( '.update-filter-set' ).removeClass( 'hide' );
+											$( '.view-edit-schedules' ).removeClass( 'hide' );
+										}
+									} );
+								}
+							}, 1000 );
+						}
+					}
+				} );
+			}
+		} );
+
+		$('#cancel').on( 'click', function() {
+			$("#save_filters").dialog("close");
+			return false;
+		} );
+	},
+
+	updateSharedFilter = function() {
+		$('.update-shared-filter-btn').on('click', function() {
+			if( true === validateSharedFilter() ) {
+				psi.patterns.showLoadingImage({
+					strElementSelector: 'div#shared_filter'
+				});
+				loadAjaxRequest( 'view_report_filters', exitTags.updateSharedFilterUrl + '&is_from_report_group=1', $( '#edit_shared_filter' ).serialize(), exitTags.viewReportFilterUrl, 'shared_filter', 500, function() { $("#modal_id").dialog("close") } );
+			}
+		});
+
+		$(".cancel-shared-filter-btn").on( 'click', function() {
+			psi.patterns.showLoadingImage({
+				strElementSelector: 'div#shared_filter'
+			});
+
+			$( this ).parents( 'div .ui-widget-content:first' ).dialog( 'close' );
+		});
+	},
+
+	editOrDeleteReportSchedule = function() {
+		$(".report-description").on( 'click', function() {
+			$(this).children('.gradient-overlay').toggle();
+			$(this).toggleClass('full-description');
+		});
+
+		//Add report Schedule logic
+		$('.create_report_schedule_btn').on('click', function() {
+			var intReportFilterId 	= $('.saved-filter-set').val();
+			psi.patterns.loadDialog({
+				width:600,
+				height:600,
+				strUrl:exitTags.createReportScheduleUrl + ( intReportFilterId ? '&report_filter_id=' + intReportFilterId : '' ),
+				strContentId:'modal_id',
+				title: __( 'Add Report Schedule' )
+			});
+		});
+
+		$('.edit_report_schedule_btn').on('click', function() {
+			psi.patterns.loadDialog({
+				width:600,
+				height:600,
+				strUrl:exitTags.editReportScheduleUrl + $(this).data('report-query') + '&report_schedule_id=' + $(this).data("report-schedule-id"),
+				strContentId:'modal_id',
+				title: __( 'Edit Report Schedule' )
+			});
+		});
+
+		$(".load-report").on("click", function(event) {
+			event.preventDefault();
+			var intReportFilterId	= $(this).data("report-filter-id"),
+				strReportUrl		= $(this).data("report-url"),
+				thisFilterRef 		= this;
+
+			psi.patterns.closeLargeDialog();
+			setTimeout(function() {
+				psi.patterns.loadLargeDialog({
+					strUrl: strReportUrl + '&report_filter_id=' + intReportFilterId,
+					title: __( "Current selection : "+ $(thisFilterRef).attr("title") ),
+					beforeSend: function() {
+						$( '.ui-button' ).trigger( 'click' );
+						psi.patterns.showLoadingImage({
+							strElementSelector: "div.modal-body"
+						});
+					},
+					complete: function() {
+						// Removed hiding open filter and saved filters code under task id 1280606 - Change default report filter / save filter report execution
+						$(".modal-body-container .generated-report").hide().show();
+						psi.patterns.removeLoadingImage({
+							strElementSelector: "div.modal-body"
+						});
+						$( '.update-filter-set' ).removeClass( 'hide' );
+						setTimeout(function() {
+							psi.patterns.setEqualHeights({
+								elementSelector: ".modal-body-container .equal-heights"
+							});
+						}, 500);
+					}
+				});
+			}, 1000);
+		});
+
+		$( '.delete-schedule-btn' ).on( "click", ".actions-btn", function() {
+			var intReportScheduleId = $(this).parents('span').parents('i').attr('data-value'),
+				intReportId 		= $(this).parents('span').parents('i').attr('data-report-id'),
+				intReportFilterId	= $(this).parents('span').parents('i').attr('data-report-filter-id');
+			loadAjaxRequest( 'scheduled_reports_div', exitTags.deleteReportScheduleUrl + '&report_filter_id=' + intReportFilterId + '&report_schedule_id=' + intReportScheduleId + '&report_id=' + intReportId , '', exitTags.viewReportScheduleUrl + '&report_filter_id=' + intReportFilterId, 'alert_error_div', 0 );
+		});
+
+		$( '.saved-filter-set' ).on( 'change', function() {
+			var intReportFilterId	= $( this ).val(),
+				strReportQuery		= $( this ).data( 'report-query' );
+
+			psi.patterns.ajaxRequest({
+				url: '/?module=scheduled_reportsxxx&action=view_scheduled_reports' + strReportQuery + ( intReportFilterId ? '&report_filter_id=' + intReportFilterId : '' ),
+				strElementSelector: '#scheduled_reports_div',
+				complete: function() {
+					$( '#filters' ).trigger( 'click' );
+				}
+			});
+		});
+	},
+
+	validateReportSchedule = function() {
+		var boolIsValid				= true;
+		var intScheduleFrequency	= $( '#schedule_frequency' ).val();
+		var strStartOnDate			= $( '.start_on_date' ).val();
+		var strOldStartOnDate 		= $( '#old_start_on_date' ).val();
+		var boolIsValidDay			= true;
+		var strMessage				= '';
+		var intDays					= '';
+		var strWeekDay				= '';
+		var intCountSelectedFields	= 0;
+		var strRecipientEmails		= $('#report_recipient').val();
+		var strNumDaysRegEx         = /^\d+$/;
+
+		switch( intScheduleFrequency ) {
+			case '1':
+				intDays			= $( '.num-days' ).val();
+				if( '' == $.trim( intDays ) ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Number of Day\'s is required.' );
+				} else if( false == strNumDaysRegEx.test( intDays ) ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Daily range should be numeric.' );
+				} else if( 1 > $( '.num-days' ).val() || 31 < $( '.num-days' ).val() ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Daily range should be between 1 to 31.' );
+				}
+				break;
+
+			case '2':
+				intDays			= $( '.num_weeks' ).val();
+				strWeekDay		= $('[name="schedule_reports[week_day]"]').val();
+
+				if( '' == $.trim( intDays ) ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Number of Week\'s is required.' );
+				} else if( false == strNumDaysRegEx.test( intDays ) ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Weekly range should be numeric.' );
+				} else if( 1 > $( '.num_weeks' ).val() || 4 < $( '.num_weeks' ).val() ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Weekly range should be between 1 to 4.' );
+				}
+
+				if( '' == strWeekDay ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __('Week day is required.' );
+				}
+
+				break;
+
+			case '3':
+				intDays			= $( '.num_months' ).val();
+
+				if( '' == $.trim( intDays ) ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Number of Month\'s is required.' );
+				} else if( false == strNumDaysRegEx.test( intDays ) ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Monthly range should be numeric.' );
+				} else if( 1 > $( '.num_months' ).val() || 12 < $( '.num_months' ).val() ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Monthly range should be between 1 to 12.' );
+				}
+
+				$("input[name^='schedule_reports[days_of_month]']").each(function () {
+					if( false == $('.binded').hasClass('selected') ) {
+						boolIsValidDay = false;
+					}
+				});
+
+				break;
+
+			case '4':
+				intDays			= $( '.ordinal' ).val();
+				strWeekDay		= $('[name="schedule_reports[weekday]"]').val();
+
+				if( '' == strWeekDay ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Week day is required.' );
+				}
+
+				break;
+
+			case '5':
+				intDays			= $( '.num_years' ).val();
+				if( '' == $.trim( intDays ) ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Number of Year\'s is required.' );
+				} else if( false == strNumDaysRegEx.test( intDays ) ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Yearly range should be numeric.' );
+				} else if( 1 > $( '.num_years' ).val() || 10 < $( '.num_years' ).val() ) {
+					boolIsValid = false;
+					strMessage = strMessage + ' ' + __( 'Yearly range should be between 1 to 10.' );
+				}
+				break;
+		}
+
+		if( false == boolIsValidDay ) {
+			boolIsValid = false;
+			strMessage = strMessage + ' ' + __( 'Day(s) of the Month is required.' );
+		}
+
+		if( '' == $.trim( strStartOnDate ) ) {
+			boolIsValid = false;
+			strMessage = strMessage + ' ' + __( 'Start on date is required.' );
+		} else if( strStartOnDate != strOldStartOnDate ) {
+			var month = strStartOnDate.substring(0, 2);
+			var date = strStartOnDate.substring(3, 5);
+			var year = strStartOnDate.substring(6, 10);
+
+			var myDate = new Date(year, month -1, date);
+			myDate.setHours(0, 0, 0, 0);
+
+			var today = new Date();
+			today.setHours(0, 0, 0, 0);
+
+			if( myDate < today ) {
+				boolIsValid = false;
+				strMessage = strMessage + ' ' + __( 'Start on date is invalid.' );
+			}
+		}
+
+		$("li[data-selected]").each(function() {
+			if( $(this).find('label').hasClass('selected') ) {
+				intCountSelectedFields++;
+			}
+		});
+
+		if( 1 > intCountSelectedFields ) {
+			boolIsValid = false;
+			strMessage = strMessage + ' ' + __( 'Recipient is required.' );
+		}
+
+		// code to validate non entrata email address
+		if( 0 < strRecipientEmails.length ) {
+			var strEmailPattern = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,64})+$/;
+			var intInvalidCount = 0;
+			strRecipientEmails = strRecipientEmails.replace(/[ \n\r]/g,"");
+			var arrRecipientEmails = strRecipientEmails.split(',');
+			for(var intIndex = 0; intIndex < arrRecipientEmails.length; intIndex++) {
+				if( !strEmailPattern.test(arrRecipientEmails[intIndex]) ) {
+					intInvalidCount = 1;
+				}
+			}
+			if( 0 !== intInvalidCount ) {
+				boolIsValid = false;
+				strMessage = strMessage + ' ' + __( 'Recipient emails not valid ' );
+			}
+		}
+
+		if( '' != strMessage ) {
+			$( '#modal_id').scrollTop(0);
+			$('#report_schedule_messages').html( '<p class="alert error slim"><i>! </i>' + strMessage + '</p>' ).fadeIn(500);
+		}
+
+		return boolIsValid;
+	},
+
+	updateReportSchedule = function() {
+		$('.update-schedule-btn').on('click', function() {
+			if( true == validateReportSchedule() ) {
+				var intReportFilterId = $('.saved-filter-set').val();
+				loadAjaxRequest( 'scheduled_reports_div', exitTags.updateReportScheduleUrl, $( '#edit_report_schedule' ).serialize(), exitTags.viewReportScheduleUrl + ( intReportFilterId ? '&report_filter_id=' + intReportFilterId : '' ), 'alert_error_div', 500, function() { $("#modal_id").dialog("close") } );
+			}
+		});
+
+		$(".cancel-schedule-btn").on( 'click', function() {
+			$("#modal_id").dialog("close");
+		});
+	},
+	//Add report schedule
+	insertReportSchedule = function() {
+		$('.save-schedule-btn').off( 'click' ).on('click', function() {
+			if( true == validateReportSchedule() ) {
+				var intReportFilterId 	= $('#scheduled_report_saved_filters').val();
+
+			setTimeout(function () {
+				psi.patterns.ajaxRequest( {
+					strElementSelector: '#scheduled_reports_div',
+					url: exitTags.insertReportScheduleUrl,
+					data: $( '#edit_report_schedule' ).serialize(),
+					beforeSend: function() {
+						psi.patterns.showLoadingImage({
+							strElementSelector: "#edit_report_schedule"
+						});
+					},
+					success: function( strResponse ) {
+						psi.patterns.removeLoadingImage( {
+							strElementSelector: '#edit_report_schedule'
+						} );
+						try {
+							var objResponse = $.parseJSON( strResponse );
+							if( true === objResponse['success'] ) {
+								var strTargetUrl = exitTags.viewReportScheduleUrl + ( intReportFilterId ? '&report_filter_id=' + intReportFilterId : '' );
+								if( '' !== strTargetUrl ) {
+									psi.patterns.ajaxRequest({
+										strElementSelector: '#scheduled_reports_div',
+										url: strTargetUrl
+									});
+								}
+								$( "#modal_id" ).dialog( "close" );
+							} else {
+								$( '#modal_id').scrollTop(0);
+								$( '#report_schedule_messages' ).html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 ">' + objResponse.message + '</span>' );
+							}
+						} catch( e ) {
+							$( '.global-error' ).html( '<p class="alert error slim" id="error_msg"><span class="error text-red font15 ">' + JSON.parse( strResponse ).error + '</span>' );
+						}
+					}
+				} );
+			}, 500 );
+		}
+	});
+
+		$(".cancel-schedule-btn").off( 'click' ).on( 'click', function() {
+			$("#modal_id").dialog("close");
+		});
+	},
+
+	saveOrScheduleFilter = function() {
+		$('li').find('.save-schedule').off( 'click' ).on( 'click', function() {
+			var $filterContainer	= $(this).parents('.view-data-filters'),
+				module				= $filterContainer.data('module');
+			if( true === ReportsModule.validateReportFilter( true ) && true === psi.reportDisplayOptions.validateDisplayOptions() ) {
+				ReportsModule.saveReportFilter(module, $filterContainer);
+				ReportsModule.clearAllErrors();
+				psi.patterns.ajaxRequest({
+					url: exitTags.createReportFilterUrl + '&validate_report=1',
+					strElementSelector: '#filters_container',
+					method: 'post',
+					data: ReportsModule.getRequestData(module),
+					success: function( response ) {
+						response = response.replace(/<([^>]+?)([^>]*?)>(.*?)<\/\1>/ig, "");
+						try {
+							var strResponseMessage = $.parseJSON( response );
+							if( true === strResponseMessage['success'] ) {
+								psi.patterns.removeLoadingImage({
+									strElementSelector: '#filters_container'
+								});
+								psi.patterns.loadDialog({
+									width:700,
+									height:700,
+									strUrl:exitTags.createReportFilterUrl + '&name=' + $('ul li.save-schedule').attr("data-report-name") + '&validate_report=0&report_module=' + module,
+									strContentId:'save_filters',
+									title:psi.reportFilter.saveOrScheduleFilterLabel
+								});
+							} else {
+								psi.patterns.removeLoadingImage({
+									strElementSelector: '#filters_container'
+								});
+								$('.global-error').html( '<p class="alert slim error inline-alert" id="error_msg"><span class="error text-red font12 ">' + JSON.parse( response ).message + '</span>' ).css('display', 'block');
+							}
+						} catch(e) {
+							$( '#view_data_filter_container' ).html( response );
+						}
+					}
+				});
+			}
+		});
+	},
+
+	downloadReport = function( strDownloadUrl ) {
+
+		$( '.element-download' ).on( 'click', function() {
+			psi.reportFilter.intReportScheduleId = $( this ).data( "schedule-id" );
+			if( 1 != $( this ).data( "schedule-type-id" ) && "" != $( this ).data( "schedule-type-id" ) ) {
+				( 1 != $( this ).data( "attach-pdf" ) ? $( ".download-pdf" ).hide() : $( ".download-pdf" ).show() );
+				( 1 != $( this ).data( "attach-xls" ) ? $( ".download-xls" ).hide() : $( ".download-xls" ).show() );
+				( 1 != $( this ).data( "attach-csv" ) ? $( ".download-csv" ).hide() : $( ".download-csv" ).show() );
+			} else {
+				$( ".download-pdf" ).show();
+				$( ".download-xls" ).show();
+				$( ".download-csv" ).show();
+			}
+		});
+
+		// Options popup for download.
+		$('.element-download').psiTooltip({
+			tooltipClass: "download-content",
+			trigger: 'click',
+			contentSelector: $('.report-download'),
+			positions: 'left',
+			items:'.element-download',
+			clickAnywhereToClose: true,
+			open: function(){
+				bindEssentials()
+			}
+		});
+
+		$(document).off('click', '.download-pdf').on('click', '.download-pdf', function(e) {
+			if(e.handled !== true) {
+				var strOutputType = $(this).hasClass( 'download-pdf' ) ? 'export_pdf' : '';
+				downloadReportSchedule( strOutputType, strDownloadUrl );
+			}
+		});
+
+		$(document).off('click', '.download-xls').on('click', '.download-xls', function(e) {
+			if(e.handled !== true) {
+				var strOutputType = $(this).hasClass( 'download-xls' ) ? 'export_spreadsheet' : '';
+				downloadReportSchedule( strOutputType, strDownloadUrl );
+			}
+		});
+
+		$(document).off('click', '.download-csv').on('click', '.download-csv', function(e) {
+			if(e.handled !== true) {
+				var strOutputType = $(this).hasClass( 'download-csv' ) ? 'export_csv' : '';
+				downloadReportSchedule( strOutputType, strDownloadUrl );
+			}
+		});
+	},
+
+	downloadReportSchedule= function( strOutputType, strDownloadUrl ) {
+		$.asyncRequest({
+			url: strDownloadUrl + '&schedule_id=' + psi.reportFilter.intReportScheduleId + '&output_type=' + strOutputType,
+			method: 'post',
+			isFile: true,
+			success: function() {
+				$('.element-download').psiTooltip('close');
+				return false;
+			}
+		});
+	},
+
+	getSavedFilterModified = function() {
+		return boolIsSavedFilterModified;
+	},
+
+	setSavedFilterModified = function( savedFilterModified ) {
+		boolIsSavedFilterModified = savedFilterModified;
+	},
+
+	setViewDisplayOptionsUrl = function( url ) {
+		exitTags.viewDisplayOptionsUrl = url;
+	},
+
+	setViewSavedFiltersUrl = function( url ) {
+		exitTags.viewSavedFiltersUrl = url;
+	},
+
+	setCreateReportFilterUrl = function( url ) {
+		exitTags.createReportFilterUrl = url;
+	},
+
+	setInsertReportFilterUrl = function( url ) {
+		exitTags.insertReportFilterUrl = url;
+	},
+
+	setUpdateReportFilterUrl = function( url ) {
+		exitTags.updateReportFilterUrl = url;
+	},
+
+	setViewReportFilterUrl = function( url ) {
+		exitTags.viewReportFilterUrl = url;
+	},
+
+	setEditReportFilterUrl = function( url ) {
+		exitTags.editReportFilterUrl = url;
+	},
+
+	setEditSharedFilterUrl = function( url ) {
+		exitTags.editSharedFilterUrl = url;
+	},
+
+	setUpdateSharedFilterUrl = function( url ) {
+		exitTags.updateSharedFilterUrl = url;
+	},
+
+	setDeleteReportFilterUrl = function( url ) {
+		exitTags.deleteReportFilterUrl = url;
+	},
+
+	setViewReportScheduleUrl = function( url ) {
+		exitTags.viewReportScheduleUrl = url;
+	},
+
+	setCreateReportScheduleUrl = function( url ) {
+		exitTags.createReportScheduleUrl = url;
+	},
+
+	setEditReportScheduleUrl = function( url ) {
+		exitTags.editReportScheduleUrl = url;
+	},
+
+	setInsertReportScheduleUrl = function( url ) {
+		exitTags.insertReportScheduleUrl = url;
+	},
+
+	setUpdateReportScheduleUrl = function( url ) {
+		exitTags.updateReportScheduleUrl = url;
+	},
+
+	setDeleteReportScheduleUrl = function( url ) {
+		exitTags.deleteReportScheduleUrl = url;
+	},
+
+	setLoadReportScheduleRecipientsUrl = function( url ) {
+		exitTags.loadReportScheduleRecipientsUrl = url;
+	},
+
+	setFilterConfigValues = function ( arrmixValues ) {
+		arrmixFilterConfigValues = arrmixValues;
+	},
+
+	resetFilterConfigValues = function () {
+
+		/**
+		 * Bypass logic -
+		 * The bypass cookie allows the bind essentials call to bypass a few functions that aren't necessary and slow down
+		 * performance. The Sizzle (jQuery CSS Selector) function is also very slow and can be found in the common.js
+		 * but that one is needed (can't remove it). Eventually this will be replaced with React code.
+		 */
+		document.cookie = "bypass=true";
+
+		psi.patterns.bindEssentials();
+
+		document.cookie = "bypass=false";
+
+		var objReportForm = $( "form#report_form" ).serializeObject();
+
+		if( $.isEmptyObject( objReportForm ) ) {
+			objReportForm = $( "form#view-data-filters" ).serializeObject();
+		}
+
+		for( let filter_key in arrmixFilterConfigValues ) {
+
+			var filter_value = '';
+
+			switch( arrmixFilterConfigValues[filter_key]['tpl_reference'] ) {
+				case 'period':
+					filter_value = objReportForm['report_filter[' + filter_key + '][period_type]']
+					break;
+
+				case 'multi-select-multi-level':
+					filter_value = objReportForm['report_filter[' + filter_key + '][application_occupancy_type_ids]']
+					break;
+
+				case 'multi-select-multi-level_renewals':
+					filter_value = objReportForm['report_filter[' + filter_key + '][application_occupancy_type_ids]']
+					break;
+
+				case 'property_group_ids':
+				case 'multi-select':
+					filter_value = objReportForm['report_filter[' + filter_key + '][]']
+					break;
+
+				default:
+					filter_value = objReportForm['report_filter[' + filter_key + ']']
+					break;
+			}
+
+			arrmixFilterConfigValues[filter_key]['value'] = filter_value;
+			arrmixFilterConfigValuesForExpr[filter_key] = filter_value;
+		}
+
+	},
+
+	getFilterConfigValues = function () {
+		return arrmixFilterConfigValues;
+	},
+
+	getFilterConfigValuesForExpr = function () {
+		return arrmixFilterConfigValuesForExpr;
+	},
+
+	showHideFiltersByVisibility = function () {
+		var promise = new Promise(function(resolve, reject) {
+		setTimeout( function() {
+			psi.reportFilter.resetFilterConfigValues();
+
+			$.each( psi.reportFilter.getFilterConfigValues(), function( visibility_filter_key, visibility_filter_values ) {
+
+				if( 'object' === typeof visibility_filter_values && visibility_filter_values.hasOwnProperty( 'visibility' ) ) {
+
+					let filterKeyDiv = $( '#' + visibility_filter_key + '_filter' ),
+						otherFilterKeyElements = $( '#' + visibility_filter_key + '_filter *' );
+
+					otherFilterKeyElements.prop( 'disabled', true );
+					filterKeyDiv.hide();
+					filterKeyDiv.addClass( 'hide' );
+
+					if( psi.reportFilter.evaluateFilterExpression( visibility_filter_values.visibility, psi.reportFilter.getFilterConfigValuesForExpr() ) ) {
+						filterKeyDiv.show();
+						otherFilterKeyElements.removeAttr( 'disabled' );
+						filterKeyDiv.removeClass( 'hide' );
+					}
+				}
+			});
+
+			resolve();
+		}, 100 );
+		});
+
+		// add promise objects to pass to Promise.all() method
+		psi.reportFilter.filterPromises.push(promise);
+	},
+
+	evaluateFilterExpression = function ( expr, filterValues ) {
+
+		if( 'object' === typeof expr && expr.hasOwnProperty( 'operation' ) && expr.hasOwnProperty( 'operands' ) ) {
+			var values = expr.operands.map( function( operand ) { return psi.reportFilter.evaluateFilterExpression( operand, filterValues ) } );
+
+			switch( expr.operation ) {
+				case 'and':
+					return values.reduce( function( acc, curr ) { return curr && acc }, 1 );
+				case 'or':
+					return values.reduce( function( acc, curr ) { return curr || acc }, 0 );
+				case 'not':
+					return !values[0];
+				case 'equals':
+					return values[0] == values[1];
+			}
+		} else if( 'object' == typeof filterValues && filterValues.hasOwnProperty( expr ) ) {
+			return filterValues[expr];
+		} else {
+			return expr;
+		}
+	};
+
+	return {
+		init: init,
+		saveReportFilters: saveReportFilters,
+		saveOrScheduleFilter: saveOrScheduleFilter,
+		createReportFilters: createReportFilters,
+		viewReportFilters: viewReportFilters,
+		editOrDeleteReportFilter: editOrDeleteReportFilter,
+		updateReportFilter: updateReportFilter,
+		editOrDeleteReportSchedule: editOrDeleteReportSchedule,
+		insertReportSchedule: insertReportSchedule,
+		updateReportSchedule: updateReportSchedule,
+		updateSharedFilter: updateSharedFilter,
+		downloadReport: downloadReport,
+		getSavedFilterModified: getSavedFilterModified,
+		setSavedFilterModified: setSavedFilterModified,
+
+		setViewDisplayOptionsUrl: setViewDisplayOptionsUrl,
+
+		setViewSavedFiltersUrl: setViewSavedFiltersUrl,
+		setCreateReportFilterUrl: setCreateReportFilterUrl,
+		setInsertReportFilterUrl: setInsertReportFilterUrl,
+		setUpdateReportFilterUrl: setUpdateReportFilterUrl,
+		setDeleteReportFilterUrl: setDeleteReportFilterUrl,
+		setViewReportFilterUrl: setViewReportFilterUrl,
+		setEditReportFilterUrl: setEditReportFilterUrl,
+
+		setEditSharedFilterUrl: setEditSharedFilterUrl,
+		setUpdateSharedFilterUrl: setUpdateSharedFilterUrl,
+
+		setViewReportScheduleUrl: setViewReportScheduleUrl,
+		setCreateReportScheduleUrl: setCreateReportScheduleUrl,
+		setEditReportScheduleUrl: setEditReportScheduleUrl,
+		setInsertReportScheduleUrl: setInsertReportScheduleUrl,
+		setUpdateReportScheduleUrl: setUpdateReportScheduleUrl,
+		setDeleteReportScheduleUrl: setDeleteReportScheduleUrl,
+
+		setFilterConfigValues: setFilterConfigValues,
+		resetFilterConfigValues: resetFilterConfigValues,
+		getFilterConfigValues: getFilterConfigValues,
+		getFilterConfigValuesForExpr: getFilterConfigValuesForExpr,
+		showHideFiltersByVisibility: showHideFiltersByVisibility,
+		evaluateFilterExpression: evaluateFilterExpression,
+
+		setLoadReportScheduleRecipientsUrl: setLoadReportScheduleRecipientsUrl,
+
+		filterPromises: filterPromises
+	};
+
+})( jQuery );
+
+//# sourceURL=Entrata/js/module/report_system/report_filter.js

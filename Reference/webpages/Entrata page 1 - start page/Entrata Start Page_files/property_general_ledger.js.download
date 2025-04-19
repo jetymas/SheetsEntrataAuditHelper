@@ -1,0 +1,608 @@
+var objPropertyGeneralLedgerModule = ( function () {
+	if( 0 == $('.js-track-inventory-quantity').find('input').val() ) {
+		$( '.inventory .js-option-list' ).prop( 'disabled', true );
+	} else {
+		$( '.inventory .js-option-list' ).prop( 'disabled', false );
+	}
+
+	$( '.js-group-submit' ).on( 'click', function() {
+
+		$('#property_gl_gross_potential_rent_settings').find('div.hide').each(function() {
+			$( this ).find( 'input[type=text]' ).attr( 'disabled', true );
+			$( this ).find( 'select' ).attr( 'disabled', true );
+			$( this ).find( 'input[type=radio][value]' ).attr( 'disabled', true );
+		});
+
+		$( '#PROPERTY_GL_SETTINGS_USE_MARKET_RENT_IN_GPR' ).val($( 'input[name="property_gl_settings_use_market_rent_in_gpr"]:checked').val());
+		$( '#PROPERTY_GL_SETTINGS_USE_BEGIN_OF_MONTH_MARKET_RENT' ).val($( 'input[name="property_gl_settings_use_begin_of_month_market_rent"]:checked').val());
+		$( '#PROPERTY_GL_SETTINGS_CALULATE_VACANCY_ON_AR_CLOSE' ).val($( 'input[name="property_gl_settings_calulate_vacancy_on_ar_close"]:checked').val());
+
+		$('.js-setting-templates').val($('#settings_template_gross_potential_rent option:selected').val());
+	});
+
+	$( '#auto_post_gpr_adjustment_on_off_switch' ).on('change', function() {
+
+		var objIsModifiedAccrualGpr		= $( '#PROPERTY_GL_SETTINGS_IS_MODIFIED_ACCURAL_GPR' );
+		var objAutoPostGprAdjustment	= $( '#PROPERTY_GL_SETTINGS_AUTO_POST_GPR_ADJUSTMENT' );
+		var objGroupExcludedUnitsInGpr	= $( '#PROPERTY_GL_SETTINGS_GROUP_EXCLUDED_UNITS_IN_GPR' );
+
+		if( 0 == objAutoPostGprAdjustment.val() ) {
+			$( '#gpr-edit > div' ).not( '.noGpr' ).addClass( 'hide' );
+		} else {
+
+			$( '#gpr-edit > div' ).removeClass( 'hide' );
+
+			if( 0 == objGroupExcludedUnitsInGpr.val() ) {
+
+				$( '.exclusion_types' ).addClass( 'hide' );
+			}
+
+			if( true == $( '#accrual_checkbox' ).prop( 'checked') && false == $( '#cash_checkbox' ).prop( 'checked') ) {
+				$( '#delinquent_rent_gl_account_row' ).addClass( 'hide' );
+			}
+
+			if( 0 == objIsModifiedAccrualGpr.val() ) {
+				$( '#prepaid_rent_gl_account_row' ).addClass( 'hide' );
+			}
+
+			if( 1 == objIsModifiedAccrualGpr.val() ) {
+				$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+			}
+		}
+	} );
+
+	$( '#property_gl_settings_prorate_gpr_vacancy_for_transfers' ).on('change', function() {
+		if( 1 == $('#PROPERTY_GL_SETTINGS_PRORATE_GPR_VACANCY_FOR_TRANSFERS').val() ) {
+			$( '#warning_message' ).removeClass( 'show' ).addClass( 'hide' );
+		} else {
+			$( '#warning_message' ).removeClass( 'hide' ).addClass( 'show' );
+		}
+	} );
+
+	$(document).ready( function() {
+		$( '#PROPERTY_GL_SETTINGS_PRORATE_GPR_VACANCY_FOR_TRANSFERS' ).parent().append( '<i style="margin-top:7px" class="alert-yellow hide" id="warning_message" title="' + __( 'Changing this setting will cause the old and new units for transfers to both show {%d, 0}% occupancy for the transfer month, which will result in loss on lease for the new unit in the transfer month', [100] ) + '"></i>' );
+	} );
+
+	$( '#accrual_checkbox' ).click( function() {
+
+		var objCashCheckbox				= $( '#cash_checkbox' );
+		var objIsModifiedAccrualGpr		= $( '#PROPERTY_GL_SETTINGS_IS_MODIFIED_ACCURAL_GPR' );
+
+		if( true == this.checked ) {
+			$( '#is_modified_accrual_gpr_row' ).removeClass( 'hide' );
+
+			if( 1 == $( '#PROPERTY_GL_SETTINGS_IS_MODIFIED_ACCURAL_GPR' ).val() ) {
+				$( '#prepaid_rent_gl_account_row' ).removeClass( 'hide' );
+			}
+
+			if( 1 == objIsModifiedAccrualGpr.val() || true == objCashCheckbox.prop( 'checked') ) {
+				$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+			}
+		} else {
+
+			if( false == objCashCheckbox.prop( 'checked') ) {
+
+				$( this ).prop( 'checked' ,true );
+				return false;
+			}
+			$( '.accrual_class' ).addClass( 'hide' );
+
+			if( 1 == objIsModifiedAccrualGpr.val() || true == objCashCheckbox.prop( 'checked') ) {
+				$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+			}
+		}
+	} );
+
+	$( '.js-lease_term_filter' ).click( function() {
+
+		var objCashCheckbox				= $( '#cash_checkbox' );
+		var objIsModifiedAccrualGpr		= $( '#PROPERTY_GL_SETTINGS_IS_MODIFIED_ACCURAL_GPR' );
+
+		var objAccrualCheckbox			= $( '#accrual_checkbox' );
+		var objGroupExcludedUnitsInGpr	= $( '#PROPERTY_GL_SETTINGS_GROUP_EXCLUDED_UNITS_IN_GPR' );
+
+		var strSelectValue = $( this ).data( 'selected_value' );
+		var boolIsAccrual	= 0;
+		var boolIsCash		= 0;
+
+		if( 'accrual' == strSelectValue || 'Accrual' == strSelectValue ) {
+			$( '#accrual_checkbox' ).prop( 'checked' ,true );
+			$( '#cash_checkbox' ).prop( 'checked' ,false );
+			boolIsAccrual = 1;
+		}
+
+		if( 'cash' == strSelectValue || 'Cash' == strSelectValue ) {
+			$( '#accrual_checkbox' ).prop( 'checked' ,false );
+			$( '#cash_checkbox' ).prop( 'checked' ,true );
+
+			boolIsCash = 1;
+		}
+
+		if( 'both' == strSelectValue || 'Both' == strSelectValue ) {
+			$( '#accrual_checkbox' ).prop( 'checked' ,true );
+			$( '#cash_checkbox' ).prop( 'checked' ,true );
+			boolIsAccrual	= 1;
+			boolIsCash		= 1;
+		}
+
+		if( 1 == boolIsAccrual ){
+			$( '#is_modified_accrual_gpr_row' ).removeClass( 'hide' );
+
+			if( 1 == $( '#PROPERTY_GL_SETTINGS_IS_MODIFIED_ACCURAL_GPR' ).val() ) {
+				$( '#prepaid_rent_gl_account_row' ).removeClass( 'hide' );
+			}
+
+			if( 1 == objIsModifiedAccrualGpr.val() || true == objCashCheckbox.prop( 'checked') ) {
+				$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+			}
+		}
+
+		if( 1 == boolIsCash ) {
+			if( false == objAccrualCheckbox.prop( 'checked') ) {
+
+				$( '#is_modified_accrual_gpr_row' ).addClass( 'hide' );
+				$( '#prepaid_rent_gl_account_row' ).addClass( 'hide' );
+			}
+
+			$( '#delinquent_rent_gl_account_row' ).not( '.noGpr' ).find( 'select' ).attr( 'disabled', false );
+			$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+
+			if( 0 == objGroupExcludedUnitsInGpr.val() ) {
+				$( '.exclusion_types' ).addClass( 'hide' );
+			}
+		}
+
+		if( 0 == boolIsAccrual ){
+			if( false == objCashCheckbox.prop( 'checked') ) {
+
+				$( this ).prop( 'checked' ,true );
+				//return false;
+			} else {
+				$( '.accrual_class' ).addClass( 'hide' );
+
+				if( 1 == objIsModifiedAccrualGpr.val() || true == objCashCheckbox.prop( 'checked') ) {
+					$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+				}
+			}
+		}
+
+		if( 0 == boolIsCash ) {
+			if( false == objAccrualCheckbox.prop( 'checked') ) {
+
+				$( this ).prop( 'checked' ,true );
+				// return false;
+			} else {
+
+				$( '#is_modified_accrual_gpr_row' ).removeClass( 'hide' );
+				$( '#prepaid_rent_gl_account_row' ).removeClass( 'hide' );
+
+				if( 0 == objGroupExcludedUnitsInGpr.val() ) {
+					$( '.exclusion_types' ).addClass( 'hide' );
+				}
+
+				if( 0 == objIsModifiedAccrualGpr.val() ) {
+					$( '#delinquent_rent_gl_account_row' ).addClass( 'hide' );
+				}
+			}
+			if( 0 == objIsModifiedAccrualGpr.val() ) {
+				$( '#prepaid_rent_gl_account_row' ).addClass( 'hide' );
+			}
+		}
+	} );
+
+	$( '#cash_checkbox' ).click( function() {
+
+		var objAccrualCheckbox			= $( '#accrual_checkbox' );
+		var objIsModifiedAccrualGpr		= $( '#PROPERTY_GL_SETTINGS_IS_MODIFIED_ACCURAL_GPR' );
+		var objGroupExcludedUnitsInGpr	= $( '#PROPERTY_GL_SETTINGS_GROUP_EXCLUDED_UNITS_IN_GPR' );
+
+		if( true == this.checked ) {
+
+			if( false == objAccrualCheckbox.prop( 'checked') ) {
+
+				$( '#is_modified_accrual_gpr_row' ).addClass( 'hide' );
+				$( '#prepaid_rent_gl_account_row' ).addClass( 'hide' );
+			}
+
+			$( '#delinquent_rent_gl_account_row' ).not( '.noGpr' ).find( 'select' ).attr( 'disabled', false );
+			$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+
+			if( 0 == objGroupExcludedUnitsInGpr.val() ) {
+				$( '.exclusion_types' ).addClass( 'hide' );
+			}
+		} else {
+
+			if( false == objAccrualCheckbox.prop( 'checked') ) {
+
+				$( this ).prop( 'checked' ,true );
+				return false;
+			}
+
+			$( '#is_modified_accrual_gpr_row' ).removeClass( 'hide' );
+			$( '#prepaid_rent_gl_account_row' ).removeClass( 'hide' );
+
+			if( 0 == objGroupExcludedUnitsInGpr.val() ) {
+				$( '.exclusion_types' ).addClass( 'hide' );
+			}
+
+			if( 0 == objIsModifiedAccrualGpr.val() ) {
+				$( '#delinquent_rent_gl_account_row' ).addClass( 'hide' );
+			}
+		}
+
+		if( 0 == objIsModifiedAccrualGpr.val() ) {
+			$( '#prepaid_rent_gl_account_row' ).addClass( 'hide' );
+		}
+	} );
+
+	$( '#is_modified_accrual_gpr_row' ).on('switchbuttontoggle', function() {
+
+		var objCashCheckbox				= $( '#cash_checkbox' );
+		var objAccrualCheckbox			= $( '#accrual_checkbox' );
+		var objIsModifiedAccrualGpr		= $( '#PROPERTY_GL_SETTINGS_IS_MODIFIED_ACCURAL_GPR' );
+		var objGroupExcludedUnitsInGpr	= $( '#PROPERTY_GL_SETTINGS_GROUP_EXCLUDED_UNITS_IN_GPR' );
+
+		if( 1 == objIsModifiedAccrualGpr.val() ) {
+			$( '.is_accrual' ).not( '.noGpr' ).find( 'select' ).attr( 'disabled', false );
+
+			$( '#prepaid_rent_gl_account_row' ).removeClass( 'hide' );
+			$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+
+			if( 0 == objGroupExcludedUnitsInGpr.val() ) {
+				$( '.exclusion_types' ).addClass( 'hide' );
+			}
+		} else {
+			$( '#prepaid_rent_gl_account_row' ).addClass( 'hide' );
+
+			if( false == objCashCheckbox.prop( 'checked' ) ) {
+				$( '#delinquent_rent_gl_account_row' ).addClass( 'hide' );
+			}
+
+			if( 0 == objGroupExcludedUnitsInGpr.val() ) {
+				$( '.exclusion_types' ).addClass( 'hide' );
+			}
+		}
+	} );
+
+	$( '#associate_exclusion_types' ).on('switchbuttontoggle', function() {
+		$( '.exclusion_types' ).addClass( 'hide' );
+		$( '.exclusion_types' ).find( '.js-option-list' ).prop( 'disabled', true );
+		if( 1 == $( '#PROPERTY_GL_SETTINGS_GROUP_EXCLUDED_UNITS_IN_GPR' ).val() ) {
+			$( '.exclusion_types' ).removeClass( 'hide' );
+			$( '.exclusion_types' ).find( '.js-option-list' ).prop( 'disabled', false );
+		}
+	} );
+
+	//For Property Financial >> General Ledger >> Assets settings
+
+	// This is written because of tooltip issue. Tooltip was getting on click of 'Purchasing Clearing Account' drop down list.
+	if( $( "#assets-info-edit" ).length ) {
+		$( '.js-property-setting-select' ).unbind( 'click' );
+	}
+
+	$( '.js-track-inventory-quantity' ).off('switchbuttontoggle').on( 'switchbuttontoggle', function() {
+
+		$( '.inventory' ).toggleClass( 'hide' );
+
+		if( 0 == $( '.js-post-to-gl' ).find( 'input' ).val() ) {
+			$( '.js-purchase-clearing-account' ).addClass( 'hide' );
+		}
+
+		if( false == boolIsSettingTemplate ) {
+			$( '.inventory .js-template-list' ).prop( 'selectedIndex', 0 );
+		} else {
+			if( 0 == $('.js-track-inventory-quantity').find('input').val() ) {
+				$( '.inventory .js-option-list' ).prop( 'disabled', true );
+			} else {
+			$( '.inventory .js-option-list' ).prop( 'disabled', false );
+			}
+		}
+		return false;
+
+	});
+
+	// depreciation toggle
+	$( '.js-is-asset-post-depreciation' ).off( 'switchbuttontoggle' ).on( 'switchbuttontoggle', function() {
+
+		var strId = $( this ).find( 'input:first' ).attr( 'id' );
+		var strPropertySettingLog = $( this ).find( 'input:eq(1)' ).attr( 'id' );
+
+		var strSwitchButtonToggleValue = $( '.switch-button ' + '#' + strId ).val();
+
+		var strOnOffText = (1 == strSwitchButtonToggleValue) ? $( this ).data( 'on-text' ) : $( this ).data( 'off-text' );
+		$( '#' + strPropertySettingLog ).val( strOnOffText );
+
+		$( '.depreciation' ).toggleClass( 'hide' );
+		return false;
+
+	} );
+
+	$( '.js-post-to-gl' ).on( 'switchbuttontoggle', function() {
+		$( '.js-purchase-clearing-account' ).toggleClass( 'hide' );
+	});
+
+} )();
+
+psi.objFinancialGeneralLedgerDetails = ( function() {
+
+	var init = function() {
+		submitGeneralSettings();
+		submitAccountReceivableSettings();
+		submitAccountPayableSettings();
+		submitInterCompanyAccountingSettings();
+		if( true == psi.objProperty.boolIsSettingsTemplateProperty ) {
+			highlightTabs();
+		}
+	};
+
+	function defaultGrossPotentialRentSettings( intSettingTemplateId ) {
+
+		var objIsModifiedAccrualGpr		= $( '#PROPERTY_GL_SETTINGS_IS_MODIFIED_ACCURAL_GPR' );
+		var objAutoPostGprAdjustment	= $( '#PROPERTY_GL_SETTINGS_AUTO_POST_GPR_ADJUSTMENT' );
+		var objGroupExcludedUnitsInGpr	= $( '#PROPERTY_GL_SETTINGS_GROUP_EXCLUDED_UNITS_IN_GPR' );
+
+		if( 0 == objAutoPostGprAdjustment.val() ) {
+			$( '#gpr-edit > div' ).not( '.noGpr' ).addClass( 'hide' );
+		} else {
+			$( '#gpr-edit > div' ).removeClass( 'hide' );
+
+			if( 0 == objGroupExcludedUnitsInGpr.val() ) {
+				$( '.exclusion_types' ).addClass( 'hide' );
+			}
+
+			if( true == $( '#accrual_checkbox' ).prop( 'checked') && false == $( '#cash_checkbox' ).prop( 'checked') ) {
+				$( '#delinquent_rent_gl_account_row' ).addClass( 'hide' );
+			}
+
+			if( 0 == objIsModifiedAccrualGpr.val() || false == $( '#accrual_checkbox' ).prop( 'checked') ) {
+				$( '.is_accrual' ).addClass( 'hide' );
+			}
+
+			if( false == $( '#accrual_checkbox' ).prop( 'checked') ) {
+				$( '#delinquent_rent_gl_account_row' ).addClass( 'hide' );
+				$( '#is_modified_accrual_gpr_row' ).addClass( 'hide' );
+			}
+
+			if( 1 == objIsModifiedAccrualGpr.val() || true == $( '#cash_checkbox' ).prop( 'checked') ) {
+				$( '#delinquent_rent_gl_account_row' ).removeClass( 'hide' );
+			}
+		}
+		$(".strpGrp").css( "border-bottom", "1px solid #d2d2d2" );
+
+		psi.objProperty.hideSettingTemplateDropdown( '.strpGrp .js-template-list', null, false );
+
+		$('#property_gl_gross_potential_rent_settings').on( 'change click', '.js-property',  function() {
+			if( false == psi.objProperty.boolIsSettingsTemplateProperty ) {
+				intSettingTemplateId = 0;
+			}
+			psi.objProperty.setTemplateValueWithColor( $('.js-template-dropdwon-toggle'), intSettingTemplateId, true );
+		});
+
+		if( true == psi.objProperty.boolIsSettingsTemplateProperty ) {
+			highlightTabs();
+		}
+	}
+
+	function goLiveWithEntrata() {
+		psi.patterns.ajaxRequest( { strElementSelector: '#general_settings_div', url: psi.objFinancialGeneralLedgerDetails.exitTags.viewUpdateGeneralSettings + '&property_gl_settings[activate_standard_posting]=true&is_from_go_live_with_entrata=1' } );
+	}
+
+	$( '.load_dialog' ).click( function() {
+		psi.patterns.loadDialog( 750, 400, psi.objFinancialGeneralLedgerDetails.exitTags.editActivatePropertyglSetting, 'edit_activate_property_gl_setting', __( 'Enable Entrata' ) );
+		return false;
+	} );
+
+	$( '.fn_entrata_live' ).click( function() {
+		alert( __( 'Unable to activate Entrata. There are transactions, invoices, or deposits in the system which need to be corrected.' ) );
+		return false;
+	} );
+
+	function submitGeneralSettings() {
+		var objRowTemplateSelectElement = '.js-option-list';
+		var objRowPropertySelectElement = '.js-template-list';
+
+		if( true == psi.objProperty.boolIsSettingsTemplateProperty ) {
+			var strElementSelector = objRowTemplateSelectElement;
+		} else {
+			var strElementSelector = objRowPropertySelectElement;
+		}
+
+		if( 1 == $( '#PROPERTY_GL_SETTINGS_IS_AR_MIGRATION_MODE' ).val() || 1 == $( '#PROPERTY_GL_SETTINGS_IS_AP_MIGRATION_MODE' ).val() ) {
+
+			$( '#disabledtemplate' ).find( strElementSelector ).addClass( 'disabled' );
+			$( '#disabledtemplate' ).find( strElementSelector ).prop( 'disabled', true );
+			$( '#property_gl_settings_user_validation_mode_value' ).prop( 'disabled', false );
+
+			if( false == $( '#PROPERTY_GL_SETTINGS_USER_VALIDATION_MODE' ).is( ':disabled' ) ) {
+				$( '#PROPERTY_GL_SETTINGS_USER_VALIDATION_MODE' ).prop( 'disabled', true );
+			}
+
+		} else {
+
+			$( '#disabledtemplate' ).find( strElementSelector ).removeClass( 'disabled' );
+			$( '#disabledtemplate' ).find( strElementSelector ).prop( 'disabled', false );
+			$( '#property_gl_settings_user_validation_mode_value' ).prop( 'disabled', true );
+		}
+
+		$( '#settings_content' ).off( 'click', '.js-submit-general-settings' ).on( 'click', '.js-submit-general-settings', function() {
+
+			boolActivateStandardPosting = $( this ).data( 'activate-standard-posting' );
+
+			var boolArMigrationMode 	= false;
+			var boolApMigrationMode 	= false;
+			var boolAssetMigrationMode 	= false;
+			var strConfirmationModes	= '';
+			var strConfirmationMsg		= '';
+
+			if( 0 == $('#initial_ar_migration_mode_value').val() ) {
+				if( 1 == $('#PROPERTY_GL_SETTINGS_IS_AR_MIGRATION_MODE').val() ) {
+					boolArMigrationMode = true;
+					strConfirmationMsg = ' ' + __( 'AR' );
+				}
+			}
+
+			if( 0 == $('#initial_ap_migration_mode_value').val() ) {
+				if( 1 == $('#PROPERTY_GL_SETTINGS_IS_AP_MIGRATION_MODE').val() ) {
+					boolApMigrationMode = true;
+					if( true == boolArMigrationMode ){
+						strConfirmationMsg += __( ', AP' );
+					} else {
+						strConfirmationMsg += ' ' + __( 'AP' );
+					}
+				}
+			}
+
+			if( 0 == $('#initial_asset_migration_mode_value').val() ) {
+				if( 1 == $('#PROPERTY_GL_SETTINGS_IS_ASSET_MIGRATION_MODE').val() ) {
+					boolAssetMigrationMode = true;
+					if( true == boolArMigrationMode || true == boolApMigrationMode ) {
+						strConfirmationMsg += __( ', ASSET' );
+					} else {
+						strConfirmationMsg += ' ' + __( 'ASSET' );
+					}
+				}
+			}
+
+			if( true == boolApMigrationMode || true == boolAssetMigrationMode ) {
+				var result = confirm( __( 'This site is already {%s, confirmation_msg} migrated, Do you want to turn on this {%s, confirmation_msg} Migration mode again?', { 'confirmation_msg': strConfirmationMsg } ) );
+				if( true == result ) {
+					if( true == boolApMigrationMode ) {
+						$('#PROPERTY_GL_SETTINGS_IS_AP_MIGRATION_MODE').val(1);
+					}
+
+					if( true == boolAssetMigrationMode ) {
+						$('#PROPERTY_GL_SETTINGS_IS_ASSET_MIGRATION_MODE').val(1);
+					}
+
+				} else {
+
+					if( true == boolApMigrationMode ) {
+						$('#PROPERTY_GL_SETTINGS_IS_AP_MIGRATION_MODE').val( $('#initial_ap_migration_mode_value').val() );
+					}
+
+					if( true == boolAssetMigrationMode ) {
+						$('#PROPERTY_GL_SETTINGS_IS_ASSET_MIGRATION_MODE').val( $('#initial_asset_migration_mode_value').val() );
+					}
+				}
+			}
+
+			if ( true == isboolDefault && ''== intSettingTemplateId ) {
+
+				var intdefaultTemplateId = $( '#disabledtemplate' ).find( strElementSelector ).find( ':selected' ).val();
+
+				$('#property_gl_settings_user_validation_mode_value').val( intdefaultTemplateId );
+				$( '#disabledtemplate' ).find( strElementSelector +' option[value="' + intdefaultTemplateId + '"]' ).prop( 'selected', true );
+
+			} else if( false == isboolDefault && ''== intSettingTemplateId ) {
+
+				$( '#property_gl_settings_user_validation_mode_value' ).val( 'None' );
+
+				if( true == boolArMigrationMode || true == boolApMigrationMode ) {
+					$( '#disabledtemplate' ).find( strElementSelector).prop( 'selectedIndex', 0 );
+				}
+
+			} else {
+
+				$( '#property_gl_settings_user_validation_mode_value' ).val( intSettingTemplateId );
+				if( true == boolArMigrationMode || true == boolApMigrationMode ) {
+					$( '#disabledtemplate' ).find( strElementSelector +' option[value="' + intSettingTemplateId + '"]' ).prop( 'selected', true );
+				}
+			}
+
+			psi.objProperty.submitFormNew({
+				strElementSelector: '#general_settings_div',
+				url: psi.objFinancialGeneralLedgerDetails.exitTags.viewUpdateGeneralSettings + '&property_gl_settings[activate_standard_posting]=' + boolActivateStandardPosting,
+				strFormId: 'general_settings_frm',
+				complete: function(){
+					psi.objFinancialGeneralLedgerDetails.submitGeneralSettings();
+						if( true == psi.objProperty.boolIsSettingsTemplateProperty ) {
+							psi.objProperty.viewUniqueSettingsListAndHighlightTabs();
+						}
+					}
+			} );
+		} );
+	}
+
+	function submitAccountReceivableSettings() {
+		$( '#settings_content' ).off( 'click', '.js-submit-accounts-receivable' ).on( 'click', '.js-submit-accounts-receivable', function() {
+				psi.objProperty.submitFormNew({
+				strElementSelector: '#accounts_receivable_div',
+				url: psi.objFinancialGeneralLedgerDetails.exitTags.viewUpdatePropertyAccountsReceivable,
+				strFormId: 'property_gl_accounts_receivable_settings_frm',
+				complete: function(){
+					psi.objFinancialGeneralLedgerDetails.submitAccountReceivableSettings();
+						if( true == psi.objProperty.boolIsSettingsTemplateProperty ) {
+							psi.objProperty.viewUniqueSettingsListAndHighlightTabs();
+						}
+					}
+			} );
+		} );
+	}
+
+	function submitAccountPayableSettings() {
+		$( '#settings_content' ).off( 'click', '.js-submit-accounts-payable' ).on( 'click', '.js-submit-accounts-payable', function() {
+
+				psi.objProperty.submitFormNew( {
+					strElementSelector: '#accounts_payable_div',
+					url: psi.objFinancialGeneralLedgerDetails.exitTags.viewUpdatePropertyAccountsPayable,
+					strFormId: 'accounts_payable_form',
+					complete: function(){
+						psi.objFinancialGeneralLedgerDetails.submitAccountPayableSettings();
+						if( true == psi.objProperty.boolIsSettingsTemplateProperty ) {
+							psi.objProperty.viewUniqueSettingsListAndHighlightTabs();
+						}
+					}
+				} );
+				$( '.active-tip' ).psiTooltip( 'close' );
+		} );
+	}
+
+	function submitInterCompanyAccountingSettings() {
+		$( '#settings_content' ).off( 'click', '.js-submit-inter-company-accounting' ).on( 'click', '.js-submit-inter-company-accounting', function() {
+				psi.objProperty.submitFormNew({
+				strElementSelector: '#inter_company_accounting_div',
+				url: psi.objFinancialGeneralLedgerDetails.exitTags.viewUpdateInterCompanyAccounting,
+				strFormId: 'inter_company_accounting_form',
+				complete: function(){
+						psi.objFinancialGeneralLedgerDetails.submitInterCompanyAccountingSettings();
+						if( true == psi.objProperty.boolIsSettingsTemplateProperty ) {
+							psi.objProperty.viewUniqueSettingsListAndHighlightTabs();
+						}
+					}
+			} );
+		} );
+	}
+
+	function highlightTabs() {
+		removeHighlightedTabs();
+
+		setTimeout( function() {
+			if( 0 < $('#settings-list').length ) {
+				if( 0 < $( "#settings-list li[data-module_name='property_financial_charges_generalxxx']" ).length ) {
+					$( '#property_financial_chargesxxx' ).addClass( 'text-yellow' );
+				}
+
+				if( 0 < $( "#settings-list li[data-module_name='property_financial_general_ledger_gross_potential_rentxxx']" ).length ) {
+					$( '#property_financial_general_ledger_gross_potential_rentxxx' ).addClass( 'yellow' );
+				}
+			}
+			removeHighlightedTabs();
+		}, 1000 );
+	}
+
+	function removeHighlightedTabs() {
+		if( 0 == $('#settings-list').length ) {
+			$('#settings_navigation_content').find('ul li').removeClass( 'text-yellow dark-yellow yellow' );
+		}
+	}
+
+	return { init: init,
+			submitGeneralSettings: submitGeneralSettings,
+			submitAccountReceivableSettings: submitAccountReceivableSettings,
+			submitAccountPayableSettings: submitAccountPayableSettings,
+			submitInterCompanyAccountingSettings: submitInterCompanyAccountingSettings,
+			goLiveWithEntrata: goLiveWithEntrata,
+			defaultGrossPotentialRentSettings: defaultGrossPotentialRentSettings,
+			highlightTabs: highlightTabs
+	};
+} )();

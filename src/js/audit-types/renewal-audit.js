@@ -2,7 +2,7 @@
  * RenewalAudit - Audit implementation for lease renewals
  * Handles verification of renewal lease records
  */
-const BaseAuditType = require('./base-audit');
+import BaseAuditType from './base-audit.js';
 
 class RenewalAudit extends BaseAuditType {
   constructor(spreadsheetId, sheetName = 'Lease Audit') {
@@ -164,4 +164,4 @@ class RenewalAudit extends BaseAuditType {
   }
 }
 
-module.exports = RenewalAudit;
+export default RenewalAudit;

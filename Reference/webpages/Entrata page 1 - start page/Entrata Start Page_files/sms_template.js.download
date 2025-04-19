@@ -1,0 +1,152 @@
+var arrintWrapUpTimeIntervalIds = [];
+
+var objChatPanelSmsTemplate = {
+	init: function() {
+	},
+
+	getMixRemainingTime: function( intCountDownTime, format ) {
+
+		format = ('undefined' != typeof format) ? format : 'h:m:s';
+
+		var arrmixFormats = format.split( ':' ),
+			boolIsRequiredHours = (arrmixFormats.includes( 'h' ) || arrmixFormats.includes( 'H' )),
+			boolIsRequiredMinutes = (arrmixFormats.includes( 'm' ) || arrmixFormats.includes( 'M' )),
+			boolIsRequiredSeconds = (arrmixFormats.includes( 's' ) || arrmixFormats.includes( 'S' )),
+			intCurrentTime = new Date().getTime(),
+
+			intRemainingTime = intCountDownTime - intCurrentTime,
+			intHours = (true == boolIsRequiredHours) ? Math.floor( (intRemainingTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60) ) + '' : '',
+			intMinutes = (true == boolIsRequiredMinutes) ? Math.floor( (intRemainingTime % (1000 * 60 * 60)) / (1000 * 60) ) + '' : '',
+			intSeconds = (true == boolIsRequiredSeconds) ? Math.floor( (intRemainingTime % (1000 * 60)) / 1000 ) + '' : '',
+			strTime = '';
+
+		if( Number( intHours ) ) {
+			strTime = (intHours.length > 1 ? '' : 0) + intHours;
+		}
+
+		if( Number( intMinutes ) ) {
+			strTime = ('' != strTime) ? strTime + ':' : strTime;
+			strTime += (intMinutes.length > 1 ? '' : 0) + intMinutes;
+		}
+
+		if( Number( intSeconds ) ) {
+			strTime = ('' != strTime) ? strTime + ':' : strTime;
+			strTime += (intSeconds.length > 1 ? '' : 0) + intSeconds;
+		}
+
+		return { time_string: strTime, remaining_time: intRemainingTime };
+	},
+
+	setWrapUpTimeInterval: function( strChatRoomJid, callBackMethod, intInterval ) {
+		arrintWrapUpTimeIntervalIds[strChatRoomJid] = setInterval( callBackMethod, intInterval );
+	},
+
+	clearWrapUpTimeInterval: function( strChatRoomJid ) {
+		clearInterval( arrintWrapUpTimeIntervalIds[strChatRoomJid] );
+	},
+
+	handleWrapUpTimeInterval: function( strChatRoomJid ) {
+		objChatPanelSmsTemplate.clearWrapUpTimeInterval( strChatRoomJid );
+		var objElm = $( '.sms-text-messages .text-section[data-chat-room=' + strChatRoomJid + ']' );
+		var boolIsChatAccepted = objElm.attr( "data-is-chat-accepted" );
+		var intCustomerId = objElm.attr( "data-customer-id" );
+		var intLeaseId = objElm.attr( "data-lease-id" );
+
+		if( 'null' == intCustomerId || "undefined" == typeof intCustomerId || '' == intCustomerId ) {
+			return;
+		}
+		if( 'null' == intLeaseId || "undefined" == typeof intLeaseId || '' == intLeaseId ) {
+			return;
+		}
+
+		if( 'true' == boolIsChatAccepted ) {
+			var intInterval = objElm.attr( "data-wrapup-time-interval" );
+			var intNotificationId = objElm.attr( "data-message-id" );
+			var intApplicantId = objElm.attr( "data-applicant-id" );
+			var intApplicationId = objElm.attr( "data-application-id" );
+			var intPropertyId = objElm.attr( "data-property_id" );
+			var intTime = getCurrentUtcTime();
+			var intMessageDateTime = new Date( intTime * 1000 ).getTime();
+			var intCountDownTime = (intMessageDateTime + (parseInt( intInterval ) * 60000));
+			var dateFormat = new Date( intCountDownTime );
+
+			objChatPanelSmsTemplate.setWrapUpTimeInterval( strChatRoomJid, function() {
+				var objRemainingTime = objChatPanelSmsTemplate.getMixRemainingTime( intCountDownTime );
+
+				if( '00:00:00' >= objRemainingTime.time_string ) {
+					objChatPanelSmsTemplate.clearWrapUpTimeInterval( strChatRoomJid );
+					/*check whether the Agent replied to message or not*/
+					psi.patterns.ajaxRequest( {
+						url: '/?module=sms_chatxxx&action=check_agent_replied_to_message',
+						type: 'post',
+						datatype: 'json',
+						data: {
+							'company_user_notification_id': intNotificationId,
+							'chat_room_id': strChatRoomJid,
+							'customer_id': intCustomerId,
+							'applicant_id': intApplicantId,
+							'message_aggregator_id': MESSAGE_AGGREGATOR_SMS
+						},
+						success: function( objResponse ) {
+							if( true == objResponse.status && false == objResponse.data.is_replied_to_message ) {
+								var objChatRoomElement = $( "#" + strChatRoomJid + ' .js-conversation-history' );
+								objChatPanelSmsTemplate.handleInsertOrUpdateEvent( intApplicationId, intPropertyId, objResponse.data.customer_id, objResponse.data.message, objResponse.data.message_id, intLeaseId );
+							}
+						}
+					} );
+				}
+			}, 1000 );
+		}
+	},
+
+	loadNotificationDetails: function( strChatRoomJid ) {
+
+		var objElm = $( '.sms-text-messages .text-section[data-chat-room=' + strChatRoomJid + ']' );
+		var attributeElement = objElm.attr( 'data-wrapup-time-interval' );
+		var intCustomerId = objElm.attr( 'data-customer-id' );
+
+		//check attribute is not present to avoid duplicate call
+		if( "undefined" == typeof attributeElement ) {
+			var intNotificationId = objElm.attr( "data-message-id" );
+			var intApplicationId = strChatRoomJid.split( '_' )[3];
+			var intCampaignTargetId = null;
+
+			if( 'smsc' == strChatRoomJid.split( '_' )[0] ) {
+				intApplicationId = null;
+				intCampaignTargetId = strChatRoomJid.split( '_' )[3];
+			}
+			var objData = {
+				'notification_id': intNotificationId,
+				'application_id': intApplicationId,
+				'campaign_target_id': intCampaignTargetId,
+				'property_id': strChatRoomJid.split( '_' )[2],
+				'customer_id': intCustomerId,
+				'message_aggregator_id': MESSAGE_AGGREGATOR_SMS
+			};
+
+			psi.patterns.ajaxRequest( {
+				url: '/?module=sms_chatxxx&action=load_notification_and_wrapup_time_interval',
+				data: objData,
+				success: function( objResponse ) {
+					objElm.attr( "data-wrapup-time-interval", objResponse.data.wrapup_time_interval );
+					objElm.attr( "data-is-chat-accepted", objResponse.data.is_chat_accepted );
+
+					var strActiveChatRoom = sessionStorage.getItem( 'current_active_sms_chat_room' );
+					if( strChatRoomJid == strActiveChatRoom && false == objResponse.data.is_chat_accepted ) {
+						objElm.attr( "data-is-chat-accepted", 'true' );
+						objChatPanelSmsTemplate.handleWrapUpTimeInterval( strChatRoomJid, objResponse.data.customer_id, objResponse.data.property_id );
+					}
+				}
+			} );
+		}
+	},
+
+	handleInsertOrUpdateEvent: function( intApplicationId, intPropertyId, intcustomerId, strMessage, intMessageId, intLeaseId ) {
+		psi.patterns.ajaxRequest( {
+			url: '/?module=sms_chatxxx&action=insert_or_update_event',
+			type: 'post',
+			datatype: 'json',
+			data: { 'customer_id': intcustomerId, 'application_id': intApplicationId, 'property_id': intPropertyId, 'note': strMessage, 'data_reference_id':intMessageId, 'lease_id':intLeaseId },
+		} );
+	}
+};

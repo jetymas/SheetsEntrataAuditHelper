@@ -1,0 +1,163 @@
+var objBrowserData = function() {
+
+	var arrAjaxRequests     = [],
+		strBrowserFilePath  = '';
+
+	function getOS() {
+		return navigator.platform;
+	}
+
+	function getUserAgentString() {
+		return navigator.userAgent;
+	}
+
+	function getBrowserResolution() {
+		return window.innerWidth + ' X ' + window.innerHeight + 'px';
+	}
+
+	function getBrowserZoomPercentage() {
+		return Math.round( window.devicePixelRatio * 100 ) + '%';
+	}
+
+	function getBrowserPlugins() {
+		var strResult = [];
+		for( var i = 0; i < navigator.plugins.length; i++ ) {
+			strResult.push( navigator.plugins[i].name );
+		}
+		return strResult;
+	}
+
+	function getUserLanguage() {
+		return navigator.language;
+	}
+
+	function getCookieList() {
+		var arrCookies = document.cookie.split(';');
+		for( var index = 0; index < arrCookies.length; index++ ) {
+			if( arrCookies[index].includes('PSI_SESSION_') ) {
+				arrCookies.splice( index, 1 );
+			}
+		}
+		return arrCookies;
+	}
+
+	function getTimestamp() {
+		return new Date();
+	}
+
+	function getBrowserLocalStorage() {
+		var strResult       = {};
+		var localStorage    = window.localStorage;
+		for( var i = 0; i < localStorage.length; i++ ) {
+			var strKey = localStorage.key( i );
+			strResult[strKey] = localStorage.getItem( localStorage.key( i ) );
+		}
+		return strResult;
+	}
+
+	function getBrowserHistory() {
+		var strResult;
+		if('undefined' !== window.sessionStorage.history) {
+			strResult = window.sessionStorage.history.split(',');
+		}
+		return strResult;
+	}
+
+	function getGeoLocation() {
+		return new Promise(function( resolve, reject ) {
+			if( navigator.geolocation ) {
+				navigator.geolocation.getCurrentPosition(
+					function( position ) {
+						resolve('Lat:' + position.coords.latitude + ',Lng:' + position.coords.longitude);
+					},
+					function ( error ) {
+						reject(error);
+						// error.code can be:
+						//   0: unknown error
+						//   1: permission denied
+						//   2: position unavailable (error response from location provider)
+						//   3: timed out
+					},
+					{
+						maximumAge: Infinity,
+						timeout: 5000
+					}
+				);
+			} else {
+				reject(new Error('N/A'));
+			}
+		});
+	}
+
+	function getCurrentUrl() {
+		return window.location.href;
+	}
+
+	function getAppCodeName() {
+		return navigator.appCodeName;
+	}
+
+	function getAppName() {
+		return navigator.appName;
+	}
+
+	function getAppVersion() {
+		return navigator.appVersion;
+	}
+
+	function getAjaxRequests() {
+		return arrAjaxRequests;
+	}
+
+	$(document).ajaxComplete( function( event, xhr, settings ) {
+		arrAjaxRequests.push(settings.url);
+	} );
+
+	function getBrowserFilePath() {
+		return strBrowserFilePath;
+	}
+
+	function toArray() {
+		Promise.all([
+			getGeoLocation().catch(function( error ) {
+				return error.message;
+			})
+		]).then(function( values ) {
+			var data = {
+				'operating_system'  : getOS(),
+				'user_agent_string' : getUserAgentString(),
+				'screen_resolution' : getBrowserResolution(),
+				'zoom_level'        : getBrowserZoomPercentage(),
+				'browser_plugins'   : getBrowserPlugins(),
+				'user_language'     : getUserLanguage(),
+				'cookie_list'       : getCookieList(),
+				'timestamp'         : getTimestamp(),
+				'local_storage'     : getBrowserLocalStorage(),
+				'current_URL'       : getCurrentUrl(),
+				'browser_history'   : getBrowserHistory(),
+				'app_code_name'     : getAppCodeName(),
+				'app_name'          : getAppName(),
+				'app_version'       : getAppVersion(),
+				'ajax_requests'     : getAjaxRequests(),
+				'geolocation'       : values[0]
+			};
+
+			psi.patterns.ajaxRequest({
+				url     : '/?module=ticket_and_taskxxx&action=upload_browser_data',
+				dataType: 'JSON',
+				data    : data,
+				method  : 'POST',
+				success : function( strResponse ) {
+					if( strResponse.status ) {
+						strBrowserFilePath = strResponse.data;
+					}
+				}
+			});
+		});
+	}
+
+	return {
+		getBrowserData:toArray,
+		getBrowserFilePath:getBrowserFilePath
+	};
+}();

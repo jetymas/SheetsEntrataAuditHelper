@@ -1,4 +1,8 @@
-document.addEventListener('DOMContentLoaded', function() {
+// Import column modules for audit flow
+import columnModules from './column-modules/index.js';
+
+// Initialize popup UI after DOM is ready
+function initPopup() {
   const startAuditButton = document.getElementById('startAudit');
   const stopAuditButton = document.getElementById('stopAudit');
   const skipRecordButton = document.getElementById('skipRecord');
@@ -25,13 +29,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
   
+  // Column modules are available via top-level import
+  
+  // Orchestrates audit flow by invoking each column module
+  async function processAuditFlow(spreadsheetId, auditType) {
+    const modules = Object.values(columnModules);
+    let count = 0;
+    for (const mod of modules) {
+      // Call run on module; context could include record data (placeholder here)
+      try {
+        const result = await mod.run(null, null, { record: {} });
+        // Update progress UI
+        count++;
+        updateStatusUI({ message: result.message || `Processed ${mod.name}`, progress: Math.round((count / modules.length) * 100) });
+        // Handle confirmation if needed
+        if (result.requiresConfirmation) {
+          await showVerificationDialog(result.prompt);
+        }
+      } catch (e) {
+        console.error(`Module ${mod.id} error:`, e);
+      }
+    }
+    // Finalize UI
+    statusText.textContent = 'Audit complete';
+    startAuditButton.disabled = false;
+    skipRecordButton.classList.add('hidden');
+  }
+
   // Start Audit button click handler
-  startAuditButton.addEventListener('click', function() {
+  startAuditButton.addEventListener('click', async () => {
     const spreadsheetUrl = spreadsheetUrlInput.value.trim();
     const auditType = auditTypeSelect.value;
     
     if (!spreadsheetUrl) {
-      alert('Please enter a Google Sheet URL');
+      // Show validation error in UI
+      errorInfo.textContent = 'Please enter a Google Sheet URL';
+      errorInfo.classList.remove('hidden');
       return;
     }
     
@@ -55,7 +88,9 @@ document.addEventListener('DOMContentLoaded', function() {
       console.log('Extracted spreadsheet ID:', spreadsheetId);
     } catch (error) {
       console.error('Error extracting spreadsheet ID:', error);
-      alert('Invalid Google Sheet URL. Please check and try again.');
+      // Show URL format error in UI
+      errorInfo.textContent = 'Invalid Google Sheet URL. Please check and try again.';
+      errorInfo.classList.remove('hidden');
       return;
     }
     
@@ -85,6 +120,9 @@ document.addEventListener('DOMContentLoaded', function() {
       spreadsheetId: spreadsheetId,
       auditType: auditType
     });
+    
+    // Kick off column modules processing flow
+    await processAuditFlow(spreadsheetId, auditType);
     
     // Show skip button for manual intervention
     skipRecordButton.classList.remove('hidden');
@@ -192,24 +230,158 @@ document.addEventListener('DOMContentLoaded', function() {
   chrome.runtime.onMessage.addListener(function(message) {
     if (message.type === 'auditStatus') {
       statusDiv.classList.remove('hidden');
-      
       // Update the current audit state
       if (message.status) {
         currentAuditState.status = message.status;
       }
-      
       if (message.currentRecordIndex !== undefined) {
         currentAuditState.currentRecordIndex = message.currentRecordIndex;
       }
-      
       if (message.recordCount !== undefined) {
         currentAuditState.recordCount = message.recordCount;
       }
-      
       // Update the UI
       updateStatusUI(message);
-      
       console.log('Status updated:', message.message);
     }
+    // === User Confirmation Workflow ===
+    if (message.type === 'fieldVerificationPrompt') {
+      showVerificationDialog(message.promptData);
+    }
   });
-});
+
+  // --- User Confirmation Dialog for Column Modules ---
+  function showVerificationDialog(promptData) {
+    // Remove existing dialog if present
+    let existing = document.getElementById('ea-popup-verification-dialog');
+    if (existing) existing.remove();
+
+    // Overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'ea-popup-overlay';
+    overlay.id = 'ea-popup-verification-overlay';
+    Object.assign(overlay.style, {
+      position: 'fixed', left: 0, top: 0, width: '100vw', height: '100vh', zIndex: 10000,
+      background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center'
+    });
+
+    // Dialog
+    const dialog = document.createElement('div');
+    dialog.className = 'ea-popup-dialog';
+    dialog.id = 'ea-popup-verification-dialog';
+    Object.assign(dialog.style, {
+      background: '#fff', borderRadius: '8px', padding: '24px', minWidth: '340px', maxWidth: '90vw',
+      boxShadow: '0 4px 32px rgba(0,0,0,0.18)', fontFamily: 'inherit', color: '#222'
+    });
+
+    // Title
+    const title = document.createElement('h2');
+    title.textContent = `Verify ${promptData.fieldName || ''}`;
+    dialog.appendChild(title);
+
+    // Message
+    if (promptData.message) {
+      const msg = document.createElement('div');
+      msg.textContent = promptData.message;
+      msg.style.marginBottom = '16px';
+      dialog.appendChild(msg);
+    }
+
+    // PDF/Sheet values
+    const values = document.createElement('div');
+    values.style.display = 'flex';
+    values.style.justifyContent = 'space-between';
+    values.style.marginBottom = '12px';
+    values.innerHTML = `
+      <div><b>PDF Value:</b><br>${promptData.pdfValue || 'Not found'}</div>
+      <div><b>Expected:</b><br>${promptData.expectedValue || 'N/A'}</div>
+    `;
+    dialog.appendChild(values);
+
+    // Comment section (hidden until skip/flag)
+    const commentSection = document.createElement('div');
+    commentSection.style.display = 'none';
+    commentSection.style.marginTop = '8px';
+    const commentLabel = document.createElement('div');
+    commentLabel.textContent = 'Add a comment (optional):';
+    commentLabel.style.fontSize = '13px';
+    const commentInput = document.createElement('textarea');
+    commentInput.style.width = '100%';
+    commentInput.style.minHeight = '36px';
+    commentInput.style.marginTop = '4px';
+    commentInput.style.fontSize = '14px';
+    commentInput.id = 'ea-popup-comment-input';
+    commentSection.appendChild(commentLabel);
+    commentSection.appendChild(commentInput);
+    dialog.appendChild(commentSection);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '12px';
+    actions.style.marginTop = '18px';
+
+    // Confirm
+    const btnConfirm = document.createElement('button');
+    btnConfirm.textContent = 'Mark as Verified';
+    btnConfirm.className = 'ea-popup-btn ea-popup-btn-confirm';
+    btnConfirm.onclick = function() {
+      sendVerificationResult('confirm', '');
+    };
+    actions.appendChild(btnConfirm);
+
+    // Skip
+    const btnSkip = document.createElement('button');
+    btnSkip.textContent = 'Skip';
+    btnSkip.className = 'ea-popup-btn ea-popup-btn-skip';
+    btnSkip.onclick = function() {
+      commentSection.style.display = 'block';
+      btnSkip.textContent = 'Submit Skip';
+      btnSkip.onclick = function() {
+        sendVerificationResult('skip', commentInput.value);
+      };
+    };
+    actions.appendChild(btnSkip);
+
+    // Flag
+    const btnFlag = document.createElement('button');
+    btnFlag.textContent = 'Flag as Mismatch';
+    btnFlag.className = 'ea-popup-btn ea-popup-btn-flag';
+    btnFlag.onclick = function() {
+      commentSection.style.display = 'block';
+      btnFlag.textContent = 'Submit Flag';
+      btnFlag.onclick = function() {
+        sendVerificationResult('flag', commentInput.value);
+      };
+    };
+    actions.appendChild(btnFlag);
+
+    dialog.appendChild(actions);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Helper: send result and close
+    function sendVerificationResult(action, comment) {
+      chrome.runtime.sendMessage({
+        action: 'fieldVerified',
+        result: {
+          action,
+          comment,
+          column: promptData.column,
+          field: promptData.fieldName,
+          pdfValue: promptData.pdfValue,
+          sheetValue: promptData.expectedValue
+        }
+      });
+      overlay.remove();
+    }
+  }
+}
+
+// Listen for DOM ready
+document.addEventListener('DOMContentLoaded', initPopup);
+
+// Export for unit tests
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { initPopup };
+}

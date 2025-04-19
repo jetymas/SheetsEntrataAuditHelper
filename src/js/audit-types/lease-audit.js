@@ -2,7 +2,7 @@
  * LeaseAudit - Audit implementation for new leases
  * Handles verification of new lease records
  */
-const BaseAuditType = require('./base-audit');
+import BaseAuditType from './base-audit.js';
 
 class LeaseAudit extends BaseAuditType {
   constructor(spreadsheetId, sheetName = 'Lease Audit') {
@@ -404,4 +404,4 @@ class LeaseAudit extends BaseAuditType {
   }
 }
 
-module.exports = LeaseAudit;
+export default LeaseAudit;

@@ -1,0 +1,2540 @@
+function showLogs() {
+	objEntrataNotification.logRawData();
+	Strophe.log = function( a, b ) {
+		console.log( a, b );
+	};
+}
+
+var objEntrataNotification = function( options ) {
+	var boolIsConnected = false;
+	var intDuration = 10000;
+	var intMaxVisibleNotifications = 5;
+	var intChatRequestMaxTime = 180; // 3 mins
+	var connection = '';
+	var strUserChatRooms = {};
+
+	var arrfunCallbackFunctions = new Array();
+	var arrstrMsgReceiptQueue = {};
+	var arrstrMsgListToBeUpdated = {};
+	var boolIsWindowActive = false;
+	var arrstrIdleChats = {};
+
+	function init( options ) {
+		objEntrataNotification.strUserChatRooms = {};
+		objEntrataNotification.arrstrUnreadMsgQueue = {};
+		objEntrataNotification.removeElementsTimeoutIds = {};
+		bindEvents();
+		initNotificationPanel();
+
+		clearLoggedNotifications();
+		setTimeout( function() {
+			intTimeInterval = setInterval( removeLoggedNotifications, ( 1000 * 5 ) );
+		}, 5000 );
+
+		$( window ).on( "focus", function() {
+			boolIsWindowActive = true;
+		} ).on( "blur", function() {
+			boolIsWindowActive = false;
+		} );
+
+	}
+
+	function bindEvents() {
+		$( ".nAlertWrapper" )
+			.on( 'click', '.nMessage', function() {
+				removeNotification( $( this ).parent() );
+			} )
+			.on( 'click', '.cMessage', function() {
+				if( 1 == $( this ).parent().data( 'sms-chat' ) ) {
+					objLeadAlertSms.showSmsChat( $( this ).parent().data( 'chat-room-jid' ) );
+					return;
+				}
+				objEntrataChat.showChat( $( this ).parent().data( 'chat-room-jid' ) );
+			} )
+			.on( 'click', '.ignore', function() {
+				ignore( $( this ).parent().parent() );
+			} )
+			.on( 'click', '.snooze', function() {
+				snooze( $( this ).parent().parent() );
+			} )
+			.on( 'click', '.chat-notification-popup', function() {
+				var strChatRoomJid = $( this ).parent().data( 'chat-room-jid' );
+				objChatPanel.acceptUnclaimedChat( strChatRoomJid );
+			} )
+			.on( 'click', '.text-message-notification-popup', function() {
+				objChatPanel.showChat( {chat_room_jid: $( this ).parent().data( 'chat-room-jid' ), target_tab: $( '#sms-text-tab' )} );
+			} )
+			.on( 'click', '.chat-notification-popup-live', function(){
+				var strChatRoomJid = $( this ).parent().data( 'chat-room-jid' );
+				objChatPanel.showResumeChat( strChatRoomJid );
+			} )
+			.on( 'click', '.add-to-chat-popup-live', function(){
+				var strChatRoomJid = $( this ).parent().data( 'chat-room-jid' );
+				objChatPanel.acceptUnclaimedChat( strChatRoomJid );
+			} );
+
+		// Reminders and chat radio buttons
+		$( 'input[name="radios"]' ).click( function() {
+			var strSelectedTab = $( this ).attr( "id" );
+			$( '#notifyWrapper' ).scrollTop( 0 );
+			sessionStorage.removeItem( "chat_details" );
+			sessionStorage.setItem( 'selected_tab', strSelectedTab );
+			if( "notifications" === strSelectedTab ) {
+				$( '.chatWrapper' ).hide();
+				$( '.notificationsWrapper' ).fadeIn();
+			} else {
+				$( '.notificationsWrapper' ).hide();
+				$( '.chatWrapper' ).fadeIn();
+				$( '.conversation' ).hide();
+				$( '#chatList' ).fadeIn();
+			}
+		} );
+
+		$(".notificationsWrapper")
+			.on( 'click', '.unread_reminder', function(){
+				var notificationId = $(this).data("notification-id");
+				updateNotificationStatus( notificationId, false);
+				$(this).removeClass("unread").addClass("read");
+				objEntrataChat.updateChatCount();
+			});
+
+	}
+
+	function connectXmpp() {
+		var boolUseNewXmppConnection = false;
+
+		boolUseNewXmppConnection = objEntrataNotification.boolEnableNewChat;
+
+		psi.patterns.ajaxRequest( {
+			url: objEntrataNotification.strXmppAuthentication,
+			success: function( data ) {
+				var objData = data.data;
+				var boolIsOnline = false;
+
+				if( 'undefined' == typeof objData || false === objData.success ) {
+					return false;
+				}
+
+				// if token not found, then re-initiate auth request. This can happen when user added after auth request.
+				if( !objData.token ) {
+					if( undefined === connectXmpp.intCount ) {
+						connectXmpp.intCount = 1;
+					}
+					if( 10 > connectXmpp.intCount ) {
+						setTimeout( connectXmpp, 5000 );
+						connectXmpp.intCount++;
+					}
+					return false;
+				}
+
+				if( boolUseNewXmppConnection ) {
+					var strType = 'chat';
+					objEntrataXmppChat.addHandler( onMessage, null, 'message', strType, null, null );
+					objEntrataXmppChat.init( objEntrataNotification.strConnectionUrl, objData.strUsername + '@' + objData.host, objData.token, true );
+					connection = objEntrataXmppChat.getConnection();
+					afterConnect( connection );
+					psi.patterns.ajaxRequest( {
+						url:objEntrataNotification.strAddNewRelicLog + '&is_site_tablet=' + objEntrataNotification.boolIsSiteTablet
+					} );
+					return;
+				}
+
+				addOauthPlugin();
+
+				connection = new Strophe.Connection( objEntrataNotification.strConnectionUrl, { mechanisms: [Strophe.SASLXOAuth2] } );
+
+				objEntrataChat.intMaxUsreChatRooms = objData.intMaxUserChatRooms;
+
+				$.each( objData.arrstrUserChatRooms, function( strChatRoom, strUniqueKey ) {
+					boolIsOnline = true;
+					strUserChatRooms[strChatRoom] = strChatRoom;
+				} );
+
+				loadNotifications();
+				objEntrataNotification.strUserChatRooms = strUserChatRooms;
+				objEntrataChat.boolIsUserOnline = objData.boolIsUserOnline;
+				connection.connect( objData.strUsername + '@' + objData.host, objData.token, onConnect );
+
+				objEntrataNotification.connection = connection;
+				objLeadAlertSms.setConnection( connection );
+				objEntrataChat.setConnection( connection );
+				objEntrataCallNotifications.setConnection( connection );
+
+				psi.patterns.ajaxRequest( {
+					url:objEntrataNotification.strAddNewRelicLog + '&is_site_tablet=' + objEntrataNotification.boolIsSiteTablet
+				} );
+
+			}
+		} );
+	}
+
+	function afterConnect( connection ) {
+		$( '.js-read-notification-bell' ).removeClass( 'hide' );
+		objEntrataChat.boolIsUserOnline = false;
+		objEntrataNotification.connection = connection;
+		boolIsConnected = true;
+		objEntrataCallNotifications.setConnection( connection );
+	}
+
+	function makeUserOnline() {
+		if( 0 < $( '#myStatus' ).length ) {
+			var objStatusButton = $( '#myStatus' );
+			objStatusButton.find( "b" )[0].style.left = '33px';
+			objStatusButton.removeClass( "off" ).addClass( "on" ).find( "span" ).text( __( 'Yes' ) );
+			// return true;
+		}
+	}
+
+	function addOauthPlugin() {
+		Strophe.addNamespace( 'RECEIPTS', 'urn:xmpp:receipts' );
+		Strophe.SASLXOAuth2 = function() {
+		};
+		Strophe.SASLXOAuth2.prototype = new Strophe.SASLMechanism( "X-OAUTH2", true, 10 );
+
+		Strophe.SASLXOAuth2.prototype.test = function( connection ) {
+			return null !== connection.authcid;
+		};
+
+		Strophe.SASLXOAuth2.prototype.onChallenge = function( connection ) {
+			var strAuthRequest = "\0";
+			strAuthRequest += connection.authcid;
+			strAuthRequest += "\0";
+			strAuthRequest += connection.pass;
+			return strAuthRequest;
+		};
+	}
+
+	function logRawData() {
+		connection.rawInput = function( data ) {
+			console.log( 'RECV: ' + data );
+		};
+		connection.rawOutput = function( data ) {
+			console.log( 'SEND: ' + data );
+		};
+	}
+
+	function onConnect( status ) {
+		if( status == Strophe.Status.CONNECTED ) {
+			// for joining the chat
+			connection.addHandler( objEntrataChat.onJoinChat, null, 'message', "join_chat", null, Strophe.getBareJidFromJid( connection.jid ), { matchBareFromJid: true } );
+
+			// for joining the existing resources
+			connection.addHandler( onAvailable, null, 'message', "join_room", null, Strophe.getBareJidFromJid( connection.jid ), { matchBareFromJid: true } );
+
+			connection.addHandler( onChat, null, 'message', "groupchat", null, null );
+			connection.addHandler( objLeadAlterChat.cacheChatHistory, null, 'message', "groupchat", null, null );
+			connection.addHandler( onMessage, null, 'message', "normal", null, null );
+			connection.addHandler( onRequest, 'jabber:x:conference', 'message', null, null, null );
+			connection.addHandler( onReceipt, Strophe.NS.RECEIPTS, "message" );
+
+			connection.addHandler( objLeadAlertSms.joinSmsChatInChatWindow, null, "message", "join_sms", null, Strophe.getBareJidFromJid( connection.jid ), { matchBareFromJid: true } );
+			connection.addHandler( objLeadAlertSms.endSmsChat, null, "message", "end_sms", null, Strophe.getBareJidFromJid( connection.jid ), { matchBareFromJid: true } );
+
+			connection.send( $pres().tree() );
+			boolIsConnected = true;
+
+			objEntrataChat.initChatFromCA();
+			$( '.js-read-notification-bell' ).removeClass( 'hide' );
+
+			objEntrataChat.setUserChatStatus( true );
+
+			if( true == objEntrataNotification.boolIsLeasingCenterSmsChat ) {
+				$( ".nContainer" ).find( "label.priorityHide" ).removeClass( "priorityHide" );
+				$( ".panel" ).animate( {
+					right: "+=360"
+				}, 300, function() {
+				} );
+				$( '.notification-bell' ).removeClass( 'js-show' );
+				$('.chatWrapper').removeClass('hide');
+				$('#chat').click();
+				$('#myStatus').click();
+				makeUserOnline();
+			} else if( objEntrataChat.boolIsUserOnline ) {
+				$( ".nContainer" ).find( "label.priorityHide" ).removeClass( "priorityHide" );
+				$('#myStatus').trigger( 'click' );
+			}
+			objEntrataChat.updateChatCount();
+		}
+	}
+
+	function onReceipt( objMessage ) {
+
+		// Read the delivery report
+		var objReceived = $( objMessage ).find( 'received' );
+		var objRead = $( objMessage ).find( 'read' );
+		var strFrom = objMessage.getAttribute( 'from' );
+		var intTime = objMessage.getAttribute( 'time' );
+
+		// TODO : need to remove once time is send from PP side
+		if( null === intTime ) {
+			intTime = getCurrentUtcTime();
+		}
+
+		if( 0 < objReceived.length ) {
+			var strMsgId = objReceived.attr( 'id' );
+			addMessageTime( strMsgId, intTime );
+			if( Strophe.getResourceFromJid( strFrom ) === connection.authcid ) {
+				delete arrstrMsgReceiptQueue[strMsgId];
+			} else {
+				$( "#" + strMsgId ).siblings( ".js-delivery-report" ).find( "i" ).attr( { class: "check-gray" } );
+			}
+		}
+
+		if( 0 < objRead.length ) {
+			var strReadMsgId = objRead.attr( 'id' );
+			addMessageTime( strReadMsgId, intTime );
+			if( Strophe.getResourceFromJid( strFrom ) === connection.authcid ) {
+				// To update the status (read/unread) of chatlist item for the other resources
+				var objChatListItem = $( "#chatList .alertList" ).find( "li." + Strophe.getNodeFromJid( strFrom ) );
+				if( true === $( objChatListItem ).hasClass( "unread" ) ) {
+					$( objChatListItem ).removeClass( "unread" ).addClass( "read" );
+				}
+				delete objEntrataNotification.arrstrUnreadMsgQueue[strReadMsgId];
+			} else {
+				$( "#" + strReadMsgId ).siblings( ".js-delivery-report" ).find( "i" ).attr( { class: "check-green" } );
+			}
+		}
+
+		return true;
+	}
+
+	function sendReceived( strMsgId ) {
+		if( arrstrMsgReceiptQueue[strMsgId] ) {
+			var strTo = arrstrMsgReceiptQueue[strMsgId];
+			if( null !== strTo.match( /^(entrata)/g ) ) {
+				delete arrstrMsgReceiptQueue[strMsgId];
+				return;
+			}
+
+			var out = $msg( {
+					to: strTo,
+					type: 'groupchat',
+					from: connection.jid,
+					id: connection.getUniqueId(),
+					time: getCurrentUtcTime()
+				} ).c( "body" ),
+				request = Strophe.xmlElement( 'received', { 'xmlns': Strophe.NS.RECEIPTS, 'id': strMsgId } );
+			out.tree().appendChild( request );
+			connection.send( out.tree() );
+			delete arrstrMsgReceiptQueue[strMsgId];
+		}
+		return true;
+	}
+
+	function sendRead( strMsgId ) {
+		if( objEntrataNotification.arrstrUnreadMsgQueue[strMsgId] ) {
+			var strTo = objEntrataNotification.arrstrUnreadMsgQueue[strMsgId];
+			var out = $msg( {
+					to: strTo,
+					type: 'groupchat',
+					from: connection.jid,
+					id: connection.getUniqueId(),
+					time: getCurrentUtcTime()
+				} ).c( "body" ),
+				request = Strophe.xmlElement( 'read', { 'xmlns': Strophe.NS.RECEIPTS, 'id': strMsgId } );
+			out.tree().appendChild( request );
+			connection.send( out.tree() );
+			delete objEntrataNotification.arrstrUnreadMsgQueue[strMsgId];
+
+			var objListElement = $( "#chatList .alertList" ).find( "li." + Strophe.getNodeFromJid( strTo ) );
+			if( true === objListElement.hasClass( "unread" ) ) {
+				objListElement.removeClass( "unread" ).addClass( "read" );
+			}
+		}
+		return true;
+	}
+
+	// Apply unread class depending on last message state
+	function updateUnreadMessageList() {
+		if( 'undefined' !== typeof objEntrataNotification.arrstrUnreadMsgQueue ) {
+			$.each( objEntrataNotification.arrstrUnreadMsgQueue, function( intIndex, strData ) {
+				var strChatRoom = Strophe.getNodeFromJid( strData );
+				arrstrMsgListToBeUpdated[intIndex] = strChatRoom;
+				var objListItem = $( '#chatList .alertList' ).find( 'li.' + strChatRoom );
+				objListItem.removeClass( 'read' ).addClass( 'unread' );
+			} );
+		}
+
+		// modify chat count
+		objEntrataChat.updateChatCount();
+	}
+
+	function onAvailable( objMessage ) {
+
+		if( objMessage.getAttribute( 'from' ) === connection.jid ) {
+			return true;
+		}
+
+		var objBodyElement = objMessage.getElementsByTagName( 'body' );
+		var body = objBodyElement[0];
+		var boolIsJoinChat = false;
+		if( 'available' === Strophe.getText( body ) ) {
+			boolIsJoinChat = true;
+			objEntrataNotification.strUserChatRooms[connection.authcid] = connection.authcid;
+		}
+
+		objEntrataChat.joinOrLeaveChatRoom( objEntrataChat.getChatRoomJid( true ), boolIsJoinChat );
+
+		var objStatusButton = $( '#myStatus' );
+		if( true === boolIsJoinChat ) {
+			// modify available button CSS
+			objStatusButton.find( "b" )[0].style.left = '33px';
+			objStatusButton.removeClass( "off" ).addClass( "on" ).find( "span" ).text( __( 'Yes' ) );
+		} else {
+			objStatusButton.find( "b" )[0].style.left = '1px';
+			objStatusButton.removeClass( "on" ).addClass( "off" ).find( "span" ).text( __( 'No' ) );
+
+			objEntrataChat.modifyChatList( null, false, true );
+			objEntrataChat.removeConversationDiv( null, true );
+		}
+
+		return true;
+	}
+
+	function onChat( objMessage ) {
+
+		var strFrom = objMessage.getAttribute( 'from' );
+		var strType = objMessage.getAttribute( 'type' );
+		var strMessageId = objMessage.getAttribute( 'id' );
+		var intTime = objMessage.getAttribute( 'time' );
+		var objBodyElement = objMessage.getElementsByTagName( 'body' );
+		var objDelayElement = objMessage.getElementsByTagName( 'delay' );
+
+		var objRequest = objMessage.getElementsByTagName( 'request' );
+		var objConversation = objMessage.getElementsByTagName( 'conversation' );
+		var strStatus = objMessage.getAttribute( 'status' );
+		var strSenderName = objMessage.getAttribute( 'sender' );
+		var strChatRoomId = Strophe.getNodeFromJid( strFrom );
+		var strAction = $( objConversation ).text();
+		var strMessage = '';
+		var strChatBubble = '';
+		var objOptions = '';
+
+		try {
+			objOptions = $.parseJSON( $( "<div/>" ).html( Strophe.getText( objBodyElement[0] ) ).text() );
+			if( 'remove_sms' === objOptions.action ) {
+				if( 0 === objDelayElement.length ) {
+					objLeadAlertSms.removeSmsChatRequest( objMessage );
+				}
+				return true;
+			}
+		} catch(e) {
+			objOptions = '';
+		}
+
+		// To handle END or TRANSFER Chat events.
+		if( null !== strStatus ) {
+			if( 'transfer' === strStatus ) {
+				strMessage = __( '{%s, senderName} has transferred the chat.', { senderName : strSenderName } );
+				strChatBubble = '<div class="chat_status"><div id="' + strMessageId + '" class="body align-center">' + strMessage + '</div></div>';
+				$( strChatBubble ).insertBefore( $( '#js-conversation' ).find( '#' + strChatRoomId ).find( ".chatMsg" ).find( ".endConversation" ) );
+				$( 'div#chatList .alertList' ).find( 'li.' + strChatRoomId ).find( '.nAlertText' ).text( strMessage );
+
+			} else if( 'end' === strStatus ) {
+				if( ( strFrom !== connection.jid ) && ( null !== strChatRoomId.match( /^(entrata)/g ) ) ) {
+					objEntrataChat.endChat( strChatRoomId, false );
+				} else {
+					strMessage = __( '{%s, 0} has ended the chat.', [ strSenderName ] );
+					strChatBubble = '<div class="chat_status"><div id="' + strMessageId + '" class="body align-center">' + strMessage + '</div></div>';
+					$( strChatBubble ).insertBefore( $( '#js-conversation' ).find( '#' + strChatRoomId ).find( ".chatMsg" ).find( ".endConversation" ) );
+					$( 'div#chatList .alertList' ).find( 'li.' + strChatRoomId ).find( '.nAlertText' ).text( strMessage );
+					objEntrataChat.endChatFromProspect( strChatRoomId );
+				}
+			}
+			return true;
+		}
+
+		if( 0 < objConversation.length && objEntrataChat.getChatRoomJid( true ) === Strophe.getBareJidFromJid( strFrom ) ) {
+			objEntrataChat.handleConversation( objMessage );
+		} else {
+			if( 1 > objBodyElement.length ) {
+				return true;
+			}
+			var body = objBodyElement[0];
+
+			strMessage = Strophe.getText( body );
+			// Do not show blank message. Normally this will come in case of Delivery report
+			if( !strMessage ) {
+				return true;
+			}
+
+			strMessage = objEntrataChat.updateMessageWithSpecialChars( strMessage );
+			var arrstrNick = strFrom.split( '/' );
+			var strNick = ( 1 < arrstrNick.length ) ? arrstrNick[1] : '';
+			var strClass = 'user';
+			var strReport = '';
+			var objElement = $( "#" + strChatRoomId );
+			if( null !== strNick.match( /^(entrata)/g ) ) {
+				strClass = 'entrata';
+				strReport = '<div class="align-right js-delivery-report"><i class="check-circle-lightgray"></div>';
+
+				arrstrIdleChats[strChatRoomId] = setTimeout( function() {
+					var strApplicantName = objElement.find( "div.js-chat-header" ).find( "div.js-applicant-name" ).text();
+					var strApplicantFirstName = strApplicantName.split( ' ' )[0];
+					objElement.find( ".js-end-btn" ).addClass( "hide" );
+					objElement.find( ".js-confirm-end-chat-msg" ).text( __( 'It has been 5 minutes since {%s, 0} last responded. Would you like to end this chat?', [ strApplicantFirstName.trim() ] ) );
+					objElement.find( ".js-end-chat-confirmation" ).removeClass( "hide" );
+				}, 300000 );
+				objEntrataChat.scrollConversationPage( strChatRoomId );
+			} else {
+				objElement.find( ".js-end-btn" ).removeClass( "hide" );
+				objElement.find( ".js-confirm-end-chat-msg" ).text( "" );
+				objElement.find( ".js-end-chat-confirmation" ).addClass( "hide" );
+				clearTimeout( arrstrIdleChats[strChatRoomId] );
+			}
+
+			// To show the leasing agent name on messages if case of transferred chat
+			var strSender = '';
+			if( null !== strNick.match( /^(entrata)/g ) && strNick !== connection.authcid ) {
+				strSender = '<div class="bold pad5">' + strSenderName + ': </div>';
+			}
+
+			var objConversationElement = $( "#js-conversation" );
+			var objMessageElement = $( 'div#chatList .alertList' ).find( 'li.' + strChatRoomId ).find( '.nAlertText' );
+			if( true === objMessageElement.hasClass( 'highlight-request' ) ) {
+				objMessageElement.removeClass( 'highlight-request' ).addClass( 'text-gray' );
+			}
+
+			strChatBubble = '<div class="chatBubble ' + strClass + '" style="display : block;">' + strSender + '<div id="' + strMessageId + '" class="body">' + strMessage + '</div>' + strReport + '</div>';
+			$( strChatBubble ).insertBefore( objConversationElement.find( '#' + strChatRoomId ).find( ".chatMsg" ).find( ".endConversation" ) );
+			objMessageElement.text( strMessage );
+
+			if( null === intTime ) {
+				intTime = getCurrentUtcTime();
+			}
+
+			// send desktop notification for chat message
+			var objChatElement = objConversationElement.find( '#' + strChatRoomId );
+			var boolShowDesktopNotification = ( false === boolIsWindowActive || false === objChatElement.is( ":visible" ) || false === objChatElement.find( ".enterMessage " ).is( ":focus" ) );
+			if( 'user' === strClass && 0 === objDelayElement.length && true === boolShowDesktopNotification ) {
+				var strCallback = function() {
+					parent.focus();
+					window.focus();
+					objEntrataChat.showChat( strChatRoomId );
+				}
+				var options = {
+					title: strSenderName,
+					options: {
+						body: strMessage,
+						icon: objEntrataNotification.strIconUrl,
+						lang: 'en-US',
+						tag: strChatRoomId,
+						requireInteraction: true,
+						onClick: strCallback,
+						storeObjects: true
+					}
+				};
+				if( false === desktopNotification( options ) ) {
+					displayChatNotification( strChatRoomId, strSenderName, strMessage );
+				}
+			}
+
+			addMessageTime( strMessageId, intTime );
+			objEntrataChat.scrollConversationPage( Strophe.getNodeFromJid( strFrom ) );
+		}
+
+		// check for request in message
+		if( connection.authcid !== Strophe.getResourceFromJid( strFrom ) ) {
+			arrstrMsgReceiptQueue[strMessageId] = Strophe.getBareJidFromJid( strFrom );
+
+			objEntrataNotification.arrstrUnreadMsgQueue[strMessageId] = Strophe.getBareJidFromJid( strFrom );
+			if( 1 === $( "#" + strChatRoomId ).find( '.enterMessage:focus' ).size() ) {
+				setTimeout( function() {
+					sendRead( strMessageId );
+				}, 1000 );
+			} else {
+				setTimeout( function() {
+					sendReceived( strMessageId );
+				}, 1000 );
+			}
+		}
+
+		setTimeout( function() {
+			updateUnreadMessageList();
+		}, 1000 );
+
+		return true;
+	}
+
+	function onMessage( objMessage ) {
+		var strContent = $( objMessage ).find( 'body' ).text();
+		var objMsg = $.parseJSON( strContent );
+		processMessage( objMsg );
+
+		return true;
+	}
+
+	function addMessageTime( strMsgId, intTime ) {
+		var objMessageElement = $( "#" + strMsgId );
+		objMessageElement.attr( "title", getLocalTime( intTime ) );
+		objMessageElement.closest( ".js-chat_box" ).find( '.chatHeader' ).data( { "time": intTime } );
+	}
+
+	function processMessage( objMsg ) {
+		// check module_ids in message
+		var strTime = objMsg.expires_on;
+		var intUtcTimestamp = new Date( ( new Date( strTime ) ).toUTCString() ).getTime();
+		var intCurrentUtcTimestamp = new Date( ( new Date( Date.now() ) ).toUTCString() ).getTime();
+
+		if( -1 !== (objMsg.tags).indexOf( "SMS_CHAT" ) && objEntrataNotification.boolEnableNewChat ) {
+			return;
+		}
+
+		if( intUtcTimestamp < intCurrentUtcTimestamp ) {
+			return;
+		}
+		if( 'undefined' !== typeof( objMsg.module_ids ) ) {
+			var intOffset;
+			for( intOffset in objMsg.module_ids ) {
+
+				var intModuleId = objMsg.module_ids[intOffset];
+				if( 'undefined' != typeof( arrfunCallbackFunctions[intModuleId] ) ) {
+					var boolStatus = (arrfunCallbackFunctions[intModuleId])( objMsg.message );
+					if( false == boolStatus ) {
+						updateNotificationStatus( objMsg.id, false );
+					}
+				}
+			}
+		}
+
+		if( -1 !== (objMsg.tags).indexOf( "CALL_INCOMING" ) ) {
+			objEntrataCallNotifications.handleCallNotifications( objMsg );
+			return true;
+		}
+
+		if( -1 !== (objMsg.tags).indexOf( "SMS_CHAT" ) && !objEntrataNotification.boolEnableNewChat ) {
+			objLeadAlertSms.handleSmsChatNotification( objMsg );
+			return true;
+		}
+
+		if( undefined == objMsg.message.description && undefined == objMsg.message.title ) {
+			return true;
+		}
+
+		objEntrataChat.modifyBellIcon(1);
+
+		if( false === displayDesktopNotification( objMsg ) ) {
+			// build popup
+			displayNotification( objMsg, false );
+		}
+	}
+
+	function displayDesktopNotification( objMsg ) {
+		var strMessage = $( '<div/>' ).html( objMsg.message.description ).text();
+		var strTitle = $( '<div/>' ).html( objMsg.message.title ).text();
+		strMessage = objEntrataChat.updateMessageWithSpecialChars( strMessage );
+
+		var strCallback = function() {
+			updateNotificationStatus( objMsg.id, false );
+			eval( objMsg.message.callback_function );
+		}
+		var intCloseTime = parseInt( $( '<div/>' ).html( objMsg.message.auto_hide_after ).text() ) * 1000;
+		var options = {
+			title: strTitle,
+			options: {
+				body: strMessage,
+				icon: objEntrataNotification.strIconUrl,
+				lang: 'en-US',
+				tag: objMsg.id,
+				requireInteraction: true,
+				closeTime: intCloseTime,
+				onClick: strCallback,
+				onDenied: function() {
+					displayNotification( objMsg, false );
+				}
+			}
+		};
+
+		return desktopNotification( options );
+	}
+
+	function onRequest( objMsg ) {
+		var objX = $( objMsg ).find( "x" );
+		var strReason = objX.attr( 'reason' );
+		var objMessage = $.parseJSON( strReason );
+
+		var strChatRoomJid = objMessage.chat_room;
+
+		if( 'undefined' === typeof objMessage.chat_room || objEntrataChat.intMaxUsreChatRooms <= Object.keys( objEntrataNotification.strUserChatRooms ).length ) {
+			objEntrataChat.deleteChatNotificationEntry( [strChatRoomJid], true );
+			return true;
+		}
+
+		if( 1 <= $( ".chatWrapper #chatList .alertList" ).find( 'li.' + strChatRoomJid ).length ) {
+			$( ".chatWrapper #chatList .alertList" ).find( 'li.' + strChatRoomJid ).remove();
+		}
+		if( 1 <= $( '#js-conversation' ).find( '#' + strChatRoomJid ).length ) {
+			$( '#js-conversation' ).find( '#' + strChatRoomJid ).remove();
+			if( false === $( '#js-conversation > div' ).is( ":visible" ) ) {
+				$( '#chatList' ).fadeIn();
+			}
+		}
+
+		objEntrataChat.modifyChatList( objMessage, true );
+
+		/**
+		 * build conversation details for the new chat request
+		 */
+		objEntrataChat.buildConversationDetails( strChatRoomJid );
+
+		var strCallback = function() {
+			parent.focus();
+			window.focus();
+			objEntrataChat.showChat( strChatRoomJid );
+		};
+
+		var intCloseTime = 1000 * intChatRequestMaxTime;
+
+		// remove request if not accepted in 3 mins
+		clearTimeout( objEntrataNotification.removeElementsTimeoutIds[strChatRoomJid] );
+		objEntrataNotification.removeElementsTimeoutIds[strChatRoomJid] = setTimeout( function() {
+			objEntrataChat.removeChatRequest( strChatRoomJid, true );
+		}, intCloseTime );
+		var strTitle = objEntrataChat.updateMessageWithSpecialChars( objMessage.applicant_name );
+
+		var options = {
+			title: strTitle,
+			options: {
+				body: __( 'Unclaimed Chat' ),
+				icon: objEntrataNotification.strIconUrl,
+				lang: 'en-US',
+				tag: strChatRoomJid,
+				closeTime: intCloseTime,
+				requireInteraction: true,
+				onClick: strCallback,
+				storeObjects: true,
+				onDenied: function() {
+					displayNotification( objMessage, true );
+				}
+			}
+		};
+
+		if( false === desktopNotification( options ) ) {
+			// build popup
+			displayNotification( objMessage, true );
+		}
+
+		var params = { detail: JSON.parse( strReason ), bubbles: false, cancelable: false },
+			event = new CustomEvent( "onRequest", params );
+		document.dispatchEvent( event );
+
+		return true;
+	}
+
+	function displayChatNotification( strChatRoomId, strSenderName, strMessage ) {
+		var strContainer = '';
+		if( 1 >= $('.' + strChatRoomId ).length ) {
+			strContainer = buildLiveChatPopup( strChatRoomId, strSenderName, strMessage );
+			$( strContainer )
+				.appendTo( '.js-notifications .nAlertWrapper' )
+				.delay( 2000 )
+				.animate( { right: "+=360" }, 400 );
+		} else {
+			$('#chat_popup_' + strChatRoomId ).find("span.nAlertText ").text(strMessage);
+		}
+
+	}
+
+	/**
+	 * e.g. options = { id: notification_Id, tags: [tags_associated_to_notification], title: 'Notification title', description: 'Notification body', auto_hide_after: time_in_seconds };
+	 * @param options
+	 * @returns {string}
+	 */
+	function buildNotificationPopup( options ) {
+
+		var strClass = options.tags.shift();
+		var strMessage = $( '<div/>' ).html( options.message.description ).text();
+
+		var strContainer = '<div class="nAlert ' + strClass.toLowerCase() + '" id="company_user_notification_' + options.unique_id + '" data-unique-id="' + options.unique_id + '" data-company-user-notification-id="' + options.id + '" data-auto_hide_after="' + options.message.auto_hide_after + '" > \
+									<div class="left text nMessage"> \
+										<span class="bold">' + options.message.title + '</span><br> \
+										<span class="nAlertText text-gray">' + strMessage + '</span> \
+									</div> \
+									<div class="snoozeWrapper right"> \
+										<p class="link ignore option2">' +  __("Ignore") + '</p> \
+										<p class="link snooze option2">' + __("Snooze") + '</p> \
+									</div> \
+								</div>';
+
+		return strContainer;
+	}
+
+	function buildChatPopup( options ) {
+
+		var strContainer = '<div id="chat_popup_' + options.chat_room + '" class="nAlert chat ' + options.chat_room + '" data-auto_hide_after="' + 300 + '" data-chat-room-jid="' + options.chat_room + '" > \
+										<div class="left text cMessage"> \
+										<span class="bold"> ' + options.applicant_name + ' </span><br> \
+										<span class="nAlertText highlight-request">' + __("Unclaimed Chat") + '</span> \
+									</div> \
+									<div class="snoozeWrapper right"> \
+										<p class="link ignore option1">' + __("Ignore") + '</p> \
+									</div> \
+								</div>';
+
+		return strContainer;
+	}
+
+	function buildLiveChatPopup( strChatRoomId, strSenderName, strMessage ) {
+		var strContainer = '<div id="chat_popup_' + strChatRoomId + '" class="nAlert chat ' + strChatRoomId + '" data-auto_hide_after="' + 300 + '" data-chat-room-jid="' + strChatRoomId + '" > <div class="left text cMessage"><span class="bold"> ' + strSenderName + ' </span><br><span class="nAlertText highlight-request">' + strMessage + '</span></div><div class="snoozeWrapper right"><p class="link ignore option1">' + __("Ignore") + '</p></div></div>';
+		return strContainer;
+	}
+
+	function displayNotification( objMsg, boolIsChat ) {
+		var intAutoHideAfter = ( 'undefined' != typeof objMsg.message ) ? parseInt( objMsg.message.auto_hide_after ) : '';
+		var strContainer = '';
+		if( true === boolIsChat ) {
+			strContainer = buildChatPopup( objMsg );
+		} else {
+			if( -1 !== (objMsg.tags).indexOf( "PAYMENTS_SEPA_BULK" ) ) {
+				strContainer = buildPaymentsNotificationPopup(objMsg);
+			} else {
+				strContainer = buildNotificationPopup(objMsg);
+			}
+		}
+
+		$( strContainer )
+			.appendTo( '.js-notifications .nAlertWrapper' )
+			.delay( 2000 )
+			.animate( { right: "+=360" }, 400, function() {
+				// auto remove notification
+				var objNotification = $( this );
+				if( intMaxVisibleNotifications > objNotification.index() && true === $.isNumeric( intAutoHideAfter ) ) {
+					setTimeout( function() {
+						removeNotification( objNotification );
+					}, intAutoHideAfter * 1000 );
+				}
+			} );
+
+		if( ( 'undefined' !== typeof objMsg.message ) && ( '' !== objMsg.message.callback_function ) ) {
+			$( ' #company_user_notification_' + objMsg.unique_id ).find( ".nMessage" ).click( function() {
+				eval( objMsg.message.callback_function );
+			} );
+		}
+	}
+
+	function removeNotification( obj, boolIsSnooze ) {
+
+		obj.animate( { opacity: '0' }, 600, function() {
+			obj.animate( { height: '0px' }, 300, function() {
+				// Load next hidden Notification message and bind auto close event, if not already bind
+				var objNextNotification = $( '.nAlertWrapper .nAlert:nth-child( ' + ( intMaxVisibleNotifications + 1 ) + ' ):not(.notification_close_binded)' );
+				var intAutoHideAfter = parseInt( objNextNotification.data( 'auto_hide_after' ) );
+				if( -1 != objNextNotification.index() && true === $.isNumeric( intAutoHideAfter ) ) {
+					objNextNotification.addClass( 'notification_close_binded' );
+					setTimeout( function() {
+						removeNotification( objNextNotification );
+					}, intDuration );
+				}
+				obj.remove();
+			} );
+		} );
+
+		if( true === $( obj ).hasClass( "call_incoming" ) ) {
+			return true;
+		}
+
+		if( 0 === $( obj ).parent().parent().find( '.cMessage' ).length ) {
+			updateNotificationStatus( $( obj ).data( 'company-user-notification-id' ), boolIsSnooze );
+		}
+
+		logRemovedNotifications( $( obj ).data( 'unique-id' ) );
+	}
+
+	function ignore( obj ) {
+		removeNotification( obj, false );
+	}
+
+	function snooze( obj ) {
+		removeNotification( obj, true );
+	}
+
+	function updateNotificationStatus( intCompanyUserNotificationId, boolIsSnooze ) {
+		if( 'undefined' == typeof intCompanyUserNotificationId || '' == intCompanyUserNotificationId ) {
+			return;
+		}
+
+		var strParam = ( true == boolIsSnooze ) ? '&snooze_notification=1' : '';
+		strParam += '&company_user_notification[id]=' + intCompanyUserNotificationId;
+
+		psi.patterns.ajaxRequest( {
+			url: objEntrataNotification.strUpdateNotificationUrl + strParam
+		} );
+		objEntrataChat.updateChatCount();
+	}
+
+	/**
+	 * Store notification_id to remove notification from all opened tabs, if removed from any one tab
+	 */
+
+	function logRemovedNotifications( intCompanyUserNotificationId ) {
+		var arrintCompanyUserNotificationIds = $.parseJSON( localStorage.getItem( objEntrataNotification.strLocalStorageKey ) );
+		if( null == arrintCompanyUserNotificationIds ) {
+			arrintCompanyUserNotificationIds = [];
+		}
+
+		arrintCompanyUserNotificationIds.push( intCompanyUserNotificationId );
+		localStorage.setItem( objEntrataNotification.strLocalStorageKey, JSON.stringify( arrintCompanyUserNotificationIds ) );
+		if( getIsConnected() ) {
+			objEntrataChat.updateChatCount();
+		}
+	}
+
+	/**
+	 * Remove notification from all opened tabs, if removed from any one tab
+	 */
+
+	function removeLoggedNotifications() {
+
+		var arrintCompanyUserNotificationIds = $.parseJSON( localStorage.getItem( objEntrataNotification.strLocalStorageKey ) );
+		if( null == arrintCompanyUserNotificationIds ) {
+			return;
+		}
+
+		$( arrintCompanyUserNotificationIds ).each( function( index, intCompanyUserNotificationId ) {
+			$( '#company_user_notification_' + intCompanyUserNotificationId ).remove();
+		} );
+
+	}
+
+	/**
+	 * Clear notification ids stored in local storage
+	 */
+
+	function clearLoggedNotifications() {
+		localStorage.removeItem( objEntrataNotification.strLocalStorageKey );
+		if( getIsConnected() ) {
+			objEntrataChat.updateChatCount();
+		}
+	}
+
+	/**
+	 * Notification panel
+	 */
+
+	$('body')
+		.on( 'click', '.js-notification-panel-toggle', function() {
+			if( $( '.notification-bell' ).hasClass( 'js-show' ) ) {
+
+				$( '.notification-container' ).removeClass('notification-container-large-modal notification-container-large-modal-right');
+
+				if( 1 == $('.js-launch-chat').length ) {
+
+					let chatPanel = $('.js-launch-chat').html();
+
+					if( '' == $.trim( chatPanel ) ) {
+						$( '.notification-container' ).addClass('notification-container-header-last');
+					} else {
+						$( '.notification-container' ).addClass('notification-container-header');
+					}
+				} else {
+					$( '.notification-container' ).addClass('notification-container-right');
+				}
+
+				if( 1 == $('.modal-large').length ) {
+
+					$( '.notification-container' ).removeClass('notification-container-header notification-container-header-last notification-container-right');
+
+					if( 1 == $('.js-launch-chat').length ) {
+						$( '.notification-container' ).addClass('notification-container-large-modal');
+					} else {
+						$( '.notification-container' ).addClass('notification-container-large-modal-right');
+					}
+
+				}
+
+				$('.chat-panel').removeClass('open');
+				$('#chat-inner-content').fadeOut();
+				$('.flex-entrata-wrapper').removeClass('chat-panel-open');
+				$( '.notification-container' ).show();
+
+				$( '.notification-bell' ).removeClass( 'js-show' );
+				loadNotifications();
+				selectNotificationTab( $( ".panel.nContainer" ).find( 'header input[name="radios"]:first' ).attr( "id" ) );
+			} else {
+				sessionStorage.removeItem( "chat_details" );
+				$( ".slider-arrow, .panel" ).animate( {
+					right: "-=360"
+				}, 300, function() {
+				} );
+				$( '.notification-bell' ).addClass( 'js-show' );
+				$( '.notification-container' ).hide();
+			}
+		} )
+		.on( 'click', '.notification-header .delete', function() {
+			sessionStorage.removeItem( "chat_details" );
+			$( ".slider-arrow, .panel" ).animate( {
+				right: "-=360"
+			}, 300, function() {
+			} );
+			$( '.notification-bell' ).addClass( 'js-show' );
+			$( '.notification-container' ).hide();
+		});
+
+	$('html').on( 'click', function(e) {
+		const container		= $(".notification-container");
+		const bellIcon	    = $(".js-read-notification-bell, .js-unread-notification-bell");
+
+		// Hide when click outside
+		if( ( !container.is(e.target) && container.has(e.target).length === 0 )
+			&& ( !bellIcon.is(e.target) && bellIcon.has(e.target).length === 0 )
+		) {
+			$( '.notification-container' ).hide();
+			$( '.notification-bell' ).addClass( 'js-show' );
+
+		}
+
+	});
+
+	var loadNotifications = function( boolIsFromShowChat ) {
+
+		var strElementSelector = '';
+
+		if( true !== boolIsFromShowChat ) {
+			strElementSelector = '#notifyWrapper';
+		}
+
+		psi.patterns.ajaxRequest( {
+			strElementSelector: strElementSelector,
+			url: '/?module=entrata_notificationxxx',
+			success: function( strResponse ) {
+				psi.patterns.removeLoadingImage( { strElementSelector: '#notifyWrapper' } );
+				var arrmixResponseDataChat = strResponse.data.chat;
+				var arrmixResponseDataReminder = strResponse.data.reminder;
+
+				var strHtml = '';
+
+				if( 'undefined' !== typeof arrmixResponseDataReminder ) {
+					if( 'undefined' !== typeof arrmixResponseDataReminder.today && 0 !== arrmixResponseDataReminder.today.length ) {
+						strHtml += '<li class="category">' + __( 'Today') + '</li>';
+						strHtml += loadHtmlData( arrmixResponseDataReminder.today );
+					}
+					if( 'undefined' !== typeof arrmixResponseDataReminder.yesterday && 0 !== arrmixResponseDataReminder.yesterday.length ) {
+						strHtml += '<li class="category">' + __('Yesterday') + '</li>';
+						strHtml += loadHtmlData( arrmixResponseDataReminder.yesterday );
+					}
+					if( 'undefined' !== typeof arrmixResponseDataReminder.all && 0 !== arrmixResponseDataReminder.all.length ) {
+						strHtml += '<li class="category">' + __('More than 1 day ago') + '</li>'
+						strHtml += loadHtmlData( arrmixResponseDataReminder.all );
+					}
+
+					$( '.notificationsWrapper .alertList' ).html( strHtml );
+				}
+
+				if( 'undefined' !== typeof arrmixResponseDataChat ) {
+					var strChatHtml = loadChatHtmlData( arrmixResponseDataChat );
+					$( '.chatWrapper #chatList .alertList' ).append( strChatHtml );
+
+					// To show new messages in list with blinking status
+					$.each( arrstrMsgListToBeUpdated, function( strIndex, strChatRoom ) {
+						var objListItem = $( '#chatList .alertList' ).find( 'li.' + strChatRoom );
+						objListItem.removeClass( 'read' ).addClass( 'unread' );
+					} );
+
+					$.each( $( '#chatList' ).find( '.alertList li' ), function( strIndex, objListItem ) {
+						var strChatRoom = $( objListItem ).data( 'chat-room-jid' );
+
+						if( false === objEntrataNotification.strUserChatRooms.hasOwnProperty( strChatRoom ) ) {
+							var intExpireTime = $( objListItem ).data( "expires-on" );
+
+							// if chat room record is already present on screen.
+							if( undefined === $( objListItem ).data( "expires-on" ) ) {
+								return true;
+							}
+
+							// @TODO : check alternative for this condition
+							if( 1 != $( this ).data( "sms-chat" ) ) {
+								if( intChatRequestMaxTime < intExpireTime ) {
+									$( objListItem ).remove();
+									return true;
+								}
+
+								// remove request if not accepted in 5 mins
+								clearTimeout( objEntrataNotification.removeElementsTimeoutIds[strChatRoom] );
+								objEntrataNotification.removeElementsTimeoutIds[strChatRoom] = setTimeout( function() {
+									objEntrataChat.removeChatRequest( strChatRoom, true );
+								}, ( intChatRequestMaxTime - $( objListItem ).data( "expires-on" ) ) * 1000 );
+							}
+						}
+
+						var objLastMessage = $( "#" + strChatRoom ).find( '.chatMsg' ).find( '.chatBubble' ).last();
+						var strLastMsg = objLastMessage.text();
+						if( strLastMsg ) {
+							if( true === $( objListItem ).find( '.nAlertText' ).hasClass( 'highlight-request' ) ) {
+								$( objListItem ).find( '.nAlertText' ).removeClass( 'highlight-request' ).addClass( 'text-gray' );
+							}
+							$( objListItem ).find( '.nAlertText' ).text( strLastMsg );
+						} else {
+							$( objListItem ).removeClass( 'read' ).addClass( 'unread' );
+						}
+						return true;
+					} );
+				}
+				// Update current chat count
+				objEntrataChat.updateChatCount();
+			}
+		} );
+	}
+
+	function selectNotificationTab( strTabId ) {
+		if( "notifications" === strTabId && '1' === objEntrataNotification.boolUseNewLeadAlertChat && "chat" === sessionStorage.getItem( 'selected_tab' ) ) {
+			strTabId = "chat";
+		}
+
+		$( ".panel.nContainer" ).find( 'header input[name="radios"]#' + strTabId )
+			.siblings().prop( "checked", false )
+			.end()
+			.prop( "checked", true )
+			.click()
+	}
+
+	var loadHtmlData = function( arrmixResponsedata ) {
+		var strHtml = '';
+		$( arrmixResponsedata ).each( function() {
+			var readOnNotification = "read";
+			if( null === this.read_on ) {
+				readOnNotification = "unread";
+			}
+			if( -1 < $.inArray( 'CALL_INCOMING', this.tags ) ) {
+				var strApplicantName = this.description.caller_name;
+				if( null !== this.description.customer_id && true == $.isNumeric( this.description.customer_id ) ) {
+					strApplicantName = this.description.customer_name;
+				}
+				strHtml = strHtml + '<li data-created-on="' + this.created_on + '" data-customer-id="' + this.description.customer_id + '" data-lease-id="' + this.description.lease_id + '" data-has-multiple-leads="' + this.description.has_multiple_leads + '"  data-call-id="' + this.description.call_id  + '" data-notification-id="' + this.id + '" id="call_' + this.description.call_id + '" data-cid="' + this.description.cid  + '" class="js-notification call_incoming' + '" data-notification-id="' + this.id + '" data-call-incoming="1" data-applicant-name="' + this.description.applicant_name + '" ' +
+					'data-application-id="' + this.description.application_id + '" data-expires-on="' + ( new Date( ( new Date( this.expires_on) ).toUTCString() ).getTime() / 1000) + '" ><span class="bold"> ' + strApplicantName + ' </span><br>' +
+					'<span class="nAlertText">' + this.description.call_status_type + ' ' + __( 'Call' ) + '</span><span class="date">' + this.time + '</span></li>';
+			} else {
+				var strClass = this.tags.shift() || '',
+					callback_function = '';
+				if( this.callback_function ) {
+					callback_function = ( this.callback_function ).replace( /"/g, '&quot;' );
+				}
+				strHtml = strHtml + '<li onclick="' + callback_function + '" class="js-notification unread_reminder ' + strClass.toLowerCase() + ' ' + readOnNotification + ' " data-notification-id="' + this.id + '"> <span class="bold"> ' + this.title + ' </span><br><span class="nAlertText text-gray"> ' + this.description + ' </span><span class="date">' + this.time + '</span></li>';
+			}
+		} );
+		return strHtml;
+	}
+
+	var loadChatHtmlData = function( arrmixResponsedata ) {
+		var strHtml = '';
+
+		var arrstrChatRooms = [];
+		$( arrmixResponsedata ).each( function() {
+
+			var strDescription = $.parseJSON( $( '<div/>' ).html( JSON.stringify( this.description ) ).text() );
+			var strChatRoom = strDescription.chat_room;
+			var strDefaultMessage = '<span class="nAlertText highlight-request">' + __('Unclaimed Chat') + '</span>';
+			var strTitleText = __('Lead');
+			var strSmsChatData = '';
+
+			if( -1 !== arrstrChatRooms.indexOf( strChatRoom ) ) {
+				return true;
+			}
+			arrstrChatRooms.push( strChatRoom );
+
+			var strHideClass = '';
+			// This is to handle loadingSMSChat data
+			if( -1 < $.inArray( 'SMS_CHAT', this.tags ) ) {
+				strSmsChatData = 'data-sms-chat="1" data-applicant-id="' + strDescription.applicant_id + '" data-unique-id="' + strDescription.unique_id + '" data-customer-id="' + strDescription.customer_id + '"' + '" data-unit-number="' + strDescription.unit_number + '" data-building-name="' + strDescription.building_name + '"';
+				strHideClass = ( true === $( "#myStatus" ).hasClass( "on" ) ) ? '' : 'hide ';
+				var strDisplayMessage = __( 'Unclaimed Text' );
+				var strTextColorClass = 'highlight-request';
+				if( true == strDescription.is_transferred_sms ) {
+					strDisplayMessage = __( 'Text Conversation - Transferred' );
+					strTextColorClass = 'text-gray';
+				}
+				strDefaultMessage = '<span class="nAlertText ' + strTextColorClass + '"> ' + strDisplayMessage + '. </span>';
+			}
+
+			if( "undefined" !== typeof strDescription.customer_id && '' !== strDescription.customer_id && null !== strDescription.customer_id ) {
+				var strUnitNumber = "" != strDescription.unit_number ? " - " + strDescription.unit_number : "";
+				var strBuildingName = "" != strDescription.building_name ? " - " + strDescription.building_name : "";
+				strTitleText = __( 'Resident {%s, 0} {%s, 1}', [ strBuildingName, strUnitNumber ] );
+			}
+
+			if( 0 !== $( "#chatList .alertList" ).find( "li." + strChatRoom ).length ) {
+				return true;
+			}
+
+			strHtml = strHtml + '<li class="js-notification read chat ' + strHideClass + strChatRoom + '" data-applicant_name="' + strDescription.applicant_name + '" data-chat-room-jid="' + strChatRoom + '" data-expires-on="' + this.expires_on + '" data-property_name="' + strDescription.property_name + '" ' + strSmsChatData + '>' +
+				'<span class="bold"> ' + strDescription.applicant_name + ' </span>' +
+				'<br>' + '<span class="font10 text-gray js-user-title" style="display:block;">' + strTitleText + '</span>' + strDefaultMessage +
+				'<span class="date">' + this.time + '</span>' +
+				'</li>';
+
+			// This is required to build conversation div of pending chat requests if user refreshes or opens new resource
+			if( -1 < $.inArray( 'SMS_CHAT', this.tags ) ) {
+				var boolIsExistingConversation = true;
+				if( null === this.read_on ) {
+					boolIsExistingConversation = false;
+				}
+				objLeadAlertSms.buildSmsConversationDetails( strDescription, this.id, boolIsExistingConversation );
+			} else if( 0 === $( "#" + strChatRoom ).length && false === objEntrataNotification.strUserChatRooms.hasOwnProperty( strChatRoom ) ) {
+				objEntrataChat.buildConversationDetails( strChatRoom );
+			}
+		} );
+		return strHtml;
+	}
+
+	function setHeight() {
+		windowHeight = $( window ).innerHeight();
+		$( '#notifyWrapper' ).css( 'height', windowHeight - 115 );
+	}
+
+	var initNotificationPanel = function() {
+		setHeight();
+		$( window ).resize( function() {
+			setHeight();
+		} );
+	}
+
+	var registerCallbackFunction = function( intModuleId, funCallbackFunction ) {
+		arrfunCallbackFunctions[intModuleId] = funCallbackFunction;
+	}
+
+	var getIsConnected = function() {
+		return boolIsConnected;
+	}
+
+	function checkUserIsOnline() {
+		if( "object" === typeof objEntrataNotification.strUserChatRooms ) {
+			return objEntrataNotification.strUserChatRooms.hasOwnProperty( objEntrataNotification.strEntratChatRoomJid );
+		}
+		return false;
+	}
+
+	function assetNotification( $intId ) {
+		var notification_id = 'content_notification_' + $intId;
+			$( '#' + notification_id ).dialog( {
+				title: __( 'Asset Notification' ),
+				resizable: true,
+				modal: true,
+				closeOnEscape: true,
+				show: 'fade',
+				hide: 'fast',
+				width: 'auto',
+				height: 'auto'
+			} );
+	}
+
+	return {
+		init: init,
+		sendRead: sendRead,
+		connect: connectXmpp,
+		logRawData: logRawData,
+		getIsConnected: getIsConnected,
+		loadNotifications: loadNotifications,
+		selectNotificationTab: selectNotificationTab,
+		registerCallbackFunction: registerCallbackFunction,
+		checkUserIsOnline: checkUserIsOnline,
+		assetNotification: assetNotification
+	}
+
+}();
+
+var objEntrataChat = function( options ) {
+
+	var connection = null;
+	var strLeasingAgentName;
+	var boolIsTransferredChat = false;
+	var strLeasingAgentFirstName;
+
+	function init() {
+		bindChatEvents();
+		initChatPanel();
+		processLastSeen();
+
+		objEntrataCallNotifications.initCallNotifications();
+		objEntrataNotification.strUserChatRooms = {};
+		intLogoutCheckTimeoutInterval = setInterval( function() {
+			objEntrataChat.checkForActiveChatsBeforeLogout();
+		}, 2000 );
+		bindLogoutEvent();
+
+		var objLogoutOption = $( "div#header div#cached-header" ).find("div#user").find( "ul" ).find( "li a.js-logout" );
+
+		window.onbeforeunload = function() {
+			if( undefined !== desktopNotification.objects && 'object' === typeof desktopNotification.objects ) {
+				$.each( desktopNotification.objects, function( intIndex, objNotification ) {
+					objNotification.close();
+				} );
+			}
+		};
+
+	}
+
+	function setConnection( objConnection ) {
+		connection = objConnection;
+	}
+
+	function setLeasingAgentName( strName ) {
+		strLeasingAgentName = strName;
+	}
+
+	function setLeasingAgentFirstName( strFirstName ) {
+		strLeasingAgentFirstName = strFirstName;
+	}
+
+	function showOrHideComposing( strChatRoom, boolHide ) {
+		var strMessage = __('Typing...');
+		if( true === boolHide ) {
+			strMessage = '';
+		}
+		$( "#" + strChatRoom ).find( ".chatMsg #chat_state" ).text( strMessage );
+		scrollConversationPage( strChatRoom );
+
+		// TODO: show typing in chat list also
+	}
+
+	function scrollConversationPage( strChatRoomId ) {
+		var cont = $( "#" + strChatRoomId ).find( '.chatMsg' );
+		if( !cont[0] ) return true;
+		cont[0].scrollTop = cont[0].scrollHeight;
+		return true;
+	}
+
+	function bindChatEvents() {
+
+		$( document )
+			.on( 'composing.chatstates', function( e, jid ) {
+				var strUsername = jid.split( '/' )[1];
+				if( null !== connection && strUsername === connection.jid.split( '@' )[0] ) {
+					return true;
+				}
+				showOrHideComposing( Strophe.getNodeFromJid( jid ), false );
+			} )
+			.on( 'paused.chatstates', function( e, jid ) {
+				showOrHideComposing( Strophe.getNodeFromJid( jid ), true );
+			} )
+			.on( 'focus', '.enterMessage', function() {
+				$.each( objEntrataNotification.arrstrUnreadMsgQueue, function( strMessageId, strChatRoom ) {
+					if( true === $( "#" + Strophe.getNodeFromJid( strChatRoom ) ).find( '.enterMessage' ).is( ':focus' ) ) {
+						objEntrataNotification.sendRead( strMessageId );
+					}
+				} );
+
+				var chatRoom = $( this ).data( 'prospect-id' );
+				removeDesktopNotification( chatRoom );
+				updateChatCount();
+			} )
+			.on( 'click', '#js-transfer-offline', function() {
+				var isHistoricalAccess = $(this).data("historical_access");
+				transferChat( false, isHistoricalAccess );
+			} )
+			.on( 'blur', '.enterMessage', function() {
+				var chatRoom = $( this ).data( 'prospect-id' );
+				var strChatRoomJid = getFullJid( chatRoom );
+				connection.chatstates.sendPaused( strChatRoomJid, 'groupchat' );
+
+				if( undefined !== sendChatState.chatStateComposingEvent ) {
+					delete sendChatState.chatStateComposingEvent[strChatRoomJid];
+				}
+
+				if( undefined !== sendChatState.chatStatePauseTimers ) {
+					delete sendChatState.chatStatePauseTimers[strChatRoomJid];
+				}
+			} )
+			.on( 'focus', '.enterSmsMessage', function() {
+				var chatRoom = $( this ).data( 'chat-room-jid' );
+				$( "#chatList" ).find( "li." + chatRoom ).removeClass( "unread" ).addClass( "read" );
+				updateChatCount();
+			} );
+
+		// Bind functions on dynamically created chat list
+		$( ".chatWrapper" )
+			.on( 'click', '#chatList li', function() {
+				var strRoomJid = $( this ).data( 'chat-room-jid' );
+				showChat( strRoomJid );
+			} )
+			.on( "click", ".js-guestcard", function() {
+				if( $( this ).data( "application-id" ) ) {
+					loadApplication( $( this ).data( "application-id" ), $( this ).data( "customer-id" ), $( this ).data( "lease-id" ) );
+				}
+				if( undefined == $( this ).data( "application-id" ) && $( this ).data( "customer-id" ) && $( this ).data( "lease-id" ) ) {
+					loadApplication( $( this ).data( "application-id" ), $( this ).data( "customer-id" ), $( this ).data( "lease-id" ) );
+				}
+				if( undefined == $( this ).data( "customer-id" ) && undefined == $( this ).data( "lease-id" ) && undefined == $( this ).data( "application-id" ) && $( this ).data('campaigntarget-id') ) {
+					loadPotentialLeadReviewTab( $( this ).data('campaigntarget-id') );
+				}
+			} );
+
+		$( ".conversation" ).on( "keypress", '.enterMessage', function( e ) {
+
+			var newText = $( this ).val();
+
+			if( 250 < newText.length ) {
+				return false;
+			}
+
+			var key = e.which;
+			var strChatRoomJid = objEntrataChat.getFullJid( $( this ).data( 'prospect-id' ) );
+
+			if( 13 !== key ) {
+				sendChatState( strChatRoomJid, true );
+				return true;
+			}
+
+			// the enter key code
+			if( '' !== newText ) {
+				sendChatState( strChatRoomJid, false );
+				sendMsg( strChatRoomJid, newText, 'groupchat', true );
+				$( this ).val( '' );
+			}
+			return false;
+		} );
+	}
+
+	function loadApplication( intApplicationId, intCustomerId, intLeaseId ) {
+		var intTime = 0;
+		if( 0 < $( "body" ).find( ".modal-large" ).length ) {
+			intTime = 500;
+			psi.patterns.closeLargeDialog();
+		}
+
+		if( undefined !== intCustomerId && undefined !== intLeaseId ) {
+			setTimeout( function() {
+				psi.patterns.loadLargeDialog( {
+					title: __( 'Resident Information' ),
+					strUrl: '/?module=customerxxx&lease[id]=' + intLeaseId + '&customer[id]=' + intCustomerId
+				} );
+			}, intTime );
+		} else {
+			setTimeout( function() {
+				psi.patterns.loadLargeDialog( {
+					title: __('Guestcard Details'),
+					strUrl: '?module=application_systemxxx&application[id]=' + intApplicationId
+				} );
+			}, intTime );
+		}
+	}
+
+	function loadPotentialLeadReviewTab( intCampaignTargetId ) {
+		psi.patterns.loadDialog( {
+			title: "Review Unknown Lead",
+			strContentId: "dashboard_unknown_leads_actions",
+			strUrl: '/?module=dashboard_leads_unknown_leadxxx&action=review_dashboard_unknown_SMS_lead_actions&campaign_target[id]=' + intCampaignTargetId,
+			width: 900,
+			height: 600,
+			onCloseCallback: function() {
+				if( jQuery.type( psi.objDashboard ) == "object" ) {
+					psi.objDashboard.reloadCurrentTab( 'dashboard_leads_potential_leads_table' );
+				}
+			}
+		} );
+	}
+
+	function sendChatState( strChatRoomJid, boolIsComposing ) {
+		var intPauseTimeout = 5000;
+		if( undefined === sendChatState.chatStatePauseTimers ) {
+			sendChatState.chatStatePauseTimers = {};
+		}
+
+		if( undefined === sendChatState.chatStateComposingEvent ) {
+			sendChatState.chatStateComposingEvent = {};
+		}
+
+		if( true === boolIsComposing ) {
+			if( true !== sendChatState.chatStateComposingEvent[strChatRoomJid] ) {
+				connection.chatstates.sendComposing( strChatRoomJid, 'groupchat' );
+				sendChatState.chatStateComposingEvent[strChatRoomJid] = true;
+			}
+
+			if( null !== sendChatState.chatStatePauseTimers[strChatRoomJid] ) {
+				clearTimeout( sendChatState.chatStatePauseTimers[strChatRoomJid] );
+			}
+
+			sendChatState.chatStatePauseTimers[strChatRoomJid] = setTimeout( sendChatState, intPauseTimeout, strChatRoomJid, false );
+		} else {
+			connection.chatstates.sendPaused( strChatRoomJid, 'groupchat' );
+			delete sendChatState.chatStateComposingEvent[strChatRoomJid];
+			delete sendChatState.chatStatePauseTimers[strChatRoomJid];
+		}
+	}
+
+	function processLastSeen() {
+		var intTimeout = 60 * 1000;
+		setInterval( calculateAndShowTimeLine, intTimeout );
+	}
+
+	function calculateAndShowTimeLine() {
+
+		$( "#js-conversation" ).find( ".js-chat_box .chatHeader" ).each( function() {
+			var strTime = getTimeLine( $( this ).data( "time" ) );
+			$( this ).find( "span.js-timeline" ).text( strTime );
+			$( "div#chatList .alertList" ).find( "li." + $( this ).parent( 'div.js-chat_box' ).attr( 'id' ) ).find( "span.date" ).text( strTime );
+		} );
+
+		$( "#notifyWrapper" ).find( ".notificationsWrapper .alertList" ).find( "li.call_incoming" ).each( function() {
+			var intTime = $( this ).data( "expires-on" );
+			var intCurrentTime = getCurrentUtcTime();
+			if( intTime <= intCurrentTime ) {
+				objEntrataCallNotifications.deleteCallNotification( $(this).data("call-id"), $(this).data("created-on") );
+			}
+		} );
+	}
+
+	function getTimeLine( intTimestamp ) {
+		if( isNaN( intTimestamp ) ) {
+			return "";
+		}
+
+		var intSeconds = getCurrentUtcTime() - intTimestamp;
+
+		var intDays = Math.floor( intSeconds / 60 / ( 60 * 24 ) );
+		var intHours = Math.floor( intSeconds / 60 / 60 );
+		var intMinutes = Math.floor( intSeconds / 60 );
+
+		var strTimeLine = __( 'Now' );
+		if( 0 < intDays ) {
+			strTimeLine = __( '{%d, 0} days ago', [ intDays ] );
+		} else if( 0 < intHours ) {
+			strTimeLine = __( '{%d, 0} hours ago', [ intHours ] );
+		} else if( 0 < intMinutes ) {
+			strTimeLine = __( '{%d, 0} minutes ago', [ intMinutes ] );
+		}
+
+		return strTimeLine;
+	}
+
+	function initChatPanel() {
+		$( ".conversation" )
+			.on( "click", ".backBtn", function() {
+				$( this ).parent().parent().addClass( "hide" );
+				$( '.conversation' ).hide();
+				$( '#chatList' ).fadeIn();
+				sessionStorage.removeItem( "chat_details" );
+			} )
+			.on( "click", ".joinBtn", function() {
+				var strChatRoomJid = $( this ).data( "chat-room-jid" );
+
+				if( 1 == objEntrataNotification.boolIsLeasingCenterSmsChat ) {
+					lcChatInProgress( strChatRoomJid );
+				}
+
+				if( 1 === $( "#chatList" ).find( "li." + strChatRoomJid ).data( "sms-chat" ) ) {
+					objLeadAlertSms.joinSmsChat( strChatRoomJid );
+					return;
+				}
+				chatRoomExists( strChatRoomJid, function() {
+					processAcceptChat( strChatRoomJid );
+				}, function() {
+					var boolRemoveAllElements = true,
+						boolProspectLeft = true;
+					removeChatRequest( strChatRoomJid, boolRemoveAllElements, boolProspectLeft );
+					removeChatRequestFromOtherTabs( strChatRoomJid, false );
+					removeOtherUserChatRequest( strChatRoomJid );
+				} );
+			} )
+			.on( "click", ".js-end-btn", function() {
+				$( this ).addClass( "hide" );
+				$( this ).siblings( ".js-end-chat-confirmation" ).find( ".js-confirm-end-chat-msg" ).text( __('Do you want to end this chat?') );
+				$( this ).siblings( ".js-end-chat-confirmation" ).removeClass( "hide" );
+				scrollConversationPage( $( this ).parent().data( "chat-room-jid" ) );
+			} )
+			.on( "click", ".js-end-chat", function() {
+
+				var strChatRoomJid = $( this ).parents( ".endConversation" ).data( "chat-room-jid" );
+
+				if( 1 == objEntrataNotification.boolIsLeasingCenterSmsChat ) {
+					lcEndChat( strChatRoomJid );
+				}
+
+				if( 1 === $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).data( "sms-chat" ) ) {
+					var intNotificationId = $( "#" + strChatRoomJid ).find( ".joinBtn" ).data( "notification-id" );
+					objLeadAlertSms.updateSmsNotification( intNotificationId, strChatRoomJid, true );
+					delete objLeadAlertSms.arrOngoingSmsChats[strChatRoomJid];
+					return true;
+				}
+
+				boolIsTransferredChat = false;
+				endChat( $( this ).parent().parent().data( "chat-room-jid" ), true );
+			} )
+			.on( "click", ".js-cancel-end-chat", function() {
+				$( this ).parent().addClass( "hide" );
+				$( this ).siblings( ".js-confirm-end-chat-msg" ).text( "" );
+				$( this ).parent().siblings( ".js-end-btn" ).removeClass( "hide" );
+			} );
+
+		$( "#myStatus" ).switchbutton( {
+			on: function() {
+				var strRoomJid = objEntrataChat.getChatRoomJid( true );
+				joinOrLeaveChatRoom( strRoomJid, true );
+				updateSessionData( Strophe.getNodeFromJid( strRoomJid ), true );
+				sendMsg( connection.authzid, 'available', 'join_room' );
+				objLeadAlertSms.showHiddenChatListItems();
+				objEntrataNotification.loadNotifications();
+				return true;
+			},
+			off: function() {
+				if( 1 < Object.keys( objEntrataNotification.strUserChatRooms ).length ) {
+					checkForActiveChats();
+				} else {
+					objLeadAlertSms.endSmsChatBeforeOffline( 'mark_unavailable');
+					setUserOffline();
+				}
+
+				return true;
+			}
+		} );
+	}
+
+	function onJoinChat( objMessage ) {
+
+		var objBodyElement = objMessage.getElementsByTagName( 'body' );
+		var body = objBodyElement[0];
+		var options = $.parseJSON( $( "<div/>" ).html( Strophe.getText( body ) ).text() );
+		var boolJoinChat = options.join;
+
+		if( true === boolJoinChat ) {
+			acceptChatRequest( options.chat_room_jid );
+		} else {
+			var boolRemoveAllElements = true,
+				boolProspectLeft = true;
+			removeChatRequest( options.chat_room_jid, boolRemoveAllElements, boolProspectLeft );
+		}
+
+		return true;
+	}
+
+	function processAcceptChat( strChatRoomJid ) {
+		if( objEntrataChat.intMaxUsreChatRooms <= Object.keys( objEntrataNotification.strUserChatRooms ).length ) {
+			showMaxChatLimitMessage( strChatRoomJid );
+			return true;
+		}
+
+		removeOtherUserChatRequest( strChatRoomJid );
+		removeChatRequestFromOtherTabs( strChatRoomJid, true );
+
+		acceptChatRequest( strChatRoomJid, true, true );
+
+		var objListElement = $( "#chatList .alertList" ).find( "li." + strChatRoomJid );
+		if( true === objListElement.hasClass( "unread" ) ) {
+			objListElement.removeClass( "unread" ).addClass( "read" );
+		}
+
+		return true;
+	}
+
+	function removeOtherUserChatRequest( strChatRoomJid ) {
+		var strToRoomJid = getChatRoomJid( true );
+		var out = $msg( {
+			to: strToRoomJid,
+			type: 'groupchat',
+			from: connection.jid,
+			id: connection.getUniqueId(),
+			time: getCurrentUtcTime()
+		} ).c( "conversation", { 'data-chat-room-jid': strChatRoomJid } ).t( 'remove_request' );
+		connection.send( out.tree() );
+	}
+
+	// to accept/remove the chat in other resources if accepted/removed in one resource
+	function removeChatRequestFromOtherTabs( strChatRoomJid, boolJoinChat ) {
+		sendMsg( Strophe.getBareJidFromJid( connection.jid ), JSON.stringify( {
+			chat_room_jid: strChatRoomJid,
+			join: boolJoinChat
+		} ), 'join_chat' );
+	}
+
+	function checkForActiveChats( objElement ) {
+		var intActiveChats = ( Object.keys( objEntrataNotification.strUserChatRooms ).length - 1 ),
+			boolIsFromHistoricalAccess = 0;
+
+		if( "undefined" !== typeof objElement && true === objElement.hasClass( "js-active_chat" ) && "show_historical_properties" === objElement.attr( "id" ) ) {
+			boolIsFromHistoricalAccess = 1;
+		}
+		psi.patterns.loadDialog( {
+			width: 600,
+			height: 275,
+			title: __('Chat Availability'),
+			strContentId: 'availableToggle',
+			strUrl: objEntrataNotification.strViewTransferChatUrl + '&is_historical_access=' + boolIsFromHistoricalAccess,
+			data: { active_chats: intActiveChats },
+			onCloseCallback: function() {
+				if( 0 < Object.keys( objEntrataNotification.strUserChatRooms ).length ) {
+					var objMyStatus = $( "#myStatus" );
+					objMyStatus.find( "b" )[0].style.left = "33px";
+					objMyStatus.removeClass( "off" ).addClass( "on" ).find( "span" ).text( "Yes" );
+				}
+			}
+		} );
+	}
+
+	function showMaxChatLimitMessage( strChatRoomJid ) {
+
+		var objConversation = $( ".conversation" ).find( '#' + strChatRoomJid );
+
+		objConversation.find( ".joinBtn" ).remove();
+		objConversation.find( ".js-chat-input" ).remove();
+		objConversation.find( ".enterMessage" ).remove();
+		objConversation.find( ".chatMsg" ).removeClass( "hide" ).html( '<div class="align-center pad20">' + __('Sorry you have already reached the maximum allowed chats limit.') + '</div>' );
+		$( "#chatList .alertList" ).find( "li." + strChatRoomJid ).remove();
+		deleteChatNotificationEntry( [strChatRoomJid], true );
+		delete objEntrataNotification.strUserChatRooms[strChatRoomJid];
+		return true;
+	}
+
+	function setUserOffline() {
+
+		var strRoomJid = objEntrataChat.getChatRoomJid( false );
+
+		// for other resources
+		sendMsg( connection.authzid, 'unavailable', 'join_room' );
+
+		setUserChatStatus( false );
+
+		// clear the chat list
+		modifyChatList( null, false, true );
+
+		// Remove all chat request popups
+		$( ".nAlertWrapper" ).find( "div.nAlert" ).remove();
+
+		// Remove the conversations details div
+		removeConversationDiv( null, true );
+	}
+
+	function endChat( strChatRoomJid, isChatEndedManually ) {
+
+		if( null !== strChatRoomJid.match( /^(entrata)/g ) ) {
+			joinOrLeaveChatRoom( getFullJid( strChatRoomJid ), false );
+			updateSessionData( strChatRoomJid, false );
+			return true;
+		}
+
+		if( true === isChatEndedManually ) {
+			if( true !== boolIsTransferredChat ) {
+				sendChatStatusMessage( getFullJid( strChatRoomJid ), 'end' );
+			}
+			setTimeout( saveAndEndChat, 1000, strChatRoomJid );
+		}
+
+		if( true === objEntrataNotification.strUserChatRooms.hasOwnProperty( strChatRoomJid ) ) {
+			delete objEntrataNotification.strUserChatRooms[strChatRoomJid];
+		} else if( true === objLeadAlertSms.arrOngoingSmsChats.hasOwnProperty( strChatRoomJid ) ) {
+			delete objLeadAlertSms.arrOngoingSmsChats[strChatRoomJid];
+		}
+
+		modifyChatList( strChatRoomJid, false );
+		removeConversationDiv( strChatRoomJid, false );
+
+		sessionStorage.removeItem( "chat_details" );
+
+		deleteChatNotificationEntry( [strChatRoomJid], true );
+		return true;
+	}
+
+	function endChatFromProspect( strChatRoomJid ) {
+		updateSessionData( strChatRoomJid, false );
+		$( '#chatList' ).find( '.alertList' ).find( 'li.' + strChatRoomJid ).remove();
+		delete objEntrataNotification.strUserChatRooms[strChatRoomJid];
+		sessionStorage.removeItem( "chat_details" );
+
+		var objConversationElement = $( '#conversation_prototype' ).siblings( "#" + strChatRoomJid );
+		objConversationElement.find( '.endConversation' ).remove();
+		objConversationElement.find( '.js-chat-input' ).remove();
+
+		deleteChatNotificationEntry( [strChatRoomJid], true );
+		$( "#chatList" ).find( ".alertList" ).find( 'li.' + strChatRoomJid ).removeClass( "unread" ).addClass( "read" );
+
+		$.each( objEntrataNotification.arrstrUnreadMsgQueue, function( strMessageId, strChatRoom ) {
+			if( strChatRoomJid === Strophe.getNodeFromJid( strChatRoom ) ) {
+				objEntrataNotification.sendRead( strMessageId );
+			}
+		} );
+
+		setTimeout( function() {
+			updateChatCount();
+		}, 1000 );
+
+		return true;
+	}
+
+	function handleTransferErrorMessage( strErrorMsg ) {
+		var objMyStatus = $( "#myStatus" );
+		objMyStatus.find( "b" )[0].style.left = "33px";
+		objMyStatus.removeClass( "off" ).addClass( "on" ).find( "span" ).text( "Yes" );
+		$( ".js-default-alert" ).html( '<p class="alert warning"><i></i>' + strErrorMsg + '</p>' );
+		$( ".js-transfer-option" ).remove();
+	}
+
+	function insertTransferNotifications( arrstrChatRoomDetails ) {
+
+		psi.patterns.ajaxRequest( {
+			url: '/?module=entrata_notificationxxx&action=insert_transfer_notifications',
+			data: { chat_room_details: arrstrChatRoomDetails }
+		} );
+	}
+
+	function transferChat( boolIsFromLogout, boolHistoricalMode ) {
+
+		psi.patterns.showLoadingImage( {
+			strElementSelector: "#availableToggle"
+		} );
+
+		var intTransferCount = 0,
+			intNonTransferCount = 0,
+			arrstrChatRooms = {},
+			arrstrTransferChatRoomDetails = {},
+			strChatTime = '';
+
+		for( var strUserChatRoom in objEntrataNotification.strUserChatRooms ) {
+			if( null === strUserChatRoom.match( /^(entrata)/g ) && true === objEntrataNotification.strUserChatRooms.hasOwnProperty( strUserChatRoom ) ) {
+				arrstrChatRooms[strUserChatRoom] = strUserChatRoom;
+			}
+		}
+		objLeadAlertSms.endSmsChatBeforeOffline( 'transfer_chat' );
+
+		if( false === $.isEmptyObject( arrstrChatRooms ) ) {
+
+			psi.patterns.ajaxRequest( {
+				url: '/?module=entrata_notificationxxx&action=get_current_time',
+				success: function( strResponse ) {
+					var arrResult = JSON.parse( strResponse );
+					strChatTime = arrResult.data;
+				}
+			});
+
+			psi.patterns.ajaxRequest( {
+				url: '/?module=entrata_notificationxxx&action=get_online_leasing_agents',
+				data: { chat_rooms: arrstrChatRooms },
+				success: function( objResult ) {
+					if( false === objResult.data.success ) {
+						return false;
+					}
+
+					var arrstrNonTransferChats = {};
+
+					$.each( objResult.data.leasing_agent_jids, function( strChatRoom, arrstrLeasingAgentJids ) {
+						boolIsTransferredChat = false;
+						// check if leasing_agents are blank for chat room
+						if( 0 === arrstrLeasingAgentJids.length ) {
+							arrstrNonTransferChats[strChatRoom] = strChatRoom;
+							intNonTransferCount++;
+							return true;
+						}
+
+						intTransferCount++;
+
+						var strChatFileName = localStorage.getItem( strChatRoom ),
+							strApplicantName = $( "#chatList" ).find( "ul.alertList li." + strChatRoom ).data( "applicant_name" );
+							arrstrChatRoomDetails = strChatRoom.split( '_' );
+
+						var strPropertyName = $( "#chatList" ).find( "ul.alertList li." + strChatRoom ).data( "property_name" );
+
+						var strChatInitializeTime = strChatTime;
+
+						var objReason = {
+							application_id: arrstrChatRoomDetails[3],
+							cid: arrstrChatRoomDetails[1],
+							chat_room: strChatRoom,
+							leasing_agent_name: strLeasingAgentName,
+							applicant_name: strApplicantName,
+							file_name: strChatFileName,
+							property_name: strPropertyName,
+							chat_initialize_time:strChatInitializeTime,
+						};
+
+						sendChatStatusMessage( getFullJid( strChatRoom ), 'transfer' );
+						var arrintCompanyUserIds = [];
+						$.each( arrstrLeasingAgentJids, function( intCompanyUserId, strUserJid ) {
+							arrintCompanyUserIds.push( intCompanyUserId );
+							var strTo = strUserJid + '@' + connection.domain;
+							sendDirectInvitation( strTo, getFullJid( strChatRoom ), JSON.stringify( objReason ) );
+						} );
+
+						arrstrTransferChatRoomDetails[strChatRoom] = {
+							company_user_ids: arrintCompanyUserIds,
+							applicant_name: strApplicantName,
+							property_name: strPropertyName
+						};
+
+						boolIsTransferredChat = true;
+						// remove chat_room data for current user
+						endChat( strChatRoom, true );
+					} );
+
+					if( 0 !== intTransferCount ) {
+						insertTransferNotifications( arrstrTransferChatRoomDetails );
+					}
+
+					if( false === boolIsFromLogout ) {
+						if( 0 === intTransferCount ) {
+							handleTransferErrorMessage( __('You cannot transfer the chat(s) for now, as no other leasing agent is online.') );
+						} else if( 0 < intTransferCount && 0 < intNonTransferCount ) {
+							// few chats transferred
+							handleTransferErrorMessage( __('{%d, 0} chat(s) were not transferred as there are no leasing agents online for those properties.', [ intNonTransferCount ] ) );
+						} else {
+							$( "#availableToggle" ).dialog( "close" );
+							if( "undefined" === typeof boolHistoricalMode || 0 === boolHistoricalMode ) {
+								setUserOffline();
+							}
+						}
+						arrstrNonTransferChats = {};
+					}
+
+					$.each( arrstrNonTransferChats, function( strIndex, strChatRoom ) {
+						// to end the chats that are not transferred
+						endChat( strChatRoom, true );
+					} );
+
+					psi.patterns.removeLoadingImage( {
+						strElementSelector: "#availableToggle"
+					} );
+
+					return true;
+				}
+			} );
+		}
+		return true;
+	}
+
+	function acceptChatRequest( strChatRoom, boolDeleteOtherChatNotifications, boolAcceptChatManually ) {
+
+		objLeadAlterChat.initChatHistory( strChatRoom );
+
+		var strChatRoomJid = getFullJid( strChatRoom );
+
+		joinOrLeaveChatRoom( strChatRoomJid, true );
+
+		var objElement = $( "#" + strChatRoom );
+		objElement.find( ".enterMessage" ).attr( "data-prospect-id", strChatRoom );
+		objElement.find( ".joinBtn" ).hide();
+		objElement.find( ".js-chat-input" ).removeClass( "hide" );
+		objElement.find( ".endConversation" ).removeClass( "hide" );
+
+		if( true === boolAcceptChatManually ) {
+			objEntrataChat.loadGreetingMsg( strChatRoom );
+			updateSessionData( strChatRoom, true );
+		}
+
+		if( true === boolDeleteOtherChatNotifications ) {
+			deleteChatNotificationEntry( strChatRoom, false );
+		}
+
+		removeChatRequest( strChatRoom, false );
+		return true;
+	}
+
+	// This function will delete the entry from notifications table
+	function deleteChatNotificationEntry( arrstrChatRooms, boolOwnNotificationEntry ) {
+
+		boolOwnNotificationEntry = ( true === boolOwnNotificationEntry ) ? 1 : 0;
+		psi.patterns.ajaxRequest( {
+			url: '/?module=entrata_notificationxxx&action=delete_notification',
+			data: { 'chat_rooms': arrstrChatRooms, 'delete_own_record': boolOwnNotificationEntry }
+		} );
+		return;
+	}
+
+	// This function will remove chat request from other users' screens if accepted by any one user
+	function removeChatRequest( strPopupClass, boolRemoveAllElements, boolProspectLeft ) {
+		$( ".js-notifications.nContainer" ).find( '.' + strPopupClass ).remove();
+
+		if( false === boolRemoveAllElements ) {
+			return true;
+		}
+
+		$( "#chatList" ).find( '.' + strPopupClass ).remove();
+		var objConversation = $( ".conversation" ).find( '#' + strPopupClass );
+
+		if( true === objConversation.is( ":visible" ) ) {
+			objConversation.find( ".js-chat-input" ).remove();
+			var strMessage = __( 'Another leasing agent has already accepted this chat request.' );
+			if( true === boolProspectLeft ) {
+				strMessage = __( 'Prospect has already ended this chat.' );
+			}
+			objConversation.find( ".chatMsg" ).html( '<div class="align-center pad20">' + strMessage + '</div>' );
+			setTimeout( function() {
+				objConversation.remove();
+				$( '.chatWrapper' ).fadeIn();
+				$( '.conversation' ).hide();
+				$( '#chatList' ).fadeIn();
+			}, 5000 );
+		} else {
+			objConversation.remove();
+			$( '.chatWrapper' ).fadeIn();
+			$( '.conversation' ).hide();
+			$( '#chatList' ).fadeIn();
+		}
+
+		removeDesktopNotification( strPopupClass );
+		updateChatCount();
+		return true;
+	}
+
+	function removeDesktopNotification( chatRoomId ) {
+		if( 'undefined' !== typeof desktopNotification.objects && 'undefined' !== typeof desktopNotification.objects[chatRoomId] ) {
+			desktopNotification.objects[chatRoomId].close();
+		}
+		return true;
+	}
+
+	function joinOrLeaveChatRoom( strRoomJid, boolIsJoinChatRoom ) {
+		var strUserJid = connection.jid;
+		var strUserName = Strophe.getNodeFromJid( strUserJid ),
+			strPresenceString = '',
+			strChatRoom = Strophe.getNodeFromJid( strRoomJid );
+
+		if( true === boolIsJoinChatRoom ) {
+			strPresenceString = { 'from': strUserJid, 'to': strRoomJid + '/' + strUserName };
+			objEntrataNotification.strUserChatRooms[strChatRoom] = strChatRoom;
+			// clear the timeout from triggerring to remove the request elements
+			clearTimeout( objEntrataNotification.removeElementsTimeoutIds[strChatRoom] );
+		} else {
+			strPresenceString = { type: 'unavailable', from: strUserJid, to: strRoomJid + '/' + strUserName };
+		}
+
+		if( true === objEntrataNotification.strUserChatRooms.hasOwnProperty( strUserName ) ) {
+			delete objEntrataNotification.strUserChatRooms[strUserName];
+		}
+
+		/**
+		 * build conversation details if user (leasing agent) refreshes the page or opens new resource
+		 * this will build the conversation details div for already joined chat_rooms
+		 */
+		if( 0 === $( '#' + strChatRoom ).length && strChatRoom !== getChatRoomJid( false ) && true === boolIsJoinChatRoom ) {
+			objEntrataChat.buildConversationDetails( strChatRoom, true );
+		}
+
+		var d = $pres( strPresenceString );
+		connection.send( d.tree() );
+	}
+
+	function setUserChatStatus( boolIsJoinChatRoom ) {
+
+		for( var strUserChatRoom in objEntrataNotification.strUserChatRooms ) {
+			if( true === objEntrataNotification.strUserChatRooms.hasOwnProperty( strUserChatRoom ) ) {
+
+				var strUserChatRoomJid = getFullJid( strUserChatRoom );
+				if( true === boolIsJoinChatRoom ) {
+					joinOrLeaveChatRoom( strUserChatRoomJid, boolIsJoinChatRoom );
+				} else {
+					endChat( strUserChatRoom );
+				}
+			}
+		}
+
+		if( null !== sessionStorage.getItem( 'chat_details' ) ) {
+			var strChatRoomJid = sessionStorage.getItem( 'chat_details' ).split( '::' )[0];
+			objEntrataChat.showChat( strChatRoomJid );
+		}
+	}
+
+	function updateSessionData( strUserChatRoom, boolIsAvailable ) {
+		if( true === boolIsAvailable ) {
+			objEntrataNotification.strUserChatRooms[strUserChatRoom] = strUserChatRoom;
+			boolIsAvailable = 1;
+			objEntrataChat.boolIsUserOnline = true;
+		} else {
+			delete objEntrataNotification.strUserChatRooms[strUserChatRoom];
+			boolIsAvailable = 0;
+			objEntrataChat.boolIsUserOnline = false;
+		}
+
+		intApplicationId = $( '.'+ strUserChatRoom ).data( 'application_id' )
+		strChatInitializeTime = $( '.'+ strUserChatRoom ).data( 'chat_initialize_time' );
+		intEventId             = $( '.'+ strUserChatRoom ).data( 'event_id' );
+
+		psi.patterns.ajaxRequest( {
+			url: objEntrataNotification.strUpdateSessionDataUrl,
+			data: { 'is_available': boolIsAvailable, 'user_chat_room': strUserChatRoom, 'message_details' : { 'chat_initialize_time': strChatInitializeTime, 'application_id': intApplicationId }, 'event_id' :intEventId }
+		} );
+	}
+
+	// Do we need the greeting message when user accepts the chat request
+	function loadGreetingMsg( strChatRoom ) {
+		var objListItem = $( "#chatList .alertList" ).find( "li." + strChatRoom );
+		var strPropertyName = objListItem.data( "property_name" );
+		var strApplicantName = objListItem.data( "applicant_name" );
+		var strApplicantFirstName = strApplicantName.split( ' ' )[0];
+		var strGreetingMsg = __( 'Hi {%s, 0}! This is {%s, 1} with {%s, 2}. How can I help you?', [ strApplicantFirstName, strLeasingAgentFirstName, strPropertyName ] );
+		var strChatRoomJid = getFullJid( strChatRoom );
+		sendMsg( strChatRoomJid, strGreetingMsg, 'groupchat', true );
+
+		if( true === objListItem.hasClass( "unread" ) ) {
+			objListItem.removeClass( "read" ).addClass( "unread" );
+		}
+
+		return true;
+	}
+
+	function modifyChatList( options, boolInsertIntoList, boolClearChatList ) {
+
+		var objChatList = $( ".chatWrapper #chatList .alertList" );
+
+		if( true === boolClearChatList ) {
+			objChatList.find( "li" ).remove();
+			$( '.chatWrapper' ).fadeIn();
+			$( '.conversation' ).hide();
+			$( '#chatList' ).fadeIn();
+			objEntrataNotification.strUserChatRooms = {};
+		} else if( true === boolInsertIntoList ) {
+			var strChatHtml = '<li class="js-notification chat unread ' + options.chat_room + '" data-chat_initialize_time="' + options.chat_initialize_time + '" data-application_id="' + options.application_id + '" data-applicant_name="' + options.applicant_name + '" data-chat-room-jid="' + options.chat_room + '" data-property_name="' + options.property_name + '" data-event_id="' + options.event_id +'">' +
+				'<span class="bold"> ' + options.applicant_name + ' </span><br><span class="font10 text-gray js-user-title" style="display:block;">' + __('Lead') + '</span><span class="nAlertText highlight-request">' + __('Unclaimed Chat')+ '</span><span class="date">' + __('Now') + '</span></li>';
+			objChatList.prepend( strChatHtml );
+		} else {
+			$( '.chatWrapper' ).fadeIn();
+			$( '.conversation' ).hide();
+			$( '#chatList' ).fadeIn();
+			delete objEntrataNotification.strUserChatRooms[options];
+		}
+
+		// modify chat count
+		updateChatCount();
+	}
+
+	function removeConversationDiv( intChatRoomId, boolRemoveAllConversations ) {
+		if( true === boolRemoveAllConversations ) {
+			$( '#conversation_prototype' ).siblings().remove();
+		} else {
+			$( '#conversation_prototype' ).siblings( "#" + intChatRoomId ).remove();
+		}
+		return true;
+	}
+
+	function updateChatCount() {
+		var intNotificationCount = updateNotificationCount(),
+			intChatCount = $( ".chatWrapper").find(" #chatList .alertList li.unread" ).not( ".hide" ).length,
+			intChatAndNotificationCount = intNotificationCount + intChatCount;
+		$( ".nContainer" ).find( "header #js-chat-count" ).text( intChatCount );
+		modifyBellIcon( intChatAndNotificationCount );
+
+	}
+
+	function updateNotificationCount() {
+		var intNotificationCount = $(".notificationsWrapper").find(".alertList li.unread").length;
+		$( ".nContainer header" ).find( " #js-notification-count" ).text( intNotificationCount );
+		return intNotificationCount;
+	}
+
+	function modifyBellIcon( intChatAndNotificationCount ) {
+		if( intChatAndNotificationCount > 0 ) {
+			$(".js-unread-notification-bell").removeClass("hide");
+			$(".js-read-notification-bell").addClass("hide");
+		} else{
+			$(".js-unread-notification-bell").addClass("hide");
+			$(".js-read-notification-bell").removeClass("hide");
+		}
+	}
+
+	function showChat( strRoomJid ) {
+		removeDesktopNotification( strRoomJid );
+
+		var strApplicantName = $( "#chatList .alertList" ).find( "li." + strRoomJid ).data( 'applicant_name' );
+		var intCustomerId = $( "#chatList .alertList").find( "li." + strRoomJid ).data('customer-id');
+		if( null === strApplicantName ) {
+			strApplicantName = sessionStorage.getItem( 'chat_details' ).split( '::' )[1];
+		}
+
+		$( ".ignore" ).click();
+		var objApplicantNameElement = $( '#' + strRoomJid ).find( "div.js-chat-header" ).find( "div.js-applicant-name" );
+
+		$( objApplicantNameElement ).text( strApplicantName );
+		var strTitleText = __( 'Lead' );
+		if( "undefined" !== typeof intCustomerId && '' !== intCustomerId && null !== intCustomerId ) {
+			var strUnitNumber = "" != $( "#chatList .alertList").find( "li." + strRoomJid ).data('unit-number') ? " - " + $( "#chatList .alertList").find( "li." + strRoomJid ).data('unit-number') : "";
+			var strBuildingName = "" != $( "#chatList .alertList").find( "li." + strRoomJid ).data('building-name') ? " - " + $( "#chatList .alertList").find( "li." + strRoomJid ).data('building-name') : "";
+			strTitleText = __( 'Resident {%s, 0} {%s, 1} ', [ strBuildingName, strUnitNumber ] );
+		}
+
+		if( 0 == $( '#' + strRoomJid ).find( '.chatHeader' ).find('.js-user-title').length ) {
+			$( "<span class='font10 js-user-title' style='display: block;margin-top: 4px;'>" + strTitleText + "</span>" ).insertAfter( objApplicantNameElement );
+		}
+
+		$( '#' + strRoomJid ).siblings().addClass( "hide" );
+		$( '#' + strRoomJid ).removeClass( "hide" );
+
+		if( $( ".notification-bell" ).hasClass( "js-show" ) ) {
+			$( ".panel" ).animate( {
+				right: "+=360"
+			}, 300, function() {
+			} );
+			$( '.notification-bell' ).removeClass( "js-show" );
+			objEntrataNotification.loadNotifications( true );
+		}
+
+		objEntrataNotification.selectNotificationTab( "chat" );
+		$( '#chatList' ).hide();
+		$( '.conversation' ).fadeIn();
+		scrollConversationPage( strRoomJid );
+
+		setTimeout( function() {
+			calculateAndShowTimeLine();
+		}, 500 );
+
+		sessionStorage.setItem( 'chat_details', strRoomJid + '::' + strApplicantName );
+	}
+
+	function getChatRoomJid( boolGetFullJid ) {
+		if( false === boolGetFullJid ) {
+			return objEntrataNotification.strEntratChatRoomJid;
+		}
+		return objEntrataNotification.strEntratChatRoomJid + '@conference.' + connection.domain;
+	}
+
+	function getFullJid( strBareJid ) {
+		return strBareJid + '@conference.' + connection.domain;
+	}
+
+	function sendMsg( strTo, strMsg, strType, boolRequestReceipt ) {
+		var objMsg = $msg( {
+			to: strTo,
+			from: connection.jid,
+			type: strType,
+			id: connection.getUniqueId(),
+			time: getCurrentUtcTime(),
+			sender: strLeasingAgentName
+		} ).c( "body" ).t( strMsg );
+
+		var boolReceiptRequired = boolRequestReceipt || false;
+
+		if( true === boolReceiptRequired ) {
+			var request = Strophe.xmlElement( 'request', { 'xmlns': Strophe.NS.RECEIPTS } );
+			objMsg.tree().appendChild( request );
+		}
+		connection.send( objMsg.tree() );
+	}
+
+	function sendChatStatusMessage( strTo, strStatus ) {
+
+		var objMsg = $msg( {
+			to: strTo,
+			from: connection.jid,
+			type: 'groupchat',
+			id: connection.getUniqueId(),
+			time: getCurrentUtcTime(),
+			sender: strLeasingAgentName,
+			status: strStatus,
+		} ).c( "body" ).t( '' );
+
+		connection.send( objMsg.tree() );
+	}
+
+	function sendDirectInvitation( strTo, strChatRoomFullJid, strReason ) {
+		var objMsg = $msg( {
+			to: strTo,
+			from: connection.jid
+		} ).c( "x", { xmlns: 'jabber:x:conference', jid: strChatRoomFullJid, reason: strReason } );
+		connection.send( objMsg.tree() );
+	}
+
+	function buildConversationDetails( strChatRoom, boolIsExistingConversation ) {
+
+		var objConversationElement = $( '#conversation_prototype' ).clone();
+		$( objConversationElement ).attr( { id: strChatRoom } );
+		$( objConversationElement ).addClass( "js-chat_box" );
+
+		$( objConversationElement ).find( ".joinBtn" ).attr( "data-chat-room-jid", strChatRoom );
+		$( objConversationElement ).find( ".js-guestcard" ).attr( "data-application-id", strChatRoom.split( '_' )[3] );
+		$( objConversationElement ).find( ".endConversation" ).attr( "data-chat-room-jid", strChatRoom );
+
+		if( true === boolIsExistingConversation ) {
+			$( objConversationElement ).find( '.enterMessage' ).attr( 'data-prospect-id', strChatRoom );
+			$( objConversationElement ).find( '.joinBtn' ).hide();
+			$( objConversationElement ).find( '.js-chat-input' ).removeClass( "hide" );
+			$( objConversationElement ).find( ".endConversation" ).removeClass( "hide" );
+		}
+
+		$( objConversationElement ).appendTo( '#js-conversation' );
+		return false;
+	}
+
+	// This function handles end_chat message and remove_request message.
+	function handleConversation( objMessage ) {
+		var objConversation = objMessage.getElementsByTagName( 'conversation' );
+		var strFrom = objMessage.getAttribute( 'from' );
+		var strNick = strFrom.split( '/' )[1];
+		var strChatRoom = $( objConversation ).data( 'chat-room-jid' );
+		var strAction = $( objConversation ).text();
+
+		if( 'remove_request' === strAction && strNick !== connection.authcid ) {
+			removeChatRequest( strChatRoom );
+			modifyChatList( strChatRoom, false );
+		}
+		return true;
+	}
+
+	function getInitialProspectMessage( strApplicantName ) {
+		var strApplicantChat = __( '{%s, 0} wants to chat.', [ strApplicantName ] );
+		return strApplicantChat;
+	}
+
+	function saveAndEndChat( strUserChatRoom ) {
+
+		delete objEntrataNotification.strUserChatRooms[strUserChatRoom];
+
+		var arrstrChatHistory = objLeadAlterChat.getChatHistory( strUserChatRoom );
+
+		var strChatHistory = ( "undefined" === arrstrChatHistory ) ? '' : arrstrChatHistory;
+		var strApplicantName = $( "#" + strUserChatRoom ).find( "div.js-applicant-name" ).text().trim();
+
+		var objData = {
+			is_available: 0,
+			user_chat_room: strUserChatRoom,
+			chat_details: strChatHistory,
+			is_transfer: ( true === boolIsTransferredChat ) ? 1 : 0,
+			applicant_name: strApplicantName
+		};
+
+		psi.patterns.ajaxRequest( {
+			url: objEntrataNotification.strEndChatUrl,
+			data: objData,
+			success: function( objResult ) {
+				if( true === objResult.data.success && true === boolIsTransferredChat ) {
+
+					var objMsg = $msg( {
+						to: getFullJid( strUserChatRoom ),
+						from: connection.jid,
+						type: 'groupchat',
+						id: connection.getUniqueId(),
+						time: getCurrentUtcTime(),
+						sender: strLeasingAgentName,
+						status: 'chat_transferred'
+					} ).c( "body" ).t( '' );
+					connection.send( objMsg.tree() );
+				}
+				joinOrLeaveChatRoom( getFullJid( strUserChatRoom ), false );
+			}
+		} );
+
+		localStorage.removeItem( strUserChatRoom );
+	}
+
+	function chatRoomExists( strChatRoomJid, onSuccessCallback, onErrorCallback ) {
+		iq = $iq( {
+			to: strChatRoomJid + '@conference.' + connection.domain,
+			type: 'get',
+			from: connection.jid,
+			id: connection.getUniqueId()
+		} ).c( "query", {
+			xmlns: 'http://jabber.org/protocol/disco#info'
+		} );
+
+		connection.sendIQ( iq.tree(), function( data ) {
+			intOccupantCount = $( data ).find( 'query' ).find( 'item' ).length;
+			if( "function" === typeof onSuccessCallback ) {
+				onSuccessCallback();
+			}
+		}, function( error ) {
+			if( "function" === typeof onErrorCallback ) {
+				onErrorCallback();
+			}
+		} );
+
+		return true;
+	}
+
+	function updateMessageWithSpecialChars( strMessage ) {
+		strMessage = strMessage.replace( /(&apos;)/g, '\'' );
+		strMessage = strMessage.replace( /(&amp;)/g, '&' );
+		strMessage = strMessage.replace( /(&lt;)/g, '<' );
+		strMessage = strMessage.replace( /(&gt;)/g, '>' );
+		strMessage = strMessage.replace( /(&quot;)/g, '"' );
+		return strMessage;
+	}
+
+	// This function will modify Entrata logout action depending on active chats
+	function checkForActiveChatsBeforeLogout() {
+
+		var objUserActions = $( "div#header div#cached-header" ).find("div#user");
+		var objLogoutOption = objUserActions.find( "ul" ).find( "li a.js-logout" ),
+			objHistoricalAccess = objUserActions.find( "ul" ).find( "li a#show_historical_properties" );
+
+		if( ( "object" === typeof objEntrataNotification.strUserChatRooms && 1 < Object.keys( objEntrataNotification.strUserChatRooms ).length )
+			|| ( "object" === typeof objLeadAlertSms.arrOngoingSmsChats && 0 < Object.keys( objLeadAlertSms.arrOngoingSmsChats ).length ) ) {
+			if( false === objLogoutOption.hasClass( 'js-active_chat' ) ) {
+				objLogoutOption.addClass( "js-active_chat" );
+			}
+			if( false === objHistoricalAccess.hasClass( 'js-active_chat' ) ) {
+				objHistoricalAccess.addClass( "js-active_chat" );
+			}
+
+		} else {
+			if( true === objLogoutOption.hasClass( 'js-active_chat' ) ) {
+				objLogoutOption.removeClass( "js-active_chat" );
+			}
+			if( true === objHistoricalAccess.hasClass( 'js-active_chat' ) ) {
+				objHistoricalAccess.removeClass( "js-active_chat" );
+			}
+		}
+
+		return true;
+	}
+
+	function bindLogoutEvent(  ) {
+		var objUserActions = $( "div#header div#cached-header" ).find("div#user");
+
+		objUserActions.find( "ul li" ).on( "click", ".js-logout", function( event ) {
+			event.preventDefault();
+		});
+	}
+
+	// Check for active chats before auto-logout in entrata
+	function transferActiveChatsBeforeAutoLogout() {
+		sessionStorage.removeItem( "chat_details" );
+		transferChat( true );
+		objEntrataChat.deleteChatNotificationEntry( [objEntrataChat.getChatRoomJid( false )], true );
+	}
+
+	function initChatFromCA() {
+		if( null !== objEntrataNotification.arrstrActiveChats && 0 < Object.keys( objEntrataNotification.arrstrActiveChats ).length ) {
+			var arrstrChatRooms = '';
+			var intApplicantId = '';
+			var objOptions = {};
+			psi.patterns.ajaxRequest( {
+				url: '/?module=entrata_live_chatxxx&action=get_applicant_details',
+				data: { 'active_chats': objEntrataNotification.arrstrActiveChats },
+				success: function( objResult ) {
+					if( true === objResult.data.success ) {
+						$.each( objResult.data.applicant_details, function( intApplicantId, arrstrApplicantDetails ) {
+							var options = { 'applicant_name': arrstrApplicantDetails.applicant_name, 'property_name': arrstrApplicantDetails.property_name, 'chat_room': arrstrApplicantDetails.chat_room };
+							modifyChatList( options, true );
+							buildConversationDetails( arrstrApplicantDetails.chat_room );
+							if( false === objEntrataNotification.strUserChatRooms.hasOwnProperty( arrstrApplicantDetails.chat_room ) ) {
+								processAcceptChat( arrstrApplicantDetails.chat_room );
+								if( 1 == Object.keys( objEntrataNotification.arrstrActiveChats ).length ) {
+									objEntrataNotification.strUserChatRooms[arrstrApplicantDetails.chat_room] = arrstrApplicantDetails.chat_room;
+									showChat( arrstrApplicantDetails.chat_room );
+								}
+							}
+
+							var objConversationElement = $( "#" + arrstrApplicantDetails.chat_room );
+							var objMessageElement = $( 'div#chatList .alertList' ).find( 'li.' + arrstrApplicantDetails.chat_room ).find( '.nAlertText' );
+							if( true === objMessageElement.hasClass( 'highlight-request' ) ) {
+								objMessageElement.removeClass( 'highlight-request' ).addClass( 'text-gray' );
+							}
+							var strMessage = $( '#' + arrstrApplicantDetails.chat_room ).find( ".chatMsg .chatBubble" ).last().text();
+							objMessageElement.text( strMessage );
+						} );
+					} else {
+						return true;
+					}
+				}
+			} );
+		}
+		return true;
+	}
+
+	function lcChatInProgress( strChatRoomId ) {
+		psi.patterns.ajaxRequest( {
+			url: '/?module=sms_chatxxx&action=leasing_center_chat_in_progress&chat_room=' + strChatRoomId,
+			success: function( objResult ) {}
+		} );
+	}
+
+	function lcEndChat( strChatRoomId ) {
+		psi.patterns.ajaxRequest( {
+			url: '/?module=sms_chatxxx&action=leasing_center_end_chat&chat_room=' + strChatRoomId,
+			success: function( objResult ) {}
+		} );
+	}
+
+	return {
+		init: init,
+		endChat: endChat,
+		sendMsg: sendMsg,
+		showChat: showChat,
+		getFullJid: getFullJid,
+		initChatPanel: initChatPanel,
+		setConnection: setConnection,
+		getChatRoomJid: getChatRoomJid,
+		initChatFromCA: initChatFromCA,
+		modifyChatList: modifyChatList,
+		loadGreetingMsg: loadGreetingMsg,
+		updateChatCount: updateChatCount,
+		modifyBellIcon: modifyBellIcon,
+		setUserChatStatus: setUserChatStatus,
+		acceptChatRequest: acceptChatRequest,
+		removeChatRequest: removeChatRequest,
+		handleConversation: handleConversation,
+		endChatFromProspect: endChatFromProspect,
+		joinOrLeaveChatRoom: joinOrLeaveChatRoom,
+		setLeasingAgentName: setLeasingAgentName,
+		setLeasingAgentFirstName: setLeasingAgentFirstName,
+		removeConversationDiv: removeConversationDiv,
+		scrollConversationPage: scrollConversationPage,
+		calculateAndShowTimeLine: calculateAndShowTimeLine,
+		buildConversationDetails: buildConversationDetails,
+		getInitialProspectMessage: getInitialProspectMessage,
+		deleteChatNotificationEntry: deleteChatNotificationEntry,
+		updateMessageWithSpecialChars: updateMessageWithSpecialChars,
+		chatRoomExists: chatRoomExists,
+		onJoinChat: onJoinChat,
+		checkForActiveChatsBeforeLogout: checkForActiveChatsBeforeLogout,
+		transferActiveChatsBeforeAutoLogout: transferActiveChatsBeforeAutoLogout
+	}
+
+}();
+
+function desktopNotification( options ) {
+	var settings = $.extend( {
+		title: __( 'Notification' ),
+		options: {
+			body: "",
+			icon: "",
+			lang: 'pt-BR',
+			onClose: "",
+			onClick: "",
+			onError: "",
+			storeObjects: false,
+			onDenied: ""
+		}
+	}, options );
+
+	if( true === settings.options.storeObjects && undefined === desktopNotification.objects ) {
+		desktopNotification.objects = {};
+	}
+
+	function init() {
+		if( false === ( "Notification" in window ) ) {
+			// "This browser does not support desktop notification"
+			return false;
+		} else if( "granted" === Notification.permission ) {
+
+			var notification = new Notification( settings.title, settings.options );
+			if( true === settings.options.storeObjects ) {
+				desktopNotification.objects[settings.options.tag] = notification;
+			}
+
+			notification.onclose = function() {
+				if( 'function' == typeof settings.options.onClose ) {
+					settings.options.onClose();
+				}
+			};
+
+			notification.onclick = function() {
+				if( 'function' == typeof settings.options.onClick ) {
+					settings.options.onClick();
+				}
+				this.close();
+			};
+
+			notification.onerror = function() {
+				if( 'function' == typeof settings.options.onError ) {
+					settings.options.onError();
+				}
+			};
+
+			notification.onshow = function() {
+				if( false === isNaN( settings.options.closeTime ) ) {
+					setTimeout( notification.close.bind( notification ), settings.options.closeTime );
+				}
+			};
+
+			return true;
+
+		} else if( 'denied' !== Notification.permission ) {
+			Notification.requestPermission( function( permission ) {
+				if( "granted" === permission ) {
+					return init();
+				} else if( "denied" === permission && 'function' == typeof settings.options.onDenied ) {
+					settings.options.onDenied();
+				}
+			} );
+		} else if( 'denied' === Notification.permission ) {
+			return false; // desktop notifications not allowed
+		}
+
+		return true;
+	}
+
+	return init();
+}

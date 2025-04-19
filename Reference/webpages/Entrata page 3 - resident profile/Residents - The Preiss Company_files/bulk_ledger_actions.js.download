@@ -1,0 +1,236 @@
+var bulkLedgerActions = (function( $ ) {
+
+	psi.patterns.bindEssentials();
+
+	function manageBulkActionsVisibility ( show ){
+		if( show ) {
+			$( '#bulk_ledger_actions_wrapper' ).show();
+			return;
+		}
+		$( '#bulk_ledger_actions_wrapper' ).hide();
+	}
+
+	function confirmBulkReversal() {
+		var arrArTransactionsIds = [];
+
+		$( '.bulk-action-transaction:checked' ).each( function () {
+
+			// If the checked input value has ',' character in it, means it is a summarized row which holds child transactions
+			if( $( this ).val().includes( ',' ) ) {
+				arrArTransactionsIds = arrArTransactionsIds.concat( $( this ).val().split( ',' ) );
+			} else {
+				arrArTransactionsIds.push( $( this ).val() );
+			}
+		});
+
+		arrArTransactionsIds = getUniqueTransactionsIds( arrArTransactionsIds );
+		psi.patterns.loadDialog({
+			width: 650,
+			height: 460,
+			data: {
+				'ar_transaction_ids': arrArTransactionsIds
+			},
+			title: __( 'Bulk Reversal' ),
+			strContentId: 'confirm_bulk_action',
+			strUrl: ledger.arrstrExitTags['confirm_bulk_reversal'] + '&ledger_filter_id=' + getLedgerFilterId(),
+		});
+	}
+
+	function selectAllTransactions() {
+
+		// If select all checkbox is checked on then select all the transactions
+		if( $( '#select_all_transactions' ).is(':checked') ) {
+			$( '.parent_transaction' ).removeProp( 'indeterminate' );
+			$( '.bulk-action-transaction' ).prop('checked', 'checked');
+
+			// If 0 transactions are selected then hide the bulk action button
+			if( 0 < $( '.bulk-action-transaction:checked' ).length ) {
+				manageBulkActionsVisibility( true );
+			}
+		} else {
+			$( '.bulk-action-transaction' ).removeProp('checked');
+			manageBulkActionsVisibility( false );
+		}
+	}
+
+	function onTransactionSelected( transactionId, strActionOnParentTransaction, parentTransactionId ) {
+
+		var strInputIdPrefix = 'transaction_';
+		var inputSelectAllTransactions = $( '#select_all_transactions' );
+		var inputParentTransaction = $( '#summarized_transaction_' + parentTransactionId );
+
+		var actionOnParentTransaction = 'true' === strActionOnParentTransaction ? true : false;
+		if( actionOnParentTransaction ) {
+			strInputIdPrefix = 'summarized_transaction_';
+		}
+
+		if( $( '#' + strInputIdPrefix + transactionId ).is(':checked' ) ) {
+			manageBulkActionsVisibility( true );
+
+			// If a parent row is selected the select all it's child transactions
+			if( actionOnParentTransaction ) {
+				$( '.parent_transaction_' + transactionId ).prop( 'checked', 'checked' );
+			}
+
+			// If all the child transaction of specific parent are selected then select it's parent transaction
+			if( parentTransactionId && $( '.parent_transaction_' + parentTransactionId + ':checked' ).length === $( '.parent_transaction_' + parentTransactionId ).length ) {
+				inputParentTransaction.removeProp( 'indeterminate');
+				inputParentTransaction.prop( 'checked', 'checked' );
+			} else {
+				inputParentTransaction.prop( 'indeterminate', true );
+			}
+
+			// If all the transactions on ledger are selected then select the select-all checkbox
+			if( getBulkActionTransactionsCount() === getSelectedTransactionsCount() ) {
+				inputSelectAllTransactions.removeProp( 'indeterminate');
+				inputSelectAllTransactions.prop( 'checked', 'checked' );
+			} else {
+				inputSelectAllTransactions.prop( 'indeterminate', true );
+			}
+			return;
+		}
+
+		// If select-all checbox is selected then uncheck it
+		if( inputSelectAllTransactions.is(':checked') ) {
+			inputSelectAllTransactions.removeProp('checked');
+		}
+
+		// If a child transaction is unchecked then uncheck it's parent transaction
+		if( parentTransactionId ) {
+			inputParentTransaction.prop( 'indeterminate', true );
+			if( inputParentTransaction.is(':checked') ) {
+				inputParentTransaction.removeProp('checked');
+			}
+
+			if( 0 === $( '.parent_transaction_' + parentTransactionId + ':checked' ).length ) {
+				inputParentTransaction.removeProp( 'indeterminate');
+			}
+		}
+
+		// If a parent transaction is unchecked then uncheck all it's child transactions
+		if( actionOnParentTransaction ) {
+			$( '.parent_transaction_' + transactionId ).removeProp('checked');
+		}
+
+		// If 0 transactions are selected on ledger then hide bulk actions button
+		if( 0 === getSelectedTransactionsCount() ) {
+			manageBulkActionsVisibility( false );
+			inputSelectAllTransactions.removeProp( 'indeterminate');
+		} else {
+			inputSelectAllTransactions.prop( 'indeterminate', true );
+		}
+	}
+
+	function bulkReverseTransactions( strRequestEndpoint ) {
+		if( !checkPostMonth() || !checkMemo() ) {
+			return;
+		}
+
+		psi.patterns.ajaxRequest({
+			url: strRequestEndpoint,
+			data: $('#transactions_bulk_reversal').serialize(),
+			strElementSelector: '#confirm_tranactions_bulk_reversal_div',
+			success: function( response ) {
+
+				if( 'success' === response.status ) {
+					bulkLedgerActions.closeDialogAndRefreshLedger();
+				} else {
+					displayError( response.messages );
+				}
+
+				psi.patterns.removeLoadingImage({
+					strElementSelector: '#confirm_tranactions_bulk_reversal_div'
+				});
+			}
+		});
+	}
+
+	function closeConfirmationDialog() {
+		$( "#confirm_bulk_action" ).dialog( "close" );
+		return false;
+	}
+
+	function closeDialogAndRefreshLedger() {
+		closeConfirmationDialog();
+		manageBulkActionsVisibility( false );
+
+		var intLedgerFilterId = $( '#customer_system_container' ).find( '.js-tab-property-ledgers.selected' ).find( '.property_ledger_filter_id' ).val();
+		var refreshUrl        = ledger.arrstrExitTags.view_ledger_container + '&load_financial_system=1&ar_transactions_filter[ledger_filter_id]=' + intLedgerFilterId;
+
+		psi.patterns.ajaxRequest( {
+			strElementSelector: '#customer_system_container',
+			url: refreshUrl,
+		} );
+	}
+
+	function getUniqueTransactionsIds( arrTransactions ) {
+		var tempObjTransactionIds = {};
+		var uniqueTransactionsIds = [];
+
+		for( var arrTransactionId of arrTransactions ) {
+			tempObjTransactionIds[arrTransactionId] = true;
+		}
+
+		for( var strKey in tempObjTransactionIds ) {
+			uniqueTransactionsIds.push(strKey);
+		}
+		return uniqueTransactionsIds;
+	}
+
+	function getSelectedTransactionsCount() {
+		return $(".bulk-action-transaction:checked").length;
+	}
+
+	function getBulkActionTransactionsCount() {
+		return $( '.bulk-action-transaction' ).length;
+	}
+
+	function getLedgerFilterId() {
+		return $( '#customer_system_container' ).find( '.js-tab-property-ledgers.selected' ).find( '.property_ledger_filter_id' ).val();
+	}
+
+	function checkMemo() {
+
+		var strMemo = $('#reversal_memo').val();
+		var strRegspace = /([^\s]+)/;
+
+		if( '' === strMemo || false === strRegspace.test( strMemo ) ) {
+			displayError( __( 'Memo is required.' ) );
+			return false;
+		}
+		return true;
+	}
+
+	function checkPostMonth() {
+
+		if( 'custom_post_month' === $('#reversal_post_month').val() && !validatePostMonth( $('#custom_post_month').val() ) ) {
+			displayError( __( 'Enter Post Month in mm/yyyy format' ) );
+			return false;
+		}
+		return true;
+	}
+
+	function validatePostMonth( input ){
+		input = input.trim();
+		const inputArray = input.split('/');
+		if( 2 !== inputArray.length ) return false;
+		if( 12 < inputArray[0] || 0 >= inputArray[0] ) return false;
+		if( 2 !== inputArray[0].length ) return false;
+		if( 4 !== inputArray[1].length ) return false;
+		return true;
+	}
+
+	function displayError( strErrorMessage ){
+		$('#errors').html('<p class="alert error slim"><i></i>' + strErrorMessage + '</p>');
+	}
+
+	return {
+		confirmBulkReversal: confirmBulkReversal,
+		onTransactionSelected: onTransactionSelected,
+		selectAllTransactions: selectAllTransactions,
+		closeConfirmationDialog: closeConfirmationDialog,
+		bulkReverseTransactions: bulkReverseTransactions,
+		closeDialogAndRefreshLedger: closeDialogAndRefreshLedger,
+		manageBulkActionsVisibility: manageBulkActionsVisibility,
+	};
+})( jQuery );

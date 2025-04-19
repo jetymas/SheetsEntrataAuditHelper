@@ -1,0 +1,1247 @@
+/**
+ * Created by jpatil on 11/1/2017.
+ */
+
+var objLeadAlertSms = function() {
+
+	var intMaxVisibleNotifications = 5;
+	var strMessageFromProspect = '';
+	var strApplicantName = '';
+	var strLeasingAgentName = '';
+	var connection = '';
+	var intAutoHidePopupAfter = 300;
+	var arrintIntervalIds = new Array();
+	const MESSAGE_AGGREGATOR_WHATSAPP = 3;
+	const MESSAGE_AGGREGATOR_SMS = 2;
+	const MESSAGE_AGGREGATOR_WECHAT = 4;
+	const MICROSECONDS_24_HOURS = 86400000; // 86400000 = 24 hours.
+	var whatsapp_template_message = '';
+
+	function initSmsChat() {
+		objLeadAlertSms.arrOngoingSmsChats = {};
+	}
+
+	function setConnection( objConnection ) {
+		connection = objConnection;
+	}
+
+	// Bind functions on dynamically created chat list items
+	$( ".conversation" ).on( "keypress", '.enterSmsMessage', function (e) {
+
+		var strMessage = $( this ).val().trim();
+
+		// What should be the SMS message max length
+		if( 1000 < strMessage.length ) {
+			return false;
+		}
+
+		var key = e.which;
+		var strChatRoomJid = $( this ).data( 'chat-room-jid' );
+
+		if( 13 === key ) {
+			if( '' === strMessage ) {
+				return false;
+			}
+			e.preventDefault();
+			sendSms( strMessage, strChatRoomJid );
+			var options = {
+				strMessage: strMessage,
+				strChatRoomJid: strChatRoomJid,
+				strClass: 'entrata',
+				strMessageId: getMessageId(),
+				intTime: getCurrentUtcTime(),
+				intMessageAggregatorId: '',
+				isUpdatedTimer: false
+			};
+			postMessageInConversationDiv( options );
+			$( this ).val( '' );
+		}
+		return true;
+	} ).on( "click", ".js-load-messages", function( e ) {
+		var strChatRoomJid = $( this ).parent().parent().find( ".joinBtn" ).data( "chat-room-jid" );
+		var intApplicationId = $( "#" + strChatRoomJid ).find( '.guestcard' ).data( "application-id" );
+		loadPreviousMessages( this, strChatRoomJid, intApplicationId );
+		return true;
+	} );
+
+	$( ".conversation" ).on( "click", '.js-chat-invitation-btn', function (e) {
+		e.preventDefault();
+		var strChatRoomJid = $( this ).data( 'chat-room-jid' );
+		var strPropertyName = $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).data( 'property-name' );
+		var strMessage = objLeadAlertSms.whatsapp_template_message;
+
+		var objChatRoomJid = $( '#' + strChatRoomJid );
+		objChatRoomJid.find( '#chat_session_timer' ).html( __( 'This WhatsApp chat has expired.' ) );
+		objChatRoomJid.find( '#send_chat_invitation' ).parent().remove();
+
+		sendSms( strMessage, strChatRoomJid, true );
+
+		var options = {
+			strMessage: strMessage,
+			strChatRoomJid: strChatRoomJid,
+			strClass: 'entrata',
+			strMessageId: getMessageId(),
+			intTime: getCurrentUtcTime(),
+			intMessageAggregatorId: MESSAGE_AGGREGATOR_WHATSAPP,
+			isUpdatedTimer: false
+		};
+
+		clearInterval( arrintIntervalIds[strChatRoomJid] );
+
+		arrintIntervalIds[strChatRoomJid] = setInterval(function() {
+			var intCurrentTime = new Date().getTime();
+			var intRemainingTime = intCountDownTime - intCurrentTime;
+
+			if( 0 >= intRemainingTime ) {
+				var strInvitationText = __( 'Send Chat Invitation' );
+				var strChatInvitationButton = '<div class="align-center"><div class="button action js-chat-invitation-btn" data-chat-room-jid="' + strChatRoomJid + '" id="send_chat_invitation"><svg viewBox="0 0 32 32" class="entrata-svg-icon fill-green default"><use xlink:href="/Common/assets/components/patterns/svg/line_sprite.svg#whatsapp-icon"></use></svg> ' + strInvitationText + '</div></div>';
+
+				objChatRoomJid.find( '#chat_session_timer' ).html( __( 'This WhatsApp chat has expired. <br> You can invite this person to start chatting again by clicking the button below.' ) );
+				$( strChatInvitationButton ).insertBefore( objChatRoomJid.find( '.enterSmsMessage' ) );
+			}
+
+		}, 1000 );
+
+		postMessageInConversationDiv( options );
+	})
+
+	function sendSms( strMessage, strChatRoomJid, isWhatsAppTemplateMessage ) {
+		if( 'undefined' == typeof isWhatsAppTemplateMessage ) {
+			isWhatsAppTemplateMessage = false;
+		}
+		//var intApplicantId = $( "#" + strChatRoomJid ).find( ".enterSmsMessage" ).data( "applicant-id" );
+		var intApplicantId = $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).data( "applicant-id" );
+		var intCustomerId = $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).data( "customer-id" );
+		var intUniqueId = $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).data( "unique-id" );
+		var intMessageAggregatorId = $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).data( "message-aggregator-id" );
+
+		var objData = {applicant_id: intApplicantId, chat_room: strChatRoomJid, chat_message: strMessage, unique_id: intUniqueId, customer_id: intCustomerId, message_aggregator_id: intMessageAggregatorId, is_whatsapp_template_message: isWhatsAppTemplateMessage};
+
+		if( 'smsc' == strChatRoomJid.split( '_' )[0] ) {
+			var intcampaignTargetId = strChatRoomJid.split( '_' )[3];
+			objData = {campaign_target_id: intcampaignTargetId, chat_room: strChatRoomJid, chat_message: strMessage, unique_id: intUniqueId, message_aggregator_id: intMessageAggregatorId, is_whatsapp_template_message: isWhatsAppTemplateMessage}
+		}
+
+		psi.patterns.ajaxRequest( {
+			url: '/?module=sms_chatxxx&action=send_chat_sms',
+			data: objData
+		} );
+
+		return true;
+	}
+
+	function handleSmsChatNotification( objMsg ) {
+		var objDescription = objMsg.message.description;
+		var intNotificationId = objMsg.id;
+		var strChatRoomJid = objDescription.chat_room;
+		strApplicantName = objDescription.applicant_name;
+		strMessageFromProspect = objDescription.message;
+		var boolIsExistingDiv = ( 0 < $( "#" + strChatRoomJid ).length ) ? true : false;
+		var joinBtnElement = $( "#" + strChatRoomJid ).find( ".joinBtn" );
+		var boolIsChatStarted = ( joinBtnElement.css('display') == 'none' ) ? true : false;
+		var boolIsChatInitiatedByAgent = objDescription.is_initiated_by_agent;
+		var intTime = getCurrentUtcTime();
+		var strMessageId = getMessageId();
+		var intMessageAggregatorId = objDescription.message_aggregator_id;
+
+		if( null === intTime ) {
+			intTime = getCurrentUtcTime();
+		}
+
+		if( true === boolIsChatInitiatedByAgent ) {
+			sessionStorage.removeItem( "chat_details" );
+			sessionStorage.setItem( 'chat_details', strChatRoomJid + '::' + strApplicantName );
+		}
+
+		// This is to handle if chat is initiated again after STOP request is processed and agetn's window is not refreshed
+		if( true === boolIsExistingDiv && 0 == $( "#" + strChatRoomJid ).find( ".endConversation" ).length && 0 == $( "#" + strChatRoomJid ).find( ".enterSmsMessage" ).length ) {
+			boolIsExistingDiv = false;
+			modifyChatList( null, false, strChatRoomJid );
+			removeSmsConversationDiv( strChatRoomJid );
+		}
+
+		// if conversation already exists
+		if( true === boolIsExistingDiv ) {
+			var strClass = 'user';
+			if( true === objDescription.is_reply_message ) {
+				strClass = 'entrata';
+			}
+
+			var postMessageOptions = {
+				strMessage: strMessageFromProspect,
+				strChatRoomJid: strChatRoomJid,
+				strClass: strClass,
+				intNotificationId: intNotificationId,
+				isReplyMessage: objDescription.is_reply_message,
+				intTime: intTime,
+				strMessageId: strMessageId,
+				isPotentialLeadConvertedToGuestCard: objDescription.potential_lead_converted_into_guest_card,
+				intApplicationId: objDescription.application_id,
+				intCustomerId: objDescription.customer_id,
+				intLeaseId: objDescription.lease_id,
+				intMessageAggregatorId: intMessageAggregatorId,
+				isUpdatedTimer: true,
+				strPropertyName: objDescription.property_name
+			};
+			postMessageInConversationDiv( postMessageOptions );
+			updateSmsNotification( intNotificationId );
+			// if any new message comes before the chat request is accepted we should not display it
+			if( false === boolIsChatStarted ) {
+				return true;
+			}
+		} else {
+			modifyChatList( objDescription, true );
+			boolIsExistingDiv = boolIsChatInitiatedByAgent;
+			buildSmsConversationDetails( objDescription, intNotificationId, boolIsExistingDiv );
+		}
+
+		var strCallback = function() {
+			parent.focus();
+			window.focus();
+			objEntrataChat.showChat( strChatRoomJid );
+		};
+
+		var intChatRequestMaxTime = 180; // 3 mins
+		var intCloseTime = 1000 * intChatRequestMaxTime;
+		var strNotificationBody = __( 'Unclaimed Text' );
+
+		if( true === boolIsChatStarted ) {
+			strNotificationBody = objEntrataChat.updateMessageWithSpecialChars( strMessageFromProspect );
+		} else if( true === objDescription.is_transferred_sms ) {
+			strNotificationBody = __( 'Text Conversation - Transferred' );
+		}
+
+		// do not show desktop notification/notification popup
+		if( false === objEntrataNotification.checkUserIsOnline() || true === objDescription.is_reply_message || true === boolIsChatInitiatedByAgent ) {
+			return true;
+		}
+
+		var options = {
+			title: objDescription.applicant_name,
+			options: {
+				body: strNotificationBody,
+				icon: objEntrataNotification.strIconUrl,
+				lang: 'en-US',
+				tag: strChatRoomJid,
+				closeTime: intCloseTime,
+				requireInteraction: true,
+				onClick: strCallback,
+				storeObjects: true,
+				onDenied: function() {
+					displayNotification( objDescription );
+				}
+			}
+		};
+
+		if( false === desktopNotification( options ) ) {
+			// build popup
+			displayNotification( objDescription );
+		}
+
+	}
+
+	function displayNotification( objDescription ) {
+
+		if( true === $( "#" + objDescription.chat_room ).is(":visible") ) {
+			return true;
+		} else if( 0 < $( "#chat_popup_" + objDescription.chat_room ).length ) {
+			$( "#chat_popup_" + objDescription.chat_room ).find( ".nAlertText" ).text( objDescription.message );
+			return true;
+		}
+
+		var intAutoHideAfter = ( 'undefined' != typeof objDescription.message ) ? parseInt( objDescription.message.auto_hide_after ) : '';
+		var strContainer = buildChatPopup( objDescription );
+
+		$( strContainer )
+			.appendTo( '.js-notifications .nAlertWrapper' )
+			.delay( 2000 )
+			.animate( { right: "+=360" }, 400, function() {
+				// auto remove notification
+				var objNotification = $( this );
+				if( intMaxVisibleNotifications > objNotification.index() && true === $.isNumeric( intAutoHideAfter ) ) {
+					setTimeout( function() {
+						removeNotification( objNotification );
+					}, intAutoHideAfter * 1000 );
+				}
+			} );
+
+		return true;
+	}
+
+	// if chat list items are hidden in case of offline messages
+	function showHiddenChatListItems() {
+		$.each( $( ".chatWrapper #chatList .alertList" ).find( "li" ), function( intIndex, objListItem ) {
+			if( $(objListItem).hasClass("hide") ) {
+				$(objListItem).removeClass("hide");
+			}
+		} );
+
+		// modify chat count
+		objEntrataChat.updateChatCount();
+	}
+
+	function buildChatPopup( objDescription ) {
+		var strHideClass = ( true === $( "#myStatus" ).hasClass( "on" ) ) ? '' : 'hide ';
+		if( false === $( "#myStatus" ).hasClass( "on" ) ) {
+			return true;
+		}
+
+		var joinBtnElement = $( "#" + objDescription.chat_room ).find( ".joinBtn" );
+		var boolIsChatStarted = ( joinBtnElement.css('display') == 'none' ) ? true : false;
+
+		var strDisplayMessage = __( 'Unclaimed Text' );
+		var strTextColorClass = 'highlight-request';
+
+		if( true === boolIsChatStarted ) {
+			strDisplayMessage = objDescription.message;
+			strTextColorClass = 'text-gray';
+		} else if( true === objDescription.is_transferred_sms ) {
+			strDisplayMessage = __( 'Text Conversation - Transferred' );
+			strTextColorClass = 'text-gray';
+		}
+
+		var strContainer	= '<div id="chat_popup_' + objDescription.chat_room + '" class="nAlert chat ' + objDescription.chat_room + ' ' + strHideClass + '" data-auto_hide_after="' + intAutoHidePopupAfter + '" data-chat-room-jid="' + objDescription.chat_room + '" data-applicant-id="' + objDescription.applicant_id + '" data-sms-chat="1" data-unique-id="' + objDescription.unique_id + '" > \
+										<div class="left text cMessage"> \
+										<span class="bold">' + objDescription.applicant_name + '</span><br> \
+										<span class="nAlertText ' + strTextColorClass + '" >' + strDisplayMessage + '</span> \
+									</div> \
+									<div class="snoozeWrapper right"> \
+										<p class="link ignore option1">' + __('Ignore') + '</p> \
+									</div> \
+								</div>';
+
+		return strContainer;
+	}
+
+	function removeNotification( obj, boolIsSnooze ) {
+
+		obj.animate( { opacity: '0' }, 600, function() {
+			obj.animate( { height: '0px' }, 300, function() {
+				// Load next hidden Notification message and bind auto close event, if not already bind
+				var objNextNotification = $( '.nAlertWrapper .nAlert:nth-child( ' + ( intMaxVisibleNotifications + 1 ) + ' ):not(.notification_close_binded)' );
+				var intAutoHideAfter = parseInt( objNextNotification.data( 'auto_hide_after' ) );
+				if( -1 != objNextNotification.index() && true === $.isNumeric( intAutoHideAfter ) ) {
+					objNextNotification.addClass( 'notification_close_binded' );
+					setTimeout( function() {
+						removeNotification( objNextNotification );
+					}, intDuration );
+				}
+				obj.remove();
+			} );
+		} );
+	}
+
+	function showSmsChat( strRoomJid ) {
+
+		var strApplicantName = $( "#chatList .alertList").find( "li." + strRoomJid ).data('applicant_name');
+		var intCustomerId = $( "#chatList .alertList").find( "li." + strRoomJid ).data('customer-id');
+
+		var objConversationElement = $( '#' + strRoomJid );
+
+		$( ".ignore" ).click();
+		var objApplicantNameElement = objConversationElement.find( "div.js-chat-header" ).find( "div.js-applicant-name" );
+		$( objApplicantNameElement ).text( strApplicantName );
+		var strTitleText = __( 'Lead' );
+		if( "undefined" !== typeof intCustomerId && '' !== intCustomerId && null !== intCustomerId ) {
+			var strUnitNumber = "" != $( "#chatList .alertList").find( "li." + strRoomJid ).data('unit-number') ? " - " + $( "#chatList .alertList").find( "li." + strRoomJid ).data('unit-number') : "";
+			var strBuildingName = "" != $( "#chatList .alertList").find( "li." + strRoomJid ).data('building-name') ? " - " + $( "#chatList .alertList").find( "li." + strRoomJid ).data('building-name') : "";
+			strTitleText = __( 'Resident {%s, 0} {%s, 1}', [ strBuildingName, strUnitNumber ] );
+		}
+		if( 0 == $( objConversationElement ).find( "div.js-chat-header" ).find( ".js-user-title" ).length ) {
+			$( "<span class='font10 js-user-title' style='display: block;margin-top: 4px;'>" + strTitleText + "</span>" ).insertAfter( objApplicantNameElement );
+		}
+		objConversationElement.siblings().addClass( "hide" );
+		objConversationElement.removeClass( "hide" );
+
+		if( $( ".notification-bell" ).hasClass( "js-show" ) ) {
+			$( ".panel" ).animate( {
+				right: "+=360"
+			}, 300, function() {
+			} );
+			$( '.notification-bell' ).removeClass( "js-show" );
+			objEntrataNotification.loadNotifications( true );
+		}
+
+		objEntrataNotification.selectNotificationTab( "chat" );
+		$( '#chatList' ).hide();
+		$( '.conversation' ).fadeIn();
+
+		objEntrataChat.scrollConversationPage( strRoomJid );
+
+		sessionStorage.setItem( 'chat_details', strRoomJid + '::' + strApplicantName );
+	}
+
+	function joinSmsChat( strChatRoom ) {
+		var intUniqueId = $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoom ).data( "unique-id" );
+
+		// To remove notification form other agents' screens
+		var arrstrExplodedChatRoomName = strChatRoom.split( '_' );
+		sendMsg( objEntrataChat.getFullJid( "entrata_" + arrstrExplodedChatRoomName[1] ), JSON.stringify( {
+			chat_room_jid: strChatRoom,
+			action: 'remove_sms',
+			unique_id: intUniqueId
+		} ), 'groupchat' );
+
+		// To join same chat in other windows/tabs of current user
+		sendMsg( connection.authzid, JSON.stringify( {
+			chat_room_jid: strChatRoom,
+			unique_id: intUniqueId
+		} ), 'join_sms' );
+
+		// Update notification entry set read_on flag and delete notification entry for other agents
+		deleteAndUpdateNotificationEntry( strChatRoom );
+	}
+
+	function deleteAndUpdateNotificationEntry( strChatRoom ) {
+		var objElement = $( "#" + strChatRoom );
+		var intNotificationId = objElement.find( ".joinBtn" ).data( "notification-id" );
+		objEntrataChat.deleteChatNotificationEntry( [strChatRoom], false );
+
+		psi.patterns.ajaxRequest( {
+			url: '/?module=entrata_notificationxxx&action=update_notification&company_user_notification[id]=' + intNotificationId
+		} );
+	}
+
+	function postMessageInConversationDiv( options ) {
+		var strMessage = options.strMessage,
+			strChatRoomJid = options.strChatRoomJid,
+			strClass = options.strClass,
+			intNotificationId = options.intNotificationId,
+			boolIsReplyMessage = options.isReplyMessage,
+			boolIsStopMessage = options.isStopMessage,
+			intTime = options.intTime,
+			strMessageId = options.strMessageId,
+			intMessageAggregatorId = options.intMessageAggregatorId,
+			isUpdatedTimer = options.isUpdatedTimer,
+			strPropertyName = options.strPropertyName;
+
+		if( '' == strMessage ) {
+			return true;
+		}
+
+		if( 'user' == strClass && MESSAGE_AGGREGATOR_WHATSAPP == intMessageAggregatorId ) {
+			$( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).attr( "data-message-aggregator-id", intMessageAggregatorId );
+		}
+
+		if( '' !== strPropertyName ) {
+			$( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).attr( "data-property-name", strPropertyName );
+		}
+
+		if( 0 == $( ".chatBubble" ).length ) {
+			$( "#" + strChatRoomJid ).find(".js-load-previous-messages").parent("div").addClass("hide");
+		}
+
+		// if any new message comes before the chat request is accepted we should not display it
+		var joinBtnElement = $( "#" + strChatRoomJid ).find( ".joinBtn" );
+		if( joinBtnElement.css( 'display' ) != 'none' ) {
+			return true;
+		}
+
+		var strSender = '';
+		var strReport = '';
+		var strChatBubble = '';
+		var strSmsIcon = '<i class="comset-sms"></i>';
+		var objConversationElement = $( "#js-conversation" );
+		var objListItem = $( 'div#chatList .alertList' ).find( 'li.' + strChatRoomJid );
+
+		if( true == isUpdatedTimer && MESSAGE_AGGREGATOR_WHATSAPP == intMessageAggregatorId ) {
+			var ChatAggregator = loadAggregator({
+				strChatRoomJid: strChatRoomJid,
+				intMessageAggregatorId: intMessageAggregatorId,
+				intTime:intTime,
+				isTemplateMessage: false,
+				isChatSessionTimeout: false,
+			});
+			ChatAggregator.handleChatMessage();
+		}
+
+		if( true == options.isPotentialLeadConvertedToGuestCard ) {
+			$( "#" + strChatRoomJid ).find( ".js-end-btn" ).remove();
+			$( '#' + strChatRoomJid ).find( '.enterSmsMessage' ).remove();
+			var chatRoomName = strChatRoomJid.split( '_' );
+			strChatBubble = '<div class="chat_status"><div class="body align-center">' + strMessage + '</div></div>';
+			$( strChatBubble ).insertBefore( objConversationElement.find( '#' + strChatRoomJid ).find( ".chatMsg" ).find( ".endConversation" ) );
+			$( objListItem ).find( '.nAlertText' ).text( strMessage );
+
+			if( undefined != options.intApplicationId ) {
+				$( '#' + strChatRoomJid ).find('.js-guestcard').removeAttr('data-campaigntarget-id').attr( 'data-application-id', options.intApplicationId );
+			}
+			if( undefined != options.intCustomerId && undefined != options.intLeaseId ) {
+				$( '#' + strChatRoomJid ).find('.js-guestcard').removeAttr('data-campaigntarget-id').attr( 'data-customer-id', options.intCustomerId );
+				$( '#' + strChatRoomJid ).find('.js-guestcard').attr( 'data-lease-id', options.intLeaseId );
+			}
+
+			if( undefined == options.intCustomerId && undefined == options.intApplicationId ) {
+				$( '#' + strChatRoomJid ).find('.js-guestcard').remove();
+			}
+			updateSmsNotification( intNotificationId, strChatRoomJid, false, true );
+			return true;
+		}
+
+		if( 'entrata' == strClass ) {
+			strSmsIcon = '';
+			strSender = strApplicantName;
+		}
+		strChatBubble = '<div class="chatBubble ' + strClass + '" style="display : block;" id="' + strMessageId + '">' + strSmsIcon + '<div class="body">' + strMessage + '</div>' + strReport + '</div>';
+		$( strChatBubble ).insertBefore( objConversationElement.find( '#' + strChatRoomJid ).find( ".chatMsg" ).find( ".endConversation" ) );
+		$( objListItem ).find( '.nAlertText' ).text( strMessage );
+
+		if( true === boolIsStopMessage ) {
+			buildOptOutMessage( strChatRoomJid, objConversationElement, objListItem, $('.js-applicant-name').text() );
+		}
+
+		if( true === boolIsReplyMessage ) {
+			buildOptOutMessage( strChatRoomJid, objConversationElement, objListItem, strApplicantName );
+			updateSmsNotification( intNotificationId, strChatRoomJid, false, true );
+			updateSmsNotification( $( "#" + strChatRoomJid ).find( ".joinBtn" ).data( "notification-id" ), strChatRoomJid, false );
+		}
+
+		addMessageTime( strMessageId, intTime );
+
+		if( false === $( "#" + strChatRoomJid ).is( ":visible" ) && true === $( objListItem ).hasClass( "read" ) ) {
+			$( objListItem ).removeClass( "read" ).addClass( "unread" );
+		} else if( 'entrata' == strClass ) {
+			$( objListItem ).removeClass("unread").addClass("read");
+		}
+
+		objEntrataChat.scrollConversationPage( strChatRoomJid );
+		objEntrataChat.updateChatCount();
+	}
+
+	function buildOptOutMessage( strChatRoomJid, objConversationElement, objListItem, strApplicantName ){
+		var strMessage = __('{%s, 0} has opted-out of text message chats.', [ strApplicantName ] );
+		var strChatBubble = '<div class="chat_status"><div class="body align-center">' + strMessage + '</div></div>';
+		$( strChatBubble ).insertBefore( objConversationElement.find( '#' + strChatRoomJid ).find( ".chatMsg" ).find( ".endConversation" ) );
+		$( objListItem ).find( '.nAlertText' ).text( strMessage );
+	}
+
+	function modifyChatList( objDescription, boolInsertIntoList, strChatRoomJid ) {
+
+		var objChatList = $( ".chatWrapper #chatList .alertList" );
+
+		if( true === boolInsertIntoList ) {
+
+			var strDisplayMessage = __( 'Unclaimed Text' );
+			var strTextColorClass = 'highlight-request';
+			if( true == objDescription.is_transferred_sms ) {
+				strDisplayMessage = __( 'Text Conversation - Transferred' );
+				strTextColorClass = 'text-gray';
+			}
+
+			var strTitleText = __( 'Lead' );
+			if( "undefined" !== typeof objDescription.customer_id && '' !== objDescription.customer_id && null !== objDescription.customer_id ) {
+				var strUnitNumber = "" != objDescription.unit_number ? " - " + objDescription.unit_number : "";
+				var strBuildingName = "" != objDescription.building_name ? " - " + objDescription.building_name : "";
+				strTitleText = __( 'Resident {%s, 0} {%s, 1}', [ strBuildingName, strUnitNumber ] );
+			}
+
+			var strHideClass = ( true === $( "#myStatus" ).hasClass( "on" ) ) ? '' : 'hide ';
+			var strChatHtml =  '<li class="js-notification chat unread ' + strHideClass + objDescription.chat_room + '" data-sms-chat="1" data-applicant_name="' + objDescription.applicant_name + '" ' +
+				'data-chat-room-jid="' + objDescription.chat_room + '" data-property-name="' + objDescription.property_name + '" data-unique-id="' + objDescription.unique_id + '" ' +
+				'data-applicant-id="' + objDescription.applicant_id + '" data-customer-id="' + objDescription.customer_id + '" data-unit-number="' + objDescription.unit_number + '" data-building-name="' + objDescription.building_name + '" data-lease-id="' + objDescription.lease_id + '" >' +
+				'<span class="bold"> ' + objDescription.applicant_name + ' </span><br>' +
+				'<span class="font10 text-gray js-user-title" style="display:block;">' + strTitleText + '</span><span class="nAlertText ' + strTextColorClass + '">' + strDisplayMessage + '</span><span class="date">' + __('Now') + '</span></li>';
+
+			objChatList.prepend( strChatHtml );
+		} else {
+			objChatList.find( "." + strChatRoomJid ).remove();
+			$( '.chatWrapper' ).fadeIn();
+			$( '.conversation' ).hide();
+			$( '#chatList' ).fadeIn();
+		}
+
+		// modify chat count
+		objEntrataChat.updateChatCount();
+	}
+
+	function buildSmsConversationDetails( objDescription, intNotificationId, boolIsExistingConversation ) {
+		var strChatRoom = objDescription.chat_room;
+		var intApplicationId = objDescription.application_id;
+		if( 'smsc' === strChatRoom.split('_')[0] ) {
+			var intCampaignTargetId = strChatRoom.split( '_' )[3];
+		} else {
+			var intApplicationId =  strChatRoom.split( '_' )[3];
+		}
+		var objConversationElement = $( '#conversation_prototype' ).clone();
+		$( objConversationElement ).attr( { id: strChatRoom } );
+		$( objConversationElement ).addClass( "js-chat_box" );
+
+		$( objConversationElement ).find( ".joinBtn" ).attr( "data-chat-room-jid", strChatRoom );
+		$( objConversationElement ).find( ".joinBtn" ).attr( "data-notification-id", intNotificationId );
+		if( undefined != intCampaignTargetId ) {
+			$( objConversationElement ).find( ".js-guestcard" ).attr( "data-campaigntarget-id", intCampaignTargetId );
+		} else {
+			$( objConversationElement ).find( ".js-guestcard" ).attr( "data-application-id", intApplicationId );
+		}
+		$( objConversationElement ).find( ".js-guestcard" ).attr( "data-customer-id", objDescription.customer_id );
+		$( objConversationElement ).find( ".js-guestcard" ).attr( "data-lease-id", objDescription.lease_id );
+		$( objConversationElement ).find( ".endConversation" ).attr( "data-chat-room-jid", strChatRoom );
+
+		if( true === boolIsExistingConversation ) {
+			objLeadAlertSms.arrOngoingSmsChats[strChatRoom] = strChatRoom;
+			//var intApplicantId = $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoom ).data( "applicant-id" );
+			$( objConversationElement ).find( '.enterMessage' ).removeClass( 'enterMessage' ).addClass( 'enterSmsMessage' ).attr( 'data-chat-room-jid', strChatRoom );//.attr( 'data-applicant-id', intApplicantId );
+			$( objConversationElement ).find( '.joinBtn' ).hide();
+			$( objConversationElement ).find( '.js-chat-input' ).removeClass( "hide" );
+			$( objConversationElement ).find( ".endConversation" ).removeClass( "hide" );
+			$( objConversationElement ).find( ".joinBtn" ).after( '<div class="align-center pad20"><a class="js-load-messages">' + __('Load Previous Messages') + '</a></div>' );
+
+			// This will load all previous messages from prospect if existing conversation
+			setTimeout( function() {
+				var objLoadMessageElement = $( objConversationElement ).find( ".js-load-messages" );
+				loadPreviousMessages( objLoadMessageElement, strChatRoom, intApplicationId );
+				if( null !== sessionStorage.getItem( 'chat_details' ) ) {
+					var strChatRoomJid = sessionStorage.getItem( 'chat_details' ).split( '::' )[0];
+					if( strChatRoom == strChatRoomJid ) {
+						showSmsChat( strChatRoomJid );
+					}
+				}
+			}, 500 );
+		}
+
+		$( objConversationElement ).appendTo( '#js-conversation' );
+
+		return false;
+	}
+
+	function removeSmsChatRequest( objMessage ) {
+
+		var strFrom = objMessage.getAttribute( 'from' );
+		var strTo = objMessage.getAttribute( 'to' );
+		var objBodyElement = objMessage.getElementsByTagName( 'body' );
+		var objOptions = $.parseJSON( $( "<div/>" ).html( Strophe.getText( objBodyElement[0] ) ).text() );
+		var intUniqueId = objOptions.unique_id;
+		var strChatRoomJid = objOptions.chat_room_jid;
+		var strNick = strFrom.split( '/' )[1];
+		var strToNick = strTo.split( '/' )[1];
+
+		if( strNick !== connection.authcid ) {
+			// Remove chat request notification from other user screen
+			$.each( $( '#chatList' ).find( '.alertList li' ), function( strIndex, objListItem ) {
+				var strChatRoom = $( objListItem ).data( "chat-room-jid" );
+				if( strChatRoomJid == strChatRoom ) {
+					if( true == $( '#' + strChatRoom ).find( '.chatMsg' ).is(':visible') ) {
+						$('#chatList').show();
+					}
+					$( "#chat_popup_" + strChatRoom ).remove();
+					$( "#" + strChatRoom ).remove();
+					$( objListItem ).remove();
+				}
+			} );
+		}
+
+		// modify chat count
+		objEntrataChat.updateChatCount();
+	}
+
+	function loadPreviousMessages( objThisElement, strChatRoomJid, intApplicationId ) {
+
+		var objData = { application_id: intApplicationId };
+
+		if( 'smsc' === strChatRoomJid.split('_')[0] ) {
+			objData = { 'campaign_target_id': strChatRoomJid.split('_')[3] }
+		}
+
+		psi.patterns.showLoadingImage( {
+			strElementSelector: ".chatMsg"
+		} );
+		psi.patterns.ajaxRequest( {
+			url: '/?module=sms_chatxxx&action=load_previous_messages',
+			data: objData,
+			success: function( objResult ) {
+				psi.patterns.removeLoadingImage( {
+					strElementSelector: ".chatMsg"
+				} );
+
+				var objElement = $( "#chatList" ).find( ".alertList li." + strChatRoomJid + " .nAlertText" );
+				if( true === objElement.hasClass( 'highlight-request' ) ) {
+					objElement.removeClass( 'highlight-request' ).addClass( 'text-gray' );
+				}
+
+				if( 0 === Object.keys( objResult.data ).length ) {
+					$( objThisElement ).text( "No previous messages!" ).removeClass( "js-load-messages" ).addClass("js-load-previous-messages");
+					objElement.text( '' );
+					return true;
+				} else {
+					$( objThisElement ).parent().remove();
+					var strClass = '';
+					var intIsStopMessage = 0;
+
+					loadPreviousMessages.boolIsStopped = false;
+					var strLastMessage = '';
+					var intCountChatBubble = objResult.data.length;
+					var intCountIterations = 0;
+					var objChatRoomJid = $( '#' + strChatRoomJid );
+
+					var strRemainingTime = '';
+					var strTime = '';
+					var intMessageTime = 0;
+					var boolIsChatSessionExpired = false;
+					var intMessageAggregatorId = 2;
+					var boolIsWhatsAppTemplateMessage = false;
+
+					$.each( objResult.data, function( intIndex, objItem ) {
+						var strClass = "entrata";
+						if( null != objItem.message_aggregator_id ) {
+							strClass += ' messageAggregator_' + objItem.message_aggregator_id;
+						}
+						var strMessage = strLastMessage = objItem.msg;
+						var intTime = objItem.time;
+						var strMessageId = objItem.id;
+						var boolIsStopMessage = false;
+
+						intCountIterations++;
+
+						// TODO : need to remove once time is send from PP side
+						if( null === intTime ) {
+							intTime = getCurrentUtcTime();
+						}
+
+						if( 1 == intIsStopMessage ) {
+							boolIsStopMessage = true;
+							intIsStopMessage = 0;
+						}
+
+						if( true === objItem.is_from_prospect ) {
+							strClass = "user";
+							loadPreviousMessages.boolIsStopped = false;
+							if( null != strMessage && "stop" === strMessage.toLowerCase() ) {
+								intIsStopMessage = 1;
+							}
+						}
+
+						if( true === objItem.is_from_prospect && MESSAGE_AGGREGATOR_WHATSAPP == objItem.message_aggregator_id ) {
+							intMessageAggregatorId = objItem.message_aggregator_id;
+							$( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoomJid ).attr( "data-message-aggregator-id", objItem.message_aggregator_id );
+						}
+
+						boolIsChatSessionExpired =  ( true === objItem.is_from_prospect && 3 == objItem.message_aggregator_id && true == objItem.chat_session_expired );
+
+						if( MESSAGE_AGGREGATOR_WHATSAPP == objItem.message_aggregator_id ) {
+							boolIsWhatsAppTemplateMessage = ( 'true' == objItem.is_whatsapp_template_message );
+						}
+
+						if( true === objItem.is_from_prospect || true == boolIsWhatsAppTemplateMessage ) {
+							intMessageTime = intTime;
+						}
+
+						var options = {
+							strMessage: strMessage,
+							strChatRoomJid: strChatRoomJid,
+							strClass: strClass,
+							intTime: intTime,
+							strMessageId: strMessageId,
+							isStopMessage: boolIsStopMessage,
+							intMessageAggregatorId: objItem.message_aggregator_id,
+							isUpdatedTimer: false,
+							strPropertyName: objItem.property_name
+						};
+						postMessageInConversationDiv( options );
+					} );
+
+					var ChatAggregator = loadAggregator({
+						strChatRoomJid: strChatRoomJid,
+						intMessageAggregatorId: intMessageAggregatorId,
+						intTime:intMessageTime,
+						isTemplateMessage: boolIsWhatsAppTemplateMessage,
+						isChatSessionTimeout: boolIsChatSessionExpired,
+					});
+
+					ChatAggregator.processMessage();
+
+					if( true === loadPreviousMessages.boolIsStopped ) {
+						$( "#" + strChatRoomJid ).find( ".endConversation,.enterSmsMessage" ).remove();
+						updateSmsNotification( '', strChatRoomJid, false, true );
+						objEntrataChat.updateChatCount();
+					}
+
+					if( true == strLastMessage.includes("opted-out") ) {
+						$( "#" + strChatRoomJid ).find( ".js-end-btn" ).remove();
+						$( '#' + strChatRoomJid ).find( '.enterSmsMessage' ).remove();
+						updateSmsNotification( '', strChatRoomJid, false, true );
+					}
+				}
+			}
+		} );
+	}
+
+	function updateSmsNotification( intNotificationId, strChatRoomJid, boolIsEndChat, boolIsStopRequest ) {
+		var intApplicationId = ( true == boolIsEndChat || true == boolIsStopRequest ) ? strChatRoomJid.split( '_' )[3] : null;
+
+		var strUrl = '/?module=sms_chatxxx&action=update_sms_notification&company_user_notification[id]=' + intNotificationId + '&application[id]=' + intApplicationId;
+		if( strChatRoomJid && 'smsc' === strChatRoomJid.split( '_' )[0] ) {
+			var intCampaignTargetId = strChatRoomJid.split( '_' )[3];
+			strUrl = '/?module=sms_chatxxx&action=update_sms_notification&company_user_notification[id]=' + intNotificationId + '&campaign_target[id]=' + intCampaignTargetId;
+		}
+		psi.patterns.ajaxRequest( {
+			url: strUrl,
+			success: function( objResult ) {
+				if( true === boolIsEndChat ) {
+					// To end same chat in other windows/tabs of current user
+					sendMsg( connection.authzid, JSON.stringify( { chat_room_jid: strChatRoomJid } ), 'end_sms' );
+				} else if( true === boolIsStopRequest ) {
+					$( "#" + strChatRoomJid ).find( ".endConversation,.enterSmsMessage" ).remove();
+					delete objLeadAlertSms.arrOngoingSmsChats[strChatRoomJid];
+					sessionStorage.removeItem( "chat_details" );
+				}
+				return true;
+			}
+		} );
+	}
+
+	function updateBulkSmsNotifications( arrintNotificationIds, arrstrChatRoomJids, boolIsEndChat, strReferer ) {
+		if( 'undefined' == typeof strReferer ) strReferer = 'unknown';
+
+		var strUrl = '/?module=sms_chatxxx&action=update_bulk_sms_notifications&referer=' + strReferer;
+
+		psi.patterns.ajaxRequest( {
+			url: strUrl,
+			type: 'POST',
+			data: { 'company_user_notification_ids': arrintNotificationIds.join(',') },
+			success: function( objResult ) {
+				if( true === boolIsEndChat ) {
+					// To end same chat in other windows/tabs of current user
+					arrstrChatRoomJids.forEach( function( strChatRoomJid ) {
+						sendMsg( connection.authzid, JSON.stringify( { chat_room_jid: strChatRoomJid } ), 'end_sms' );
+					} )
+				}
+				return true;
+			}
+		} );
+	}
+
+	function removeSmsConversationDiv( intChatRoomId ) {
+		$('#conversation_prototype').siblings( "#" + intChatRoomId ).remove();
+		return true;
+	}
+
+	function sendMsg( strTo, strMsg, strType ) {
+		var objMsg = $msg( {
+			to: strTo,
+			from: connection.jid,
+			type: strType,
+			id: connection.getUniqueId(),
+			time: getCurrentUtcTime(),
+			sender: strLeasingAgentName
+		} ).c( "body" ).t( strMsg );
+
+		connection.send( objMsg.tree() );
+	}
+
+	// to initiate lead SMS chat from entrata
+	function handleInitiateChatFromEntrata( options ) {
+		var intApplicantId = options.intApplicantId,
+			intApplicationId = options.intApplicationId,
+			intPropertyId = options.intPropertyId,
+			strElementSelector = options.strElementSelector,
+			strErrorSelector = options.strErrorSelector;
+
+		var intCid = objEntrataNotification.strEntratChatRoomJid.split( '_' )[1];
+		var strChatRoomJid = "sms_" + intCid + "_" + intPropertyId + "_" + intApplicationId;
+
+		var strUrl = '/?module=sms_chatxxx&action=start_chat_from_lead_profile'
+		if( undefined != options.intCampaignTargetId ) {
+			strChatRoomJid = "smsc_" + options.intCid + "_" + intPropertyId + "_" + options.intCampaignTargetId;
+
+			strUrl = '/?module=sms_chatxxx&action=start_chat_from_potential_lead_dashboard'
+		}
+		if( 0 < $( "#" + strChatRoomJid ).length ) {
+			objLeadAlertSms.showSmsChat( strChatRoomJid );
+			var objJoinButtonElement = $( "#" + strChatRoomJid ).find( ".joinBtn" );
+			if( true === objJoinButtonElement.is( ":visible" ) ) {
+				objJoinButtonElement.click();
+			}
+			if( "function" == typeof options.onSuccess ) {
+				options.onSuccess();
+			}
+		} else {
+			var strDataAttributre = { 'applicant_id': intApplicantId, 'application_id': intApplicationId, 'property_id': intPropertyId };
+			if( undefined != options.intCampaignTargetId ) {
+				strDataAttributre = { 'campaign_target_id': options.intCampaignTargetId };
+			}
+			psi.patterns.showLoadingImage( {
+				strElementSelector: strElementSelector
+			} );
+			psi.patterns.ajaxRequest( {
+				url: strUrl,
+				data: strDataAttributre,
+				success: function( objResponse ) {
+					if( false === objResponse.data.success ) {
+						$( '#smsChatErrorMessage' ).remove();
+						var strErrorMessage = '<p id="smsChatErrorMessage" class="alert error slim">' + objResponse.data.message + '</p>';
+						$( strErrorSelector ).append( strErrorMessage );
+					} else {
+						$( '#smsChatErrorMessage' ).remove();
+						if( "function" == typeof options.onSuccess ) {
+							options.onSuccess();
+						}
+						if( undefined != options.intCampaignTargetId ) {
+							objLeadAlertSms.showSmsChat( strChatRoomJid );
+						}
+					}
+
+					psi.patterns.removeLoadingImage( {
+						strElementSelector: strElementSelector
+					} );
+				}
+			});
+		}
+		return true;
+	}
+
+	// to initiate resident SMS chat from entrata
+	function handleInitiateResidentChat( options ) {
+
+		var intCustomerId = options.intCustomerId,
+			intPropertyId = options.intPropertyId,
+			intLeaseId = options.intLeaseId,
+			strElementSelector = options.strElementSelector,
+			strErrorSelector = options.strErrorSelector;
+		var intCid = objEntrataNotification.strEntratChatRoomJid.split( '_' )[1];
+		var strUrl = '/?module=sms_chatxxx&action=start_chat_from_resident_profile';
+
+		psi.patterns.showLoadingImage( {
+			strElementSelector: strElementSelector
+		} );
+		psi.patterns.ajaxRequest( {
+			url: strUrl,
+			data: { 'customer_id': intCustomerId, 'property_id': intPropertyId, 'lease_id': intLeaseId },
+			success: function( objResponse ) {
+				if( false === objResponse.data.success ) {
+					$( '#smsChatErrorMessage' ).remove();
+					var strErrorMessage = '<p id="smsChatErrorMessage" class="alert error slim">' + objResponse.data.message + '</p>';
+					$( strErrorSelector ).append( strErrorMessage );
+				} else {
+					$( '#smsChatErrorMessage' ).remove();
+					var strChatRoomJid = "sms_" + intCid + "_" + intPropertyId + "_" + objResponse.data.message.application_id;
+					if( 0 < $( "#" + strChatRoomJid ).length ) {
+						objLeadAlertSms.showSmsChat( strChatRoomJid );
+						var objJoinButtonElement = $( "#" + strChatRoomJid ).find( ".joinBtn" );
+						if( true === objJoinButtonElement.is( ":visible" ) ) {
+							objJoinButtonElement.click();
+						}
+						if( "function" == typeof options.onSuccess ) {
+							options.onSuccess();
+						}
+					}
+					if( "function" == typeof options.onSuccess ) {
+						options.onSuccess();
+					}
+				}
+
+				psi.patterns.removeLoadingImage( {
+					strElementSelector: strElementSelector
+				} );
+			}
+		} );
+		return true;
+	}
+
+	function endSmsChatBeforeOffline( strReferer ) {
+		if( 'undefined' == typeof strReferer ) strReferer = 'unknown';
+
+		var arrintNotificationIds = [];
+		var arrstrChatRoomJids = [];
+		if( 0 < Object.keys( objLeadAlertSms.arrOngoingSmsChats ).length ) {
+			for( var strChatRoomJid in objLeadAlertSms.arrOngoingSmsChats ) {
+				if( true === objLeadAlertSms.arrOngoingSmsChats.hasOwnProperty( strChatRoomJid ) ) {
+					var intNotificationId = $( "#" + strChatRoomJid ).find( ".joinBtn" ).data( "notification-id" );
+					arrintNotificationIds.push( intNotificationId );
+					arrstrChatRoomJids.push( strChatRoomJid );
+				}
+			}
+			objLeadAlertSms.updateBulkSmsNotifications( arrintNotificationIds, arrstrChatRoomJids, true, strReferer );
+		}
+		return true;
+	}
+
+	function addMessageTime( strMsgId, intTime ) {
+		var objMessageElement = $( "#" + strMsgId );
+		objMessageElement.attr( "title", getLocalTime( intTime ) );
+		objMessageElement.closest( ".js-chat_box" ).find( '.chatHeader' ).data( { "time": intTime } );
+	}
+
+	function getMessageId() {
+		var randomId = function() {
+			return ( ( ( 1 + Math.random() ) * 0x10000 ) | 0).toString( 16 ).substring( 1 );
+		};
+		return ( randomId() + randomId() + randomId() + randomId() + randomId() );
+	}
+
+	function joinSmsChatInChatWindow( objMessage ) {
+		var objBodyElement = objMessage.getElementsByTagName( 'body' );
+		var objOptions = $.parseJSON( $( "<div/>" ).html( Strophe.getText( objBodyElement[0] ) ).text() );
+		var strChatRoom = objOptions.chat_room_jid;
+
+		var objListItem = $( ".chatWrapper #chatList .alertList" ).find( "li." + strChatRoom );
+		var intApplicantId = $( objListItem ).data( "applicant-id" );
+		var intCustomerId = $( objListItem ).data( "customer-id" );
+		var objElement = $( "#" + strChatRoom );
+		var intApplicationId = strChatRoom.split( '_' )[3];
+		objElement.find( '.enterMessage' ).removeClass( 'enterMessage' ).addClass( 'enterSmsMessage' ).attr( 'data-chat-room-jid', strChatRoom ).attr( 'data-applicant-id', intApplicantId ).attr( 'data-customer-id', intCustomerId );
+		objElement.find( ".joinBtn" ).hide();
+		objElement.find( ".js-chat-input" ).removeClass( "hide" );
+		objElement.find( ".endConversation" ).removeClass( "hide" );
+
+		objLeadAlertSms.arrOngoingSmsChats[strChatRoom] = strChatRoom;
+
+		if( 0 < $( '#chat_popup_' + strChatRoom ).length ) {
+			$( '#chat_popup_' + strChatRoom ).remove();
+		}
+
+		var objLoadMessageElement = objElement.find( ".js-load-messages" );
+		loadPreviousMessages( objLoadMessageElement, strChatRoom, intApplicationId );
+		return true;
+	}
+
+	function endSmsChat( objMessage ) {
+
+		var objBodyElement = objMessage.getElementsByTagName( 'body' );
+		var objOptions = $.parseJSON( $( "<div/>" ).html( Strophe.getText( objBodyElement[0] ) ).text() );
+		var strChatRoomJid = objOptions.chat_room_jid;
+
+		clearInterval( arrintIntervalIds[strChatRoomJid] );
+		modifyChatList( null, false, strChatRoomJid );
+		removeSmsConversationDiv( strChatRoomJid );
+		delete objLeadAlertSms.arrOngoingSmsChats[strChatRoomJid];
+		sessionStorage.removeItem( "chat_details" );
+		return true;
+	}
+
+	var loadAggregator = function( options ) {
+		switch( parseInt( options.intMessageAggregatorId ) ) {
+			case MESSAGE_AGGREGATOR_WHATSAPP:
+				WhatsAppAggregator.prototype = new Aggregator();
+				var ChatAggregator = new WhatsAppAggregator( options );
+				break;
+
+			case MESSAGE_AGGREGATOR_WECHAT:
+				WeChatAppAggregator.prototype = new Aggregator();
+				var ChatAggregator = new WeChatAppAggregator( options );
+				break;
+
+			case MESSAGE_AGGREGATOR_SMS:
+			default:
+				SmsAppAggregator.prototype = new Aggregator();
+				var ChatAggregator = new SmsAppAggregator( options );
+		}
+
+		return ChatAggregator;
+	}
+
+	var WhatsAppAggregator = function ( options ) {
+		Aggregator.call( this, options );
+		this.processMessage = function() {
+			if( true == this.isTemplateMessage ) {
+				this.handleWhatsAppTemplateMessage();
+				return true;
+			}
+
+			if( false == this.isChatSessionTimeout ) {
+				this.handleChatMessage();
+			} else {
+				this.hideTextBox();
+				this.addChatInvitationButton({
+					strSendInvitationText: __( 'Send Chat Invitation' ),
+					infoMessage: __( 'This WhatsApp chat has expired.' ),
+					sessionExpiredMessage: __( 'You can invite this person to start chatting again by clicking the button below.' )
+				});
+			}
+		}
+
+		this.handleChatMessage = function() {
+			this.clearInterval();
+			this.addChatSessionTimer( __( 'Chat will expire in: ' ) );
+			this.removeChatInvitationButton();
+
+			var objThis = this;
+
+			var intCountDownTime = this.getCountDownTime( this.intTime, MICROSECONDS_24_HOURS );
+			this.setTimer( function(){
+				var objRemainingTime = objThis.getRemainingTime( intCountDownTime );
+
+				objThis.objChatRoomJid.find( '#session_timer' ).text( objRemainingTime.time_string );
+
+				if( 0 >= objRemainingTime.remaining_time ) {
+					objThis.hideTextBox();
+					objThis.addChatInvitationButton({
+						strSendInvitationText: __( 'Send Chat Invitation' ),
+						infoMessage: __( 'This WhatsApp chat has expired.' ),
+						sessionExpiredMessage: __( 'You can invite this person to start chatting again by clicking the button below.' )
+					});
+
+					objThis.clearInterval();
+				} else {
+					objThis.showTextBox();
+				}
+			}, 1000 );
+		}
+
+		this.handleWhatsAppTemplateMessage = function() {
+			var strDiv = __( '<div class="margin10-bottom chat_session_timer" id="chat_session_timer">This WhatsApp chat has expired.</div>' );
+			this.insertBeforeTextBox( strDiv );
+			this.hideTextBox();
+			this.clearInterval();
+			var intCountDownTime = this.getCountDownTime( this.intTime, MICROSECONDS_24_HOURS );
+			var objThis = this;
+			this.setTimer( function(){
+				var objRemainingTime = objThis.getRemainingTime( intCountDownTime );
+
+				if( 0 >= objRemainingTime.remaining_time ) {
+					objThis.addChatInvitationButton({
+						strSendInvitationText: __( 'Send Chat Invitation' ),
+						infoMessage: __( 'This WhatsApp chat has expired.' ),
+						sessionExpiredMessage: __( 'You can invite this person to start chatting again by clicking the button below.' )
+					});
+
+					objThis.clearInterval();
+				}
+			}, 1000 );
+		}
+	}
+
+	var SmsAppAggregator = function ( options ) {
+		Aggregator.call( this, options );
+
+		this.processMessage = function() {
+			// Remove the timer and invitation button (if any) for text messages
+			this.showTextBox();
+			this.removeChatInvitationButton();
+			this.removeChatSessionTimer();
+		}
+	}
+
+	var WeChatAppAggregator = function ( options ) {
+		Aggregator.call( this, options );
+
+		this.processMessage = function() {
+			// Do something
+		}
+	}
+
+	var Aggregator =  function ( options ) {
+		var defaults = {
+			strChatRoomJid: '',
+			intMessageAggregatorId: MESSAGE_AGGREGATOR_SMS,
+			intTime:0,
+			isTemplateMessage: false,
+			isChatSessionTimeout: false
+		};
+		defaults = $.extend( {}, defaults, options );
+
+		for( property in defaults ) {
+			this[property] = defaults[property];
+		}
+
+		this.objChatRoomJid = $( '#' + this.strChatRoomJid );
+
+		Aggregator.prototype.showTextBox = function() {
+			this.objChatRoomJid.find( '.enterSmsMessage' ).show();
+		}
+
+		Aggregator.prototype.insertBeforeTextBox = function( strDiv ) {
+			$( strDiv ).insertBefore( this.objChatRoomJid.find( '.enterSmsMessage' ) );
+		}
+
+		Aggregator.prototype.addChatSessionTimer = function( strText ) {
+			var strDiv = __( '<div class="margin10-bottom chat_session_timer" id="chat_session_timer"> {%s,0}: <span id="session_timer"></span></div>', [strText] );
+
+			if( 1 > this.objChatRoomJid.find( '#chat_session_timer' ).length ) {
+				this.insertBeforeTextBox( strDiv );
+			} else {
+				this.objChatRoomJid.find( '#chat_session_timer' ).html( strDiv );
+			}
+		}
+
+		Aggregator.prototype.removeChatSessionTimer = function() {
+			if( 1 <= this.objChatRoomJid.find( '#chat_session_timer' ).length ) {
+				this.objChatRoomJid.find( '#chat_session_timer' ).remove();
+			}
+		}
+
+		Aggregator.prototype.clearInterval = function() {
+			clearInterval( arrintIntervalIds[this.strChatRoomJid] );
+		}
+
+		Aggregator.prototype.removeChatInvitationButton = function() {
+			if( 1 <= this.objChatRoomJid.find( '#send_chat-invitation' ).length ) {
+				this.objChatRoomJid.find( '#send_chat-invitation' ).parent().remove();
+			}
+		}
+
+		Aggregator.prototype.addChatInvitationButton = function( options ) {
+			var strChatInvitationButton = '<div class="align-center"><div class="button action js-chat-invitation-btn" data-chat-room-jid="' + this.strChatRoomJid + '" id="send_chat_invitation"><svg viewBox="0 0 32 32" class="entrata-svg-icon fill-green default"><use xlink:href="/Common/assets/components/patterns/svg/line_sprite.svg#whatsapp-icon"></use></svg> ' + options.strSendInvitationText + '</div></div>';
+
+			if( 1 <= this.objChatRoomJid.find( '#chat_session_timer' ).length ) {
+				this.objChatRoomJid.find( '#chat_session_timer' ).html( options.infoMessage + '<br>' + options.sessionExpiredMessage );
+				this.insertBeforeTextBox( strChatInvitationButton )
+			} else {
+				var strDiv = __( '<div class="margin10-bottom chat_session_timer" id="chat_session_timer">{%s,0} <br> {%s,1}</div> {%s,2}', [options.infoMessage, options.sessionExpiredMessage, strChatInvitationButton] );
+				this.insertBeforeTextBox( strDiv );
+			}
+		}
+
+		Aggregator.prototype.getCountDownTime = function( intTime, intInterval ) {
+			return new Date( getLocalTime( intTime ) ).getTime() + intInterval;
+		}
+
+		Aggregator.prototype.getRemainingTime = function( intCountDownTime, format ) {
+			format = ( 'undefined' != typeof format ) ? format : 'h:m:s';
+
+			var arrmixFormats = format.split( ':' ),
+				boolIsRequiredHours = ( arrmixFormats.includes( 'h' ) || arrmixFormats.includes( 'H' ) ),
+				boolIsRequiredMinutes = ( arrmixFormats.includes( 'm' ) || arrmixFormats.includes( 'M' ) ),
+				boolIsRequiredSeconds = ( arrmixFormats.includes( 's' ) || arrmixFormats.includes( 'S' ) ),
+				intCurrentTime = new Date().getTime(),
+				intRemainingTime = intCountDownTime - intCurrentTime,
+				intHours = ( true == boolIsRequiredHours ) ? Math.floor( ( intRemainingTime % ( 1000 * 60 * 60 * 24 ) ) / ( 1000 * 60 * 60 ) ) + '' : '',
+				intMinutes = ( true == boolIsRequiredMinutes ) ? Math.floor( ( intRemainingTime % ( 1000 * 60 * 60 ) ) / ( 1000 * 60 ) ) + '' : '',
+				intSeconds = ( true == boolIsRequiredSeconds ) ? Math.floor( ( intRemainingTime % ( 1000 * 60)) / 1000 ) + '' : '',
+				strTime = '';
+
+			if( '' != intHours ) {
+				strTime = ( intHours.length > 1 ? '' : 0 ) + intHours;
+			}
+
+			if( '' != intMinutes ) {
+				strTime = ( '' != strTime ) ? strTime + ':' : strTime;
+				strTime += ( intMinutes.length > 1 ? '' : 0 ) + intMinutes;
+			}
+
+			if( '' != intSeconds ) {
+				strTime = ( '' != strTime ) ? strTime + ':' : strTime;
+				strTime += ( intSeconds.length > 1 ? '' : 0 ) + intSeconds;
+			}
+
+			return {time_string: strTime, remaining_time: intRemainingTime};
+		}
+
+		Aggregator.prototype.setTimer = function ( callBackMethod, intInterval ) {
+			arrintIntervalIds[this.strChatRoomJid] = setInterval( callBackMethod, intInterval );
+		}
+
+		Aggregator.prototype.hideTextBox = function() {
+			this.objChatRoomJid.find( '.enterSmsMessage' ).hide();
+		}
+	};
+
+	return {
+		endSmsChat: endSmsChat,
+		initSmsChat: initSmsChat,
+		updateSmsNotification: updateSmsNotification,
+		joinSmsChat: joinSmsChat,
+		showSmsChat: showSmsChat,
+		setConnection: setConnection,
+		showHiddenChatListItems: showHiddenChatListItems,
+		removeSmsChatRequest: removeSmsChatRequest,
+		loadPreviousMessages: loadPreviousMessages,
+		buildSmsConversationDetails: buildSmsConversationDetails,
+		handleSmsChatNotification: handleSmsChatNotification,
+		handleInitiateChatFromEntrata: handleInitiateChatFromEntrata,
+		handleInitiateResidentChat: handleInitiateResidentChat,
+		endSmsChatBeforeOffline: endSmsChatBeforeOffline,
+		joinSmsChatInChatWindow: joinSmsChatInChatWindow,
+		updateBulkSmsNotifications: updateBulkSmsNotifications
+	};
+
+} ();

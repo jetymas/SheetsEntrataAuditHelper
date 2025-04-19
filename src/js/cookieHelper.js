@@ -7,7 +7,7 @@
  * @param {string} name - The name of the cookie to retrieve.
  * @returns {Promise<string|null>} Resolves with the cookie value or null if not found.
  */
-function getCookie(url, name) {
+export function getCookie(url, name) {
   return new Promise((resolve, reject) => {
     chrome.cookies.get({ url, name }, (cookie) => {
       if (chrome.runtime.lastError) {
@@ -30,7 +30,7 @@ function getCookie(url, name) {
  * @param {number} [options.expirationDate] - Optional UNIX timestamp in seconds for cookie expiration.
  * @returns {Promise<chrome.cookies.Cookie>} Resolves with the set cookie object.
  */
-function setCookie({ url, name, value, expirationDate }) {
+export function setCookie({ url, name, value, expirationDate }) {
   const details = {
     url,
     name,
@@ -53,7 +53,3 @@ function setCookie({ url, name, value, expirationDate }) {
   });
 }
 
-// Export for Node.js testing
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getCookie, setCookie };
-}

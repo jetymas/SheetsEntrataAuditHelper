@@ -1,0 +1,124 @@
+.wrapper {
+    width: auto;
+    min-width: 300px;
+    min-height: 80px;
+    padding: 30px 0 30px 20px;
+    position: absolute;
+    top: 72px;
+    right: 0;
+    overflow: hidden;
+    z-index: 10000;
+    box-sizing: border-box;
+    display: none;
+}
+#show-toast {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    top: 50%;
+    left: 50%;
+    background-color: #101020;
+    color: #ffffff;
+    padding: 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+#processing_payment_toast {
+    display: flex;
+    background-color: #ffffff;
+    box-shadow: 0 10px 20px rgba(75, 50, 50, 0.8);
+    border-radius: 4px;
+    transform: translate(500px);
+    transition: 1s;
+}
+
+#complete_payment_toast {
+    display: flex;
+    background-color: #ffffff;
+    box-shadow: 0 10px 20px rgba(75, 50, 50, 0.8);
+    border-radius: 4px;
+    transform: translate(500px);
+    transition: 1s;
+}
+
+#error_payment_toast {
+    display: flex;
+    background-color: #ffffff;
+    box-shadow: 0 10px 20px rgba(75, 50, 50, 0.8);
+    border-radius: 4px;
+    transform: translate(500px);
+    transition: 1s;
+}
+
+.toast-info,
+.complete-payment-toast-info {
+    display: flex;
+    flex-direction: column;
+    flex: 3;
+    height: inherit;
+    justify-content: center;
+    padding: 10px;
+    border-right: 1px solid lightgrey;
+    border-radius: 2px 0 0 4px;
+    box-shadow: 3px 0px 2px lightgrey;
+}
+
+.toast-info,
+.complete-payment-toast-info p:not(first-child) {
+    font-style: italic;
+}
+
+#processing_payment_toast {
+    border-left: 4px solid dodgerblue;
+}
+
+#complete_payment_toast {
+    border-left: 4px solid green;
+}
+
+error_payment_toast {
+    border-left: 4px solid red;
+}
+
+.success {
+    color: green;
+}
+
+.error {
+    color: red;
+}
+
+.toast-info,
+.complete-payment-toast-info p:first-child {
+    color: #101020;
+    font-weight: 600;
+    font-size: 16px;
+}
+.toast-info p:last-child {
+    font-size: 12px;
+    color: #656565;
+    font-weight: 400;
+}
+.toast-info,
+.complete-payment-toast-info p:not(first-child) {
+    font-style: italic;
+}
+
+.toast-action,
+.complete-payment-toast-action {
+    display: flex;
+    flex: 1;
+    height: inherit;
+    min-width: fit-content;
+    padding: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+.bulk-pull-payment-toster-button {
+    background-color: transparent;
+    font-size: 14px;
+    line-height: 0;
+    color: dodgerblue;
+    cursor: pointer;
+    border: none;
+}

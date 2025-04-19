@@ -1,0 +1,515 @@
+function makeAmountMonitary(amount){
+	var nAmount = amount.replace('$','');
+	var nAmount = nAmount.replace(',','');
+	nAmount = (Number(nAmount))?Number(nAmount):0;
+	nAmount = nAmount.toFixed(2);
+	if(Number(nAmount) < 0){
+		nAmount = String(nAmount);
+		nAmount =  nAmount.substring(nAmount.indexOf('-')+1,nAmount.length);
+		sAmount = "-$" +nAmount;
+	}else{
+		sAmount = "$" +nAmount;
+	}
+	return(sAmount);
+}
+
+function makeAmountMonetary(amount){
+	var nAmount = amount.replace('$','');
+	var nAmount = nAmount.replace(',','');
+	nAmount = (Number(nAmount))?Number(nAmount):0;
+	nAmount = nAmount.toFixed(2);
+	if(Number(nAmount) < 0){
+		nAmount = String(nAmount);
+		nAmount =  nAmount.substring(nAmount.indexOf('-')+1,nAmount.length);
+		sAmount = "-" +nAmount;
+	}else{
+		sAmount = "" +nAmount;
+	}
+	return(sAmount);
+}
+
+function formatAmount(amount){
+	var nAmount = amount.replace('$','');
+	var nAmount = nAmount.replace(',','');
+	nAmount = (Number(nAmount))?Number(nAmount):0;
+	nAmount = nAmount.toFixed(2);
+
+	if(isNaN(amount) || 0 == Number(nAmount)) {
+		sAmount = "";
+	} else if(Number(nAmount) < 0){
+		nAmount = String(nAmount);
+		sAmount =  nAmount.substring(nAmount.indexOf('-')+1,nAmount.length);
+	} else {
+		sAmount = nAmount;
+	}
+
+	return(sAmount);
+}
+
+function formatAmountAllowZero(amount){
+	var nAmount = amount.replace('$','');
+	var nAmount = nAmount.replace(',','');
+	nAmount = (Number(nAmount)) ? Number(nAmount):0;
+	nAmount = nAmount.toFixed(2);
+
+	if(Number(nAmount) < 0){
+		nAmount = String(nAmount);
+		sAmount =  nAmount.substring(nAmount.indexOf('-')+1,nAmount.length);
+	} else {
+		sAmount = nAmount;
+	}
+
+	return(sAmount);
+}
+
+function makeAmountMonetaryWithoutDollar(amount){
+	var nAmount = amount.replace('$','');
+	var nAmount = nAmount.replace(',','');
+	nAmount = (Number(nAmount))?Number(Math.round(nAmount)):0;
+	nAmount = nAmount.toFixed(2);
+	if(Number(nAmount) < 0){
+		nAmount = String(nAmount);
+		nAmount =  nAmount.substring(nAmount.indexOf('-')+1,nAmount.length);
+	}
+
+	return(nAmount);
+}
+
+function makeAmountMonetaryWithoutDollarWithNegatives(amount){
+	var nAmount = amount.replace('$','');
+	var nAmount = nAmount.replace(',','');
+	nAmount = (Number(nAmount))?Number(Math.round(nAmount*100)/100):0;
+	nAmount = nAmount.toFixed(2);
+
+	return(nAmount);
+}
+
+function makeAmountMonitaryWithDollarWithoutNegatives(amount){
+	var nAmount = amount.replace('$','');
+	var nAmount = nAmount.replace(',','');
+	nAmount = (Number(nAmount))?Number(nAmount):0;
+	nAmount = nAmount.toFixed(2);
+	if(Number(nAmount) < 0){
+		nAmount = String(nAmount);
+		nAmount = nAmount.substring(nAmount.indexOf('-')+1,nAmount.length);
+		sAmount = "$" +nAmount;
+	}
+	sAmount = "$" +nAmount;
+	return(sAmount);
+}
+
+function changeFormat( inputId ) {
+	var inputAmount = document.getElementById( inputId ).value;
+	inputAmount = (Number(inputAmount))?Number(inputAmount):'';
+	inputAmount = inputAmount.replace("$", '');
+
+	document.getElementById( inputId ).value = inputAmount;
+	//var inputAmount = Number( ( document.getElementById( inputId ).value ).replace("$", ''));
+	//document.getElementById( inputId ).value = inputAmount.toFixed(2);
+}
+
+function makeAmountSignedMonetaryWithoutDollar(amount){
+	var nAmount = amount.replace('$','');
+	var nAmount = nAmount.replace(',','');
+	nAmount = (Number(nAmount))?Number(nAmount):0;
+	nAmount = nAmount.toFixed(2);
+	return(nAmount);
+}
+
+function validate_time( objInput )
+{
+	// regular expression to match required time format
+	re = /^(\d{1,2}):(\d{2})?$/;
+
+	if(objInput.value != '') {
+		if(regs = objInput.value.match(re)) {
+			if(regs[3]) {
+				if(regs[1] < 1 || regs[1] > 12) {
+					alert("Invalid value for hours: " + regs[1]);
+					objInput.value = '';
+					//objInput.focus();
+					return false;
+				}
+			} else {
+				if(regs[1] > 23) {
+					alert("Invalid value for hours: " + regs[1]);
+					objInput.value = '';
+					//objInput.focus();
+					return false;
+				}
+			}
+			if(regs[2] > 59) {
+				alert("Invalid value for minutes: " + regs[2]);
+				objInput.value = '';
+				//objInput.focus();
+				return false;
+			}
+		} else {
+			alert("Invalid time format: " + objInput.value);
+			objInput.value = '';
+			//objInput.focus();
+			return false;
+		}
+	}
+
+	return true;
+}
+
+//This function accepts a six/eight digit date in 'mmddyy' or 'mmddyyyy' or 'mm/dd/yy' format and converts it to mm/dd/yyyy format
+function convertToDateFormat( strDate ) {
+
+	if( ( 8 != strDate.length && 6 != strDate.length ) || ( null == strDate.match( /^\d{6}$/ ) && null == strDate.match( /^\d{8}$/ ) && null == strDate.match( /^\d{2}\/\d{2}\/\d{2}$/ ) )
+		|| ( 12 < strDate.substr( 0, 2 ) ) || ( 0 == strDate.substr( 0, 2 ) )
+		|| ( 31 < strDate.substr( 2, 2 ) ) || ( 0 == strDate.substr( 2, 2 ) ) ) {
+
+		return strDate;
+	}
+	
+	var arrstrDate		= strDate.split( '' );
+	var intMonth		= arrstrDate[0] + '' + arrstrDate[1];
+
+	if( 6 == strDate.length ) {											// 6 digits mmddyy
+		var intDay			= arrstrDate[2] + '' + arrstrDate[3];
+		var objCurrentDate	= new Date();
+		var intYear			= String( objCurrentDate.getFullYear() ).substr( 0, 2 ) + arrstrDate[4] + arrstrDate[5];
+	} else if( null != strDate.match( /^\d{2}\/\d{2}\/\d{2}$/ ) ) {		// 8 digits mm/dd/yy
+		var intDay			= arrstrDate[3] + '' + arrstrDate[4];
+		var objCurrentDate	= new Date();
+		var intYear			= String( objCurrentDate.getFullYear() ).substr( 0, 2 ) + arrstrDate[6] + arrstrDate[7];
+	} else {															// 8 digits mmddyyyy
+		var intDay			= arrstrDate[2] + '' + arrstrDate[3];
+		var intYear			= arrstrDate[4] + arrstrDate[5] + arrstrDate[6] + arrstrDate[7];
+	}
+	var objDate		= new Date( intYear, intMonth, 0 );
+
+	if( intDay > objDate.getDate() ) {
+		return strDate;
+	}
+
+	var objNewDate	= new Date( intYear, intMonth - 1 , intDay );
+	var intNewYear	= objNewDate.getFullYear();
+	var intNewMonth	= objNewDate.getMonth() + 1;
+	var intNewDay	= objNewDate.getDate();
+
+	intNewMonth	= ( 10 <= intNewMonth )? intNewMonth : '0' + intNewMonth;
+	intNewDay	= ( 10 <= intNewDay )? intNewDay : '0' + intNewDay;
+
+	return intNewMonth + '/' + intNewDay + '/' + intNewYear;
+}
+
+/*
+Valid input formats
+m/yy
+mmyy
+mm/yy
+m/yyyy
+mmyyyy
+mm/yyyy
+*/
+function checkPostMonth(obj) {
+  
+  var ilen;
+  var sout;
+  var yy, mm, dd;
+  var tmp;
+  var inumsep;
+  var imonth, iyear, iday;
+  var errorMessage;
+  var isep1, isep2;  //holds position of "/"
+  var imstart, imlen;
+  var idstart, idlen;
+  var iystart, iylen;
+  var ss = new String(obj.value);
+  var d = new Date();
+  var m = new Array("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec");
+  var cutOffYear = 50;
+
+  ilen = ss.length;
+  iday = 0;  //in case is never gets set below
+  
+  // check for required field
+  if (ilen == 0) {return true;}
+
+	errorMessage = __("Expecting date in mm/yyyy format.");
+errorMessageForYearRange = __("Post Month Year should be in proper range.");
+  // all chars must be numeric or "/"
+  inumsep = 0
+  for( var i = 0; i < ilen; i++){
+    tmp = ss.charAt(i);
+    if (tmp == '/') {
+      inumsep = inumsep + 1;
+      if (inumsep == 1) {isep1 = i}
+      else if (inumsep == 2) {isep2 = i}
+    }
+  }
+
+  //check for valid number of "/"
+  if ( inumsep > 1 ) { alert( errorMessage ); return false; }
+
+  //check for valid placement of "/"
+  if (inumsep > 0) {
+    if (isep1 != 1 && isep1 != 2) {alert( errorMessage ); return false;}
+  }
+
+  if (inumsep > 1) {
+    if (isep2 != 3 && isep2 != 4 && isep2 != 5) {alert( errorMessage ); return false;}
+  }
+
+  //set start and length of month, day and year
+  if (inumsep == 0) {
+    if (ilen == 4) {
+      imstart = 0; imlen = 2;
+      iystart = 2; iylen = 2;
+    } else if (ilen == 6 && obj.isDay) {
+      imstart = 0; imlen = 2;
+      idstart = 2; idlen = 2;
+      iystart = 4; iylen = 2;
+    } else if (ilen == 6 && !obj.isDay) {
+      imstart = 0; imlen = 2;
+      iystart = 2; iylen = 4;
+    } else if (ilen == 8) {
+      imstart = 0; imlen = 2;
+      idstart = 2; idlen = 2;
+      iystart = 4; iylen = 4;
+    }
+    
+  } else if (inumsep == 1) {
+    imstart = 0; imlen = isep1;
+    iystart = isep1  + 1; iylen = ilen - isep1 - 1
+  
+  } else if (inumsep == 2) {
+    imstart = 0; imlen = isep1;
+    idstart = isep1  + 1; idlen = isep2 - isep1 - 1
+    iystart = isep2 + 1; iylen = ilen - isep2 - 1
+  }
+
+  imonth = parseInt(ss.substr(imstart, imlen), 10);  //10 param sets to base 10 (default is 8!) //without it, "08" and "09" returned 0
+  iyear = parseInt(ss.substr(iystart, iylen), 10);
+
+  if (isNaN(imonth) || isNaN(iyear) || isNaN(iday)) { alert( errorMessage ); return false; }
+
+  errorMessage = __("Expecting date in mm/yyyy format.");
+
+
+  if (iylen != 4 && iylen != 2) { alert( errorMessage ); return false; }
+  if (imlen != 1 && imlen != 2) { alert( errorMessage ); return false; }
+  if (imonth < 1 || imonth > 12) { alert( errorMessage ); return false; }
+  if (iylen == 4 && (iyear < 1875 )) { alert( errorMessageForYearRange ); return false; }
+  if (iylen == 2 && (iyear < 0 || iyear > 99)) { alert( errorMessage ); return false; }
+
+  mm = imonth;
+  mm = mm > 9 ? mm : "0" + mm.toString();
+  dd = iday;
+  dd = dd > 9 ? dd : "0" + dd.toString();
+  yy = iyear;
+  yy = yy > 9 ? yy : "0" + yy.toString();
+
+  if (iyear < 1000 ) {
+    if ( parseInt(yy) < cutOffYear ) { yy = "20" + yy }
+    else { yy = "19" +  yy }
+    iyear = parseInt(yy)
+  }
+
+  sout = mm + "/" + yy;
+
+  obj.value = sout;
+  /*Update vacancy filter accoding to post month*/
+  /*This applies to MRR and GPR report */
+  /*Task Id 245036*/
+	if($('[name="updateVacancyFilters"]').val() == 1){
+		updateVacancyPeriod(obj);
+	}
+  return true;
+}
+function updateVacancyPeriod(obj){
+	var postMonthValue = obj.value.split( '/' );
+	var postMonth = parseInt( postMonthValue[0] );
+	var postYear = parseInt( postMonthValue[1] );
+	var curDate = new Date();
+	var date = new Date( postYear, postMonth,1,0,0,0,0 );
+		if ( postMonth  >= 1 && postMonth <= 12 )  {
+			var firstDay = new Date(date.getFullYear(), date.getMonth()-1, 1);
+			var lastDay = new Date(date.getFullYear(), date.getMonth() , 0);
+			$( "#start_date" ).datepicker( 'setDate',  firstDay );
+			$( "#end_date" ).datepicker( 'setDate',  lastDay );
+		}else {
+			var firstDay = new Date( curDate.getFullYear(), curDate.getMonth(), 1 );
+			var lastDay = new Date( curDate.getFullYear(), curDate.getMonth() + 1, 0 );
+			$( "#start_date" ).datepicker( 'setDate', firstDay );
+			$( "#end_date" ).datepicker( 'setDate', lastDay );
+			$( "#post_month" ).val(  ( curDate.getMonth()+1 ) + "/" + curDate.getFullYear() );
+		}
+}
+
+function allowOnlyPositiveInteger(amount){
+	amount = (parseInt( Math.abs( amount ) ))?parseInt( Math.abs( amount ) ):'';
+
+	return(amount);
+}
+
+function allowOnlyValidPostMonth( obj ) {
+
+	// Validates whether post month is of mm/yyyy format
+
+	var boolIsValid 	= true;
+    var strPostMonth 	= obj.value;
+    var objRegExp 		= /^\d{1,2}\/\d{4}$/;
+
+    if( !objRegExp.test( strPostMonth ) ) {
+    	boolIsValid	= false
+    } else {
+		// check whether the month exceeds 12
+		var intMonth = strPostMonth.substring( 0, 2 );
+
+		if( 12 < intMonth ) {
+			boolIsValid	= false;
+		}
+    }
+
+    if( true == boolIsValid ) {		
+    	return strPostMonth;
+    }else if( false == boolIsValid ) {
+    	return "";
+    }
+}
+
+isDay = function ( strVar ) {
+     return /^\d+$/.match( strVar );
+}
+this.isDay = isDay;
+
+function isValidYear( objInputElement ) {
+	if( false == /^(19|20)[\d]{2,2}$/.match( objInputElement.value ) ) {
+		objInputElement.value = '';
+	}
+	return objInputElement.value;
+}
+this.isValidYear = isValidYear;
+
+isNumeric = function ( strVar ) {
+    return /^\d*\.?\d*$/.match( strVar );
+}
+this.isNumeric = isNumeric;
+
+allowOnlyNumeric = function allowOnlyNumeric( strElementInput , strMessage ) {
+	strAmount = document.getElementById(strElementInput).value;
+	if( 'No Change' == strAmount || '' == strAmount ) { return true };
+	
+	if( true == isNumeric( strAmount ) ) { return true };
+	alert( strMessage );   
+    document.getElementById(strElementInput).focus();
+    return false;		
+}
+this.allowOnlyNumeric = allowOnlyNumeric;
+
+
+checkValidDays = function ( strElementInput , strMessage ) {
+	strAmount = document.getElementById(strElementInput).value;
+	if( 'No Change' == strAmount || '' == strAmount ) { return true };
+	
+	if( true == isDay( strAmount ) ) { return true };
+	alert( strMessage );   
+    document.getElementById(strElementInput).focus();
+    return false;		
+}
+this.checkValidDays = checkValidDays;
+
+isOnlyInteger = function ( strVar ) {
+    return /^\d+$/.match( strVar );
+}
+this.isOnlyInteger = isOnlyInteger;
+
+allowOnlyInteger = function allowOnlyInteger( strElementInput , strMessage ) {
+	strAmount = document.getElementById(strElementInput).value;
+	if( 'No Change' == strAmount || '' == strAmount ) { return true };
+	
+	if( true == isOnlyInteger( strAmount ) ) { return true };
+	alert( strMessage );   
+    document.getElementById(strElementInput).focus();
+    return false;		
+}
+this.allowOnlyInteger = allowOnlyInteger;
+
+//Accept input in formats - mmyy or mmyyyy or mm/yyyy and gives output in mm/yyyy.
+function convertToPostMonth( strPostMonth ) {
+
+	var objRegExpFirst	= new RegExp(/^(0[1-9]|1[012])[\/\.](19|20)\d\d$/);	//mm/yyyy
+	var objRegExpSecond = new RegExp(/^(([0][1-9]|[1][0-2])\d{2})$|^(([0][1-9]|[1][0-2])\d{4})$/);	//mmyyyy or mmyy
+
+	if( true == objRegExpFirst.test( strPostMonth ) ) {
+		return strPostMonth;
+	}
+
+	if( false == objRegExpSecond.test( strPostMonth ) ) {
+		return '';
+	}
+
+	var arrstrDate		= strPostMonth.split( '' );
+	var intMonth		= strPostMonth.substr(0,2);
+	
+	var objCurrentDate	= new Date();
+
+	var intYear			= ( 4 == arrstrDate.length )? String( objCurrentDate.getFullYear() ).substr( 0, 2 ) + strPostMonth.substr( 2, 2 ) : strPostMonth.substr( 2, 6 );
+	var objDate			= new Date( intYear, intMonth - 1, 1, 0, 0, 0, 0 );
+
+	var intNewMonth		= objDate.getMonth() + 1;
+	intNewMonth			= ( 10 <= intNewMonth )? intNewMonth : '0' + intNewMonth;
+
+	var strNewDate		= String( intNewMonth ) + '/' + String( objDate.getFullYear() );
+
+	if( false == objRegExpFirst.test( strNewDate ) ) {
+		return '';
+	}
+	return strNewDate;
+}
+
+function formatPaymentAmount( intAmount ){
+	
+	var intformattedAmount = 0;
+	if( 0 < intAmount.length ) {
+		intformattedAmount =  Math.abs( intAmount.replace( /[^\d.-]/g, '' ) );
+
+		if ( isNaN( intformattedAmount ) ) {
+			intformattedAmount = 0;
+		}
+	}
+	return ( parseFloat( intformattedAmount ).toFixed( 2 ) );
+
+}
+
+function getValidFormattedPostMonth( strRequestedPostMonth ) {  
+	// Accept possible formats of Post Month and convert it in mm/yyyy
+
+	var objRegExp		= /^(((0|[1-9])|(0[1-9]))|(1[0-2]))(|\/|.|-|)(\d{2}|\d{4})$/ 
+	
+	if( !objRegExp.test( strRequestedPostMonth ) ) return '';
+
+	var intYear			= 0;
+	var intMonth		= 0;
+	var intPostMonth	= strRequestedPostMonth.replace(/[^0-9]/g, '');
+
+	if( 4 == intPostMonth.length || 3 == intPostMonth.length ) {
+		intYear		= '20' + strRequestedPostMonth.substring( strRequestedPostMonth.length - 2 );
+		intMonth	= intPostMonth.slice( 0, intPostMonth.indexOf( intYear )-1 );
+	} else {
+		intYear		= strRequestedPostMonth.substring( strRequestedPostMonth.length - 4 );
+		intMonth	= intPostMonth.slice( 0, intPostMonth.indexOf( intYear ) );
+	}
+
+	// Check whether the month exceeds 12
+	if( 12 < intMonth || 0 == intMonth ) return '';
+
+	if( 1 == intMonth.length ) intMonth = '0' + intMonth;
+
+	return ( 0 != parseInt( intYear ) ) ? intMonth + '/' + intYear : '';
+}
+
+function getCurrencyAmount( strAmount ) {
+
+	strAmount = parseFloat( i18nUtils.number( strAmount.toString().replace( i18nUtils.getCurrencySymbol(), '' ), 'nots' ) );
+
+	if(!Number( strAmount ) ){
+		strAmount = 0.00;
+	}
+	return parseFloat( strAmount ).toFixed(2);
+}

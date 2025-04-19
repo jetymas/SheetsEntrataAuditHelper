@@ -1,0 +1,228 @@
+(function(window, $, undefined) {
+	trainingDatabases = {
+		init: function() {
+			var objThisref 		= this;
+
+			$('#js-training-databases-list').off().on('click', '#create-db-btn, .edit-db-link', function() {
+
+				var strUrl = objThisref.exitTags.add_edit_training_database;
+				var strTitle = __( "Create Learning Session" );
+				if( $(this).hasClass('edit-db-link') ) {
+					strUrl += '&training_databases[id]=' + $(this).data('training-db-id');
+					strTitle = __( "Edit Learning Session" );
+				}
+
+				psi.patterns.loadDialog({
+					title: strTitle,
+					strContentId: "createDatabase",
+					strUrl: strUrl ,
+					width: "800",
+					height: "650",
+					onCloseCallback: function() {
+						psi.patterns.ajaxRequest({
+							url: objThisref.exitTags.view_training_databases,
+							strElementSelector: '#body',
+						});
+					}
+				});
+			});
+
+			$('a.list-users').on('click', function() {
+
+				var strUrl = objThisref.exitTags.view_training_database_users + '&training_databases[id]=' + $(this).data('training-db-id');
+				var strTitle = ( 1 == objThisref.is_administrator ) ? __( "Learning Session Participants" ) : __( "Select Learning Session" );
+
+				psi.patterns.loadDialog({
+					title: strTitle,
+					strContentId: "createDatabase",
+					strUrl: strUrl ,
+					width: "800",
+					height: "650",
+					onCloseCallback: function() {
+						psi.patterns.ajaxRequest({
+							url: objThisref.exitTags.view_training_databases,
+							strElementSelector: '#body',
+						});
+					}
+				});
+			});
+
+		},
+		addEditTrainingDatabase: function() {
+			var objThisref 		= this;
+
+			$('#frm-submit-training-database').on( 'submit', function( e ) {
+				e.preventDefault();
+				var objData =  $(this).serializeArray();
+				var objListIds = [];
+				$('#selected-company-user_list li').each(function() {
+					objListIds.push( $(this).data('listid') );
+				});
+
+				objData.push( {
+					name: "training_databases[training_database_users]",
+					value: objListIds
+				});
+
+				psi.patterns.ajaxRequest({
+					url: objThisref.exitTags.insert_or_update_training_database ,
+					data: objData,
+					beforeSend: function () {
+						psi.patterns.showLoadingImage({
+							strElementSelector:'#createDatabase'
+						});
+					},
+					strElementSelector: '#createDatabase',
+				});
+
+			});
+
+			$('#cancel-edit').on( 'click', function( e ) {
+
+				$( '#createDatabase' ).dialog( 'close' );
+				psi.patterns.ajaxRequest({
+					url: objThisref.exitTags.view_training_databases,
+					strElementSelector: '#body',
+				});
+			});
+
+			var expirationDate	= $('#dtp-expire-on-date');
+			var startDate 		= $('#dtp-start-date');
+
+			function updateExpirationLimit() {
+				var dateFormat = $( '#dtp-start-date .dateholder' ).datepicker( "option", "dateFormat" );
+				var dateFormatted = $.datepicker.parseDate( dateFormat, $( '#dtp-start-date .dateholder' ).val() );
+				if( dateFormatted !== null ){
+					var end_date_interval = parseInt( $( '#dtp-expire-on-date' ).data("end-date-interval") );
+					dateFormatted.setMonth( dateFormatted.getMonth() + end_date_interval);
+					$('#dtp-expire-on-date .dateholder').datepicker( "option", "maxDate", dateFormatted );
+				}
+			}
+
+			updateExpirationLimit();
+
+			$('#dtp-start-date').change(function(){
+				updateExpirationLimit();
+			});
+
+		},
+		deleteTrainingUser: function( intTrainingDatabaseUserId, intTrainingId ) {
+			var objThisref = this;
+			psi.patterns.ajaxRequest( {
+					url: objThisref.exitTags.delete_training_database_user + '&company_user[id]=' + intTrainingDatabaseUserId + '&company_user[training_database_id]=' + intTrainingId,
+					strElementSelector: '#body',
+					success: function( strResponse ) {
+						try {
+								psi.patterns.ajaxRequest( {
+									url: objThisref.exitTags.view_training_databases,
+									strElementSelector: '#body',
+									complete: function() {
+										psi.patterns.removeLoadingImage( { strElementSelector: '#body' } );
+											$( '#ajax-message' ).fadeOut( 3000 );
+										}
+									} );
+
+						} catch( e ) {}
+					}
+			} );
+		},
+		deleteTraining: function( intTrainingId ) {
+			var objThisref = this;
+			psi.patterns.ajaxRequest( {
+				url: objThisref.exitTags.delete_training_database + '&training_database_id=' + intTrainingId,
+				strElementSelector: '#body',
+				success: function( strResponse ) {
+					try {
+						psi.patterns.ajaxRequest( {
+							url: objThisref.exitTags.view_training_databases,
+							strElementSelector: '#body',
+							complete: function() {
+								psi.patterns.removeLoadingImage( { strElementSelector: '#body' } );
+								$( '#ajax-message' ).fadeOut( 3000 );
+							}
+						} );
+
+					} catch( e ) {}
+				}
+			} );
+		},
+		loginTrainingDatabaseUser: function() {
+			var objThisref 		= this;
+			$('.training-session-login-link').on('click', function(  ) {
+				objThisref.loginSingleTrainingDatabaseUser( $(this).data('training-database-user-id'), objThisref.exitTags.login_training_session );
+			});
+		},
+		loginSingleTrainingDatabaseUser: function( intTrainingDatabaseUserId , strUrl ) {
+
+			var objData = {
+				'training_database_user_id' : intTrainingDatabaseUserId
+			}
+
+			psi.patterns.ajaxRequest({
+				url: strUrl,
+				data: objData,
+				success: function( strResponse ) {
+					window.open( strResponse.data.url, '_blank' );
+				}
+			});
+		},
+		initTrainingDatabaseUserInstance : function() {
+			psi.patterns.bindEssentials();
+			$('.js-check-all-training').click( function() {
+				$('.js-training-form-checkbox').prop('checked', $('.js-check-all-training').prop('checked'));
+			});
+		},
+		fnResetTraining : function( obj ) {
+			var resetbutton = $(obj).parents( '.js-reset-link' );
+			$('.tip').hide();
+			psi.patterns.ajaxRequest({
+				strElementSelector: "#createDatabase",
+				url: "/?module=trainings_databasexxx&action=reset_training_database_user",
+				data: { training_database_user_ids : [ resetbutton.data('id') ] },
+				method: 'POST',
+				success: function( transport ) {
+					if( true === transport.status ) {
+						resetbutton.hide();
+						var checkboxSelector='#checkbox-training-' + resetbutton.data('id');
+						$(checkboxSelector).hide();
+						var loginSelector='#login-link-training-' + resetbutton.data('id');
+						$(loginSelector).hide();
+						var statusSelector='#status-training-' + resetbutton.data('id');
+						$(statusSelector).html('Reset in Progress');
+						$('.js-training-error-msg p').html('Learning Session reset requested successfully.').removeClass('error').addClass('success').fadeIn().delay(5000).fadeOut();
+						psi.patterns.removeLoadingImage( { strElementSelector: "#createDatabase" } );
+					} else  {
+						$('.js-training-error-msg p').html('Learning Session reset request failed.').removeClass('success').addClass('error').fadeIn().delay(5000).fadeOut();
+						psi.patterns.removeLoadingImage( { strElementSelector: "#createDatabase" } );
+					}
+				}
+			});
+		},
+		fnMultiResetTraining : function() {
+			var arrintIds = [];
+			$('.js-training-form-checkbox').each(function () {
+				if ($(this).prop('checked')) arrintIds.push($(this).val());
+			});
+			$('.tip').hide();
+			psi.patterns.ajaxRequest({
+				strElementSelector: "#createDatabase",
+				url: "/?module=trainings_databasexxx&action=reset_training_database_user",
+				data: {training_database_user_ids: arrintIds},
+				method: 'POST',
+				success: function (transport) {
+					if (true === transport.status) {
+						$.each(arrintIds, function (index, value) {
+							$('#checkbox-training-' + value).hide();
+							$('#reset-link-training-' + value).hide();
+						});
+						$('.js-training-error-msg p').html('Learning Session reset requested successfully.').removeClass('error').addClass('success').fadeIn().delay(5000).fadeOut();
+						psi.patterns.removeLoadingImage({strElementSelector: "#createDatabase"});
+					} else {
+						$('.js-training-error-msg p').html('Learning Session reset request failed.').removeClass('success').addClass('error').fadeIn().delay(5000).fadeOut();
+						psi.patterns.removeLoadingImage({strElementSelector: "#createDatabase"});
+					}
+				}
+			});
+		}
+	};
+})(window, jQuery);

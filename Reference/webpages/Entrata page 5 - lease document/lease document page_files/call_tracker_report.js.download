@@ -1,0 +1,619 @@
+var objCallTrackerModule = {};
+var arrstrExitTags	= {};
+objCallTrackerModule.intCurrentPageNo	= 0;
+objCallTrackerModule.intCallsCount		= 0;
+
+objCallTrackerModule.bindCallTrackerModuleEssentials = function() {
+	psi.patterns.bindEssentials();
+
+	$( '#call_tracker_ajax_messages' ).fadeIn('fast');
+	$( '#call_tracker_ajax_messages' ).fadeOut(10000);
+
+	$(".more-actions").hide();
+	$(".more-actions").each(function(){
+		if( $(this).find("ul li").length ) {
+			$(this).show()
+		}
+	});
+	$(".updateCallResult").unbind();
+	$(".updateCallResult").on( 'change', function() {
+		objCallTrackerModule.updateSelectedCallResult( this );
+	});
+
+	$("#checkAll").unbind();
+	$("#checkAll").on( 'click', function() {
+		objCallTrackerModule.checkAllPage( this );
+	});
+
+	$(function(){
+		objCallTrackerModule.viewCallTrackerLogsPagination();
+	});
+}
+
+objCallTrackerModule.bindCallTrackerFilterEssentials = function() {
+	if( 'archived_calls' == $('#call_tracker_filter_archived').val() ) {
+		$('#archive-btn').hide();
+		$('#unarchive-btn').show();
+	} else if( 'current_calls' == $('#call_tracker_filter_archived').val() ) {
+		$('#archive-btn').show();
+		$('#unarchive-btn').hide();
+	} else {
+		$('#archive-btn').show();
+		$('#unarchive-btn').show();
+	}
+
+
+	$('#call_tracker_call_source_id').change( function( e ) {
+		if( '' === $(this).val() ) {
+			$('#call_type_multiselect #call_type_option_0').click();
+			return true;
+		}
+
+		psi.patterns.ajaxRequest({
+			url: arrstrExitTags.view_call_tracker_calls_left_advanced_search,
+			data: jQuery('#advance_search_calls').serialize(),
+			strElementSelector: '#call_tacker_advanced_filters'
+		});
+
+	});
+
+	$("#advance_search_calls_submit").unbind();
+	$("#advance_search_calls_submit").on( 'click', function() {
+		objCallTrackerModule.quickSearch();
+	});
+
+	$('#advanced_search_generic_data').unbind();
+	$('#advanced_search_generic_data').bind('keypress', function(e) {
+		if( 13 == e.keyCode ) {
+			objCallTrackerModule.quickSearch();
+		}
+	});
+
+	$("#link_reset_quick_search").unbind();
+	$("#link_reset_quick_search").on( 'click', function() {
+		objCallTrackerModule.resetQuickSearch();
+	});
+
+	if( 0 === $('input:checkbox[name="call_tracker_call_filter[call_type_ids][]"]:not(:checked)').length ) {
+		$('#call_type_multiselect_caption').html( 'All' );
+	}
+}
+
+objCallTrackerModule.bindCallAssociationEssentials = function() {
+	$("#call_association_submit").on( 'click', function() {
+		objCallTrackerModule.loadcallAssociations();
+	});
+
+	$("#close_call_association_dialog").on( 'click', function() {
+		objCallTrackerModule.closeCallAssociationDialog();
+	});
+
+	$("#call_association_action").on( 'change', function() {
+		objCallTrackerModule.changeCallAssociationAction();
+	});
+}
+
+/***********************************************************************
+ New Call Tracker Report >> Calls Reports [view_call_tracker_calls.tpl,-- remove this after checking all the code and validatino -- view_call_tracker_callers.tpl]
+ ***********************************************************************/
+
+arrstrExitTags.view_maintenance_request = '';
+
+objCallTrackerModule.showWorkOrderDetails = function( intMaintainenceRquestId ) {
+	loadReportsDialogBoxes( { title: __('View Work Order'), strUrl : arrstrExitTags.view_maintenance_request+'&is_resident_system=0&maintenance_request[id]='+intMaintainenceRquestId } );
+	return false;
+}
+
+function loadReportsDialogBoxes( strOptions ) {
+	// IF the modal-large changes this also needs to be change
+	if( 0 < $( "body" ).find( ".modal-large" ).length ) {
+		psi.patterns.addDialogContent( strOptions );
+	} else {
+		psi.patterns.loadLargeDialog( strOptions );
+	}
+}
+
+arrstrExitTags.view_matched_applicants = '';
+
+objCallTrackerModule.showMultipleLeads = function( intCallId ) {
+	psi.patterns.loadDialog( { title: __('View Merge Leads'), dialogClass: 'read_only',strContentId: 'add_lead_dlg',strUrl: arrstrExitTags.view_matched_applicants+'&call[id]='+ intCallId,width: '800',height: '400' } );
+}
+
+arrstrExitTags.view_matched_residents = '';
+
+objCallTrackerModule.showMultipleResidents = function( intCallId ) {
+	psi.patterns.loadDialog( { title: __('View Merge Residents'), strContentId: 'add_lead_dlg', strUrl: arrstrExitTags.view_matched_residents+'&call[id]='+ intCallId, width: '800', height: '400' } );
+}
+
+arrstrExitTags.create_call_tracker_associate	= '';
+
+objCallTrackerModule.loadCallAssociationsDialog = function( intCallId, boolShowCallRecording, boolIsUnknown, strPhoneNumber, strEventId) {
+	var strShowCallRecording = '';
+	if( boolShowCallRecording ) {
+		strShowCallRecording = '&show_call_recording='+boolShowCallRecording;
+	}
+
+	if( true == boolIsUnknown ) {
+		psi.patterns.loadDialog( { title: __('View Call Association'), strContentId: 'call_association_container', strUrl: arrstrExitTags.create_call_tracker_associate+'&call[id]='+intCallId+strShowCallRecording+'&isLoadCallAction=1&event[id]='+strEventId, width: '522', height: '400' } );
+	} else {
+		psi.patterns.loadDialog( { title: strPhoneNumber, strContentId: 'call_association_container', strUrl: arrstrExitTags.create_call_tracker_associate+'&call[id]='+intCallId+strShowCallRecording+'&isLoadCallAction=0&event[id]='+strEventId, width: '430', height: '155' } );
+	}
+}
+
+objCallTrackerModule.loadCallReAssociationsDialog = function( intCallId, strEventId, strName, strCallAction ) {
+	psi.patterns.loadDialog( { title: __('Update Call Association'), strContentId: 'call_association_container', strUrl: arrstrExitTags.create_call_tracker_associate+'&call[id]='+intCallId+'&caller_name='+encodeURI(strName)+'&call_action='+strCallAction+'&isLoadCallAction=1&is_reassociate=true&event[id]='+strEventId, width: '522', height: '400' } );
+}
+
+arrstrExitTags.view_call_tracker_calls	= '';
+
+objCallTrackerModule.resetQuickSearch = function() {
+	psi.patterns.ajaxRequest( { url : arrstrExitTags.view_call_tracker_calls+'&reset[status]=1', strElementSelector : '#call_tracker_container', data: $('#advance_search_calls').serialize() } );
+}
+
+objCallTrackerModule.refreshCalls = function() {
+	psi.patterns.ajaxRequest( { url : arrstrExitTags.view_call_tracker_calls+'&reset[status]=0', strElementSelector : '#call_tracker_container', data: $('#advance_search_calls').serialize() } );
+}
+
+objCallTrackerModule.refreshCurrentCallsPage = function() {
+	if( '' != arrstrWorkOrderExitTags && arrstrWorkOrderExitTags['view_call_tracker_calls'] ){
+		strUrl = arrstrWorkOrderExitTags.view_call_tracker_calls;
+	} else {
+		strUrl = arrstrExitTags.view_call_tracker_calls;
+	}
+	psi.patterns.ajaxRequest( {
+		url : strUrl +'&application_filters[view_call_tracker_calls]=1&page_no='+objCallTrackerModule.intCurrentPageNo,
+		strElementSelector : '#call_tracker_container',
+		data: $('#advance_search_calls').serialize()
+	} );
+}
+
+arrstrExitTags.download_call_tracker_calls = '';
+
+arrstrExitTags.delete_call_tracker_calls = '';
+
+objCallTrackerModule.deleteCallTrackerCalls = function( strArchiveStatus, strSelectedCalls ) {
+	if( 0 == $( '#view_call_tracker_calls tr td.action input[type="checkbox"]:checked' ).length ) {
+		alert (__('Please select at least one record'));
+		return false;
+	}
+
+	var selectedLeadCalls = [];
+
+	$( '#view_call_tracker_calls tr td.action input[type="checkbox"]:checked' ).each(function() {
+		var intCallId = parseInt( $( this ).val() );
+
+		if( false == isNaN( intCallId ) ) {
+			selectedLeadCalls.push( $( this ).val() );
+		}
+	} );
+	psi.patterns.ajaxRequest( {
+		url : arrstrExitTags.delete_call_tracker_calls+'&call_tracker_calls[ids]='+selectedLeadCalls+'&lead_calls[multiple_discard]=1&archive='+strArchiveStatus+'&application_filters[view_call_tracker_calls]=1&page_no='+objCallTrackerModule.intCurrentPageNo,
+		strElementSelector : '#call_tracker_container',
+		data: $('#advance_search_calls').serialize()
+	} );
+}
+
+arrstrExitTags.view_call_tracker_call_note = '';
+
+objCallTrackerModule.viewCallNote = function( intCallId ) {
+	psi.patterns.loadDialog( { title: __('Notes'), strContentId: 'call_notes', strUrl : arrstrExitTags.view_call_tracker_call_note+'&call[id]='+intCallId, width: '700', height: '375' } );
+}
+
+arrstrExitTags.update_call_tracker_call = '';
+
+objCallTrackerModule.updateSelectedCallResult = function( obj ) {
+	var referenceClass = $(obj).attr('class').split(' ');
+
+	if( 0 < referenceClass.length ) {
+		var referenceClassId = $(obj).attr('class').split('_');
+		var callResultId = $( '#call_result_id_' + referenceClassId[3] ).find("option:selected").val();
+
+		psi.patterns.ajaxRequest( {
+			url : arrstrExitTags.update_call_tracker_call+'&call[id]='+referenceClassId[3]+'&call[call_result_id]='+callResultId,
+			strElementSelector : '#call_association_container',
+			success:function(html){
+				$( '#update_call_result_message' + referenceClassId[3] ).addClass("jtooltip");
+				$( '#update_call_result_message' + referenceClassId[3] ).html('Call Result Updated Successfully.');
+				$( '#update_call_result_message' + referenceClassId[3] ).fadeIn('fast');
+				$( '#update_call_result_message' + referenceClassId[3] ).fadeOut(7000);
+			}
+		} );
+	}
+}
+
+objCallTrackerModule.checkAllPage = function( obj ){
+	$("#checkboxOptions").hide();
+	if($(obj).is(":checked") == true) {
+		$("#tableSortable").find("input").prop('checked', true);
+		$("[name='checkAllDown']").prop('checked', true);
+		$("[name='checkAllUp']").prop('checked', true);
+	} else {
+		$("#tableSortable").find("input").prop('checked', false);
+		$("[name='checkAllDown']").prop('checked', false);
+		$("[name='checkAllUp']").prop('checked', false);
+	}
+}
+
+objCallTrackerModule.toggleCheckboxOptions = function() {
+	if($("#checkboxOptions").is(":visible") == true) {
+		$("#checkboxOptions").hide();
+	} else {
+		$("#checkboxOptions").slideDown("fast");
+	}
+}
+
+objCallTrackerModule.downloadCallTrackerLogs = function( boolisDownloadAllCalls ) {
+	var arrobjDocumets				= document.getElementsByName( "call_tracker_calls[ids][]" );
+	var len							= arrobjDocumets.length,i;
+	var checkedCount				= 0;
+	var intIsAllLeadsPageSelected 	= $("#checkAll").val();
+	var selectedLeadCalls			= new Array();
+
+	if( false == objEntrataNotification.getIsConnected() ) {
+		objEntrataNotification.connect();
+	}
+
+	if( 0 < len ) {
+		for( i	= 0; i < len; i++ ) {
+			if( true == arrobjDocumets[i].checked ) {
+				selectedLeadCalls.push( arrobjDocumets[i].value );
+				checkedCount++;
+			}
+		}
+	}
+
+	if( true != boolisDownloadAllCalls  && 0 == checkedCount ) {
+		return alert("Please select at least one record.");
+	}
+	if(true == boolisDownloadAllCalls ) {
+		selectedLeadCalls = [];
+	}
+
+	if( objCallTrackerModule.intCallsCount > 50000 ) {
+		$('#call_tracker_ajax_messages').html( '<p class="alert error slim">You have exceeded download limit of 50K records. Currently you have selected ' + objCallTrackerModule.intCallsCount + ' records, Please adjust your date filters.</p>' );
+		$('#call_tracker_ajax_messages').show();
+		$('#call_tracker_ajax_messages').fadeOut( 10000, 'swing', function() {
+			$('#call_tracker_ajax_messages').html("");
+			$('#call_tracker_ajax_messages').hide();
+		} );
+		return false;
+	}
+
+	psi.patterns.ajaxRequest( {
+		url : arrstrExitTags.download_call_tracker_logs+"&call_tracker_calls[call_ids]=" + selectedLeadCalls + "&call_tracker_call_filter[generic_data]=" + $('#advanced_search_generic_data').val()
+			+ "&call_tracker_call_filter[is_all_calls_selected]=" + intIsAllLeadsPageSelected + "&application_filters[view_call_tracker_calls]=1",
+		strElementSelector : '#call_tracker_container',
+		data: $('#advance_search_calls').serialize()
+	} );
+}
+
+objCallTrackerModule.viewCallTrackerLogsDownloadHistory = function() {
+	psi.patterns.loadDialog( { title: __('View Call Tracker Logs Download'), strContentId: 'call_tracker_logs_download_history_container', strUrl: arrstrExitTags.view_call_tracker_logs_download_history, width: '800', height: '600' } );
+}
+
+objCallTrackerModule.refreshCallTrackerLogsDownloadHistory = function() {
+	psi.patterns.ajaxRequest( { url : arrstrExitTags.view_call_tracker_logs_download_history, strElementSelector : '#call_tracker_logs_download_history_container', data: $('#view_call_tracker_logs_download_history').serialize() } );
+}
+
+objCallTrackerModule.toggleCallTrackerLogsDownloadHistory = function( currentRow ) {
+	$( '#'+currentRow ).slideToggle();
+}
+
+objCallTrackerModule.viewCallTrackerLogsPagination = function() {
+	psi.patterns.ajaxRequest( {
+		url: arrstrExitTags.view_call_tracker_logs_pagination,
+		strElementSelector: '#pagination'
+	} );
+}
+
+objCallTrackerModule.loadSubAnswerStatusTypeIds = function() {
+
+	$( '#call_sub_status_type_div' ).addClass( 'hide' );
+	var objSelectedCheckBox = $( '#answer_status_multiselect input:checked.multiselect-checkbox ' );
+	if( true == objSelectedCheckBox.length ) {
+		if( CALL_STATUS_UNANSWERED == jQuery( objSelectedCheckBox[0] ).val() ) {
+			$( '#call_sub_status_type_div' ).removeClass( 'hide' );
+		}
+	}
+}
+
+//***********************************************************************
+//New Call Tracker Report >> Left Advanced Searched [call_tracker_calls_left_advanced_search.tpl]
+//***********************************************************************
+
+arrstrExitTags.view_call_tracker_calls	= '';
+
+objCallTrackerModule.quickSearch = function() {
+	$( '#is_current_leads_page_selected' ).val(0);
+	$( '#is_all_calls_selected' ).val(0);
+	$( '#is_all_calls_deselected' ).val(1);
+	$( '#current_selected_leads_page_no' ).val('');
+	$( '#is_column_sorting_set' ).val(0);
+	$( '#call_tracker_call_filter_id' ).val('');
+	$( '#filter_name' ).val('');
+	psi.patterns.bindEssentials();
+	psi.patterns.ajaxRequest( { url : arrstrExitTags.view_call_tracker_calls+'&refresh_filter=1', strElementSelector : '#call_tracker_container', data: $('#advance_search_calls').serialize() } );
+}
+
+//***********************************************************************
+//New Call Tracker Report >> View Multiple Resident [view_matched_residents.tpl]
+//***********************************************************************
+
+objCallTrackerModule.AttachSelectedResident = function( intCallId, intLeaseId, intCustomerId, intPropertyId ) {
+	psi.patterns.ajaxRequest( {
+		url : arrstrExitTags.associate_resident_call_tracker+'&call[id]='+intCallId+'&lease_customer[id]='+intCustomerId+'&application_filters[view_call_tracker_calls]=1&property_id='+intPropertyId,
+		strElementSelector : '#add_lead_dlg',
+		success:function(html){
+			loadLeaseInLargeDialog( intLeaseId, intCustomerId );
+			objCallTrackerModule.closeMultipleResidentDialog();
+			objCallTrackerModule.refreshCurrentCallsPage();
+		}
+	} );
+}
+
+objCallTrackerModule.closeMultipleResidentDialog = function() {
+	$('#add_lead_dlg').dialog('close');
+}
+
+//***********************************************************************
+//New Call Tracker Report >> Call Actions Popup [create_call_tracker_associate.tpl]
+//***********************************************************************
+
+objCallTrackerModule.closeCallAssociationDialog = function() {
+	$('#call_association_container').dialog('close');
+}
+
+objCallTrackerModule.loadcallAssociations = function() {
+	var intCallId	= $('#call_association_form #call_id').val();
+	var type		= $('#call_association_action').find("option:selected").val();
+
+	switch( type ) {
+		case 'create_lead':
+			$('#application_id').remove();
+			validateCallActionNotes('create_lead');
+			break;
+
+		case 'create_workorder':
+			validateCallActionNotes('create_workorder');
+			break;
+
+		case 'attach_to_lead':
+			validateCallActionNotes('attach_to_lead');
+			break;
+
+		case 'attach_to_resident':
+			validateCallActionNotes('attach_to_resident');
+			break;
+
+		case 'archive':
+			validateCallActionNotes('archive');
+			break;
+
+		default:
+			validateCallActionNotes(null);
+			break;
+	}
+}
+
+objCallTrackerModule.changeCallAssociationAction = function() {
+	$('#call_notes').val('');
+	if( 'attach_to_lead' == $("#call_association_action").val() ) {
+		$(".action-attach_to_lead").show();
+		$(".action-attach_to_resident").hide();
+		$(".action-dismiss").hide();
+	} else if( 'attach_to_resident' == $("#call_association_action").val() ) {
+		$(".action-attach_to_resident").show();
+		$(".action-attach_to_lead").hide();
+		$(".action-dismiss").hide();
+	} else if( 'archive' == $("#call_association_action").val() ) {
+		$(".action-dismiss").show();
+		$(".action-attach_to_resident").hide();
+		$(".action-attach_to_lead").hide();
+	} else {
+		$(".action-attach_to_resident").hide();
+		$(".action-attach_to_lead").hide();
+		$(".action-dismiss").hide();
+	}
+}
+
+objCallTrackerModule.selectCustomer = function(obj) {
+	$('#lease_customer_id').val( obj.customer_id );
+	$("#lease_customer_name").val(obj.name_first+" "+obj.name_last);
+	$("#lease_id").val(obj.lease_id);
+}
+
+objCallTrackerModule.selectLead = function(obj) {
+	$('#applicant_id').val(obj.applicant_id);
+	$('#application_id').val(obj.application_id);
+	$('#applicant_name').val(obj.name_first+' '+obj.name_last);
+}
+
+//***********************************************************************
+//New Call Tracker Report >> Call Notes Popup [view_call_tracker_call_note.tpl]
+//***********************************************************************
+
+objCallTrackerModule.saveCallTrackerCallNotes = function(intCallId) {
+	CKEDITOR.instances.call_lead_notes.updateElement();
+	var callNote = $('#call_lead_notes').val();
+	psi.patterns.ajaxRequest( {
+		url : arrstrExitTags.update_call_tracker_call_note,
+		strElementSelector : '#call_notes',
+		data: $('#frm_call_lead_notes').serialize(),
+		success:function(html){
+			objCallTrackerModule.closeCallTrackerCallNotesDialog();
+			if( '' != callNote ) {
+				$('#note_'+intCallId).find('svg').remove('svg');
+				$('#note_'+intCallId).find('i').addClass('note');
+			} else if( '' == callNote && 0 == $( '#note_'+intCallId ).find('svg').length ) {
+				$('#note_'+intCallId).find('i').removeClass('note');
+				$('#note_'+intCallId).find('i').append('<svg viewBox="0 0 32 32" class="entrata-svg-icon fill- default"><use xlink:href="/Common/assets/components/patterns/svg/line_sprite.svg#note-icon"></use></svg>');
+			}
+			objCallTrackerModule.refreshCurrentCallsPage();
+		}
+	} );
+}
+
+objCallTrackerModule.closeCallTrackerCallNotesDialog = function() {
+	$('#call_notes').dialog('close');
+}
+
+validateCallActionNotes = function(strCaseName) {
+	psi.patterns.ajaxRequest({
+		strElementSelector: "#call_association_container",
+		url: arrstrExitTags.validate_call_association_fields+'&archive='+strCaseName,
+		data: $('#call_association_form').serialize(),
+		success : function(result){
+			var response=$.parseJSON(result);
+			psi.patterns.removeLoadingImage({
+				strElementSelector: "#call_association_container"
+			});
+			if( false == response['boolSuccess']) {
+				$('#error_mes').html( '<p class="alert error slim">' + response['messages'] + '</p>' );
+				return false;
+			} else {
+				if('create_lead' == strCaseName) {
+					loadReportsDialogBoxes( { strUrl : arrstrExitTags.create_application+'&show_lead_form=1&phone_numbers[0][phone_number_type]=4'+'&phone_numbers[0][phone_number]='+[ response['originPhoneNumber'] ]+'&'+$('#call_association_form').serialize(true), onCloseCallback:function(html){
+							objCallTrackerModule.refreshCurrentCallsPage();
+						}
+					} );
+					objCallTrackerModule.closeCallAssociationDialog();
+				} else if('create_workorder' == strCaseName) {
+					psi.patterns.loadDialog( { title: __('New Work Order'), strContentId: 'add_work_order', strUrl: arrstrExitTags.create_maintenance_request+$('#call_association_form').serialize(true)+'&is_from_call_tracker=1', width: '1000', height: '620',
+						onCloseCallback:function(html){
+							if( '' != $('#maintenance_request_id').val() && false == isNaN($('#maintenance_request_id').val()) ) {
+								loadReportsDialogBoxes( { strUrl : arrstrExitTags.view_maintenance_request+'&maintenance_request[id]=' + $('#maintenance_request_id').val(), title : 'View Work Order', onCloseCallback : function(html){
+										objCallTrackerModule.refreshCurrentCallsPage();
+									} } );
+							} else {
+								objCallTrackerModule.refreshCurrentCallsPage();
+							}
+						}
+					} );
+					objCallTrackerModule.closeCallAssociationDialog();
+				} else if('attach_to_lead' == strCaseName) {
+					boolIsUpdateSecondaryNumber = objCallTrackerModule.checkSecondaryNumber( response['secondaryNumber'] );
+					psi.patterns.ajaxRequest( {
+						url : arrstrExitTags.associate_lead_call_tracker+'&page_no='+objCallTrackerModule.intCurrentPageNo+'&application_filters[view_call_tracker_calls]=1&show_lead_form=0',
+						strElementSelector : '#call_tracker_container',
+						data: $('#call_association_form').serialize() + "&boolIsUpdateSecondaryNumber=" + boolIsUpdateSecondaryNumber
+					} );
+					objCallTrackerModule.closeCallAssociationDialog();
+
+				} else if('attach_to_resident' == strCaseName) {
+					boolIsUpdateSecondaryNumber = objCallTrackerModule.checkSecondaryNumber( response['secondaryNumber'] );
+					psi.patterns.ajaxRequest( {
+						url : arrstrExitTags.associate_resident_call_tracker+'&page_no='+objCallTrackerModule.intCurrentPageNo+'&application_filters[view_call_tracker_calls]=1',
+						strElementSelector : '#call_tracker_container',
+						data: $('#call_association_form').serialize() + "&boolIsUpdateSecondaryNumber=" + boolIsUpdateSecondaryNumber
+					} );
+					objCallTrackerModule.closeCallAssociationDialog();
+				} else if('archive' == strCaseName) {
+					var intCallId			= $('#call_association_form #call_id').val();
+					var call_notes			= $("#call_notes").val();
+					var call_result_id		= $("#call_result_id").val();
+					var intPropertyId		= $("input[name='fast_lookup_filter[property_id]']").val();
+					var intLeaseCustomerId	= $('#lease_customer_id').val();
+					var intApplicationId	= $('#application_id').val();
+					var strUrl				= arrstrExitTags.delete_call_tracker_calls;
+
+					if(true == $.isNumeric(intCallId)) {
+						strUrl += '&call_tracker_calls[ids][]='+intCallId;
+
+						if('undefined' !== typeof call_notes && null !== call_notes && 0 < call_notes.trim().length) {
+							strUrl += '&call['+intCallId+'][notes]='+call_notes;
+						}
+
+						if(true == $.isNumeric(call_result_id)) {
+							strUrl += '&call['+intCallId+'][call_result_id]='+call_result_id;
+						}
+					}
+
+					if(true == $.isNumeric(intPropertyId)) {
+						strUrl += '&property[id]='+intPropertyId;
+					}
+
+					if(true == $.isNumeric(intLeaseCustomerId)) {
+						strUrl += '&customer[id]='+intLeaseCustomerId;
+					}
+
+					if(true == $.isNumeric(intApplicationId)) {
+						strUrl += '&application[id]='+intApplicationId;
+					}
+
+					strUrl += '&archive=archive'+'&application_filters[view_call_tracker_calls]=1&page_no='+objCallTrackerModule.intCurrentPageNo;
+
+					psi.patterns.ajaxRequest( { url : strUrl, strElementSelector : '#call_tracker_container' } );
+					objCallTrackerModule.closeCallAssociationDialog();
+				}
+			}
+		}
+	});
+}
+
+function loadVanityNumbers(){
+	psi.patterns.ajaxRequest({
+		url: arrstrExitTags.view_call_tracker_calls_left_advanced_search,
+		data: jQuery('#advance_search_calls').serialize(),
+		strElementSelector: '#call_tacker_advanced_filters'
+	});
+}
+
+objCallTrackerModule.checkSecondaryNumber = function( strSecondaryNumber ) {
+	var boolIsUpdateSecondaryNumber = true;
+	if( null != strSecondaryNumber ) {
+		var boolIsUpdateSecondaryNumber = false;
+		var returnValue = confirm( 'Do you want to replace secondary number?' );
+		if( returnValue ) {
+			var boolIsUpdateSecondaryNumber = true;
+		}
+	}
+	return boolIsUpdateSecondaryNumber;
+}
+objCallTrackerModule.viewCallHistory = function( intCallId ) {
+	psi.patterns.loadDialog( { title: __('View Call History'), strContentId: 'view_call_history', strUrl : arrstrExitTags.view_call_history+'&call[id]='+intCallId, width: '950', height: '500' } );
+}
+
+objCallTrackerModule.createCallEmail = function( intCallId ) {
+	psi.patterns.loadDialog( { title: __('Send Call Email'), strContentId: 'create_call_email', strUrl : arrstrExitTags.create_call_email+'&call[id]='+intCallId, width: '950', height: '500' } );
+}
+
+objCallTrackerModule.closeCreateCallEmailDialog = function() {
+	$('#create_call_email').dialog('close');
+}
+
+objCallTrackerModule.sendCallEmail = function() {
+	CKEDITOR.instances.call_email_content.updateElement();
+	psi.patterns.ajaxRequest({
+		strElementSelector: "#create_call_email",
+		url: arrstrExitTags.send_call_email,
+		data: $('#frm_call_email').serialize(),
+		success : function(result){
+			var response=$.parseJSON(result);
+			psi.patterns.removeLoadingImage({
+				strElementSelector: "#create_call_email"
+			});
+			if( false == response['boolSuccess']) {
+				$('#error_message').html( '<p class="alert error slim">' + response['messages'] + '</p>' );
+				return false;
+			} else {
+				objCallTrackerModule.closeSendCallEmail();
+				objCallTrackerModule.refreshCurrentCallsPage();
+				return false;
+			}
+		}
+	});
+}
+
+objCallTrackerModule.closeSendCallEmail = function() {
+	$('#create_call_email').dialog('close');
+}
+
+objCallTrackerModule.drillDownCallScore = function( intCallId ) {
+	psi.patterns.loadDialog( {
+		title: __('Call Score'),
+		strContentId: 'view_call_score_drill_down',
+		strUrl: arrstrExitTags.view_call_scorecard + '&call[id]=' + intCallId,
+		width: 1200,
+		height: 900
+	} );
+}

@@ -1,0 +1,735 @@
+if( 'undefined' == typeof( PropertyGroupCombo ) ) {
+	var PropertyGroupCombo = {};
+
+	PropertyGroupCombo.type = 'Advanced';
+	PropertyGroupCombo.intAllPropertyGroupId = '';
+
+	PropertyGroupCombo.SelectProperty = function( obj, intUniqueId, intUniqueName ) {
+
+		if( 'Advanced-v2' == PropertyGroupCombo.type ) {
+			PropertyGroupCombo.SelectPropertyV2( obj, intUniqueId, intUniqueName );
+		} else {
+			var $this = $( obj );
+			if( false == $this.hasClass( 'property-group-record' ) ) return;
+
+			$this.hide();
+			$this.addClass( 'js-selected' )
+			$( '#' + intUniqueId + ' .property-group-record[data-listid=' + $this.data( "listid" ) + ']' ).hide( 'fast' );
+
+			if( 0 == $( '#selected-' + intUniqueId + '-' + $this.data( 'listid' ) ).length ) {
+				$( "#" + intUniqueId + " .assigned ul" ).append( "<li id='selected-" + intUniqueId + "-" + $this.data( "listid" ) + "' data-listid='" + $this.data( "listid" ) + "'><label><i class='delete' title=" + __( 'Remove' ) + "></i>" + $this.find( 'span.property-name' ).text() + "</label><input type='hidden' name='" + intUniqueName + "' value='" + $this.data( "listid" ) + "' /></li>" );
+			}
+		}
+	}
+
+	PropertyGroupCombo.RemovePropertyGroup = function( obj, intUniqueId ) {
+
+		if( 'Advanced-v2' == PropertyGroupCombo.type ) {
+			PropertyGroupCombo.RemovePropertyGroupV2( obj, intUniqueId );
+		} else {
+
+			var $this = $( obj );
+			var intListId = $this.data( 'listid' );
+
+			$objProp = $( '#' + intUniqueId + ' .property-group-record[data-listid="' + intListId + '"]' );
+			$objProp.show();
+			$objProp.removeClass( 'js-selected' );
+
+			if( $objProp.hasClass( 'header' ) ) {
+				$objProp.find( 'i.down-arrow' ).addClass( 'right-arrow' ).removeClass( 'down-arrow' );
+				$objProp.next( 'ul' ).find( 'li.js-selected' ).removeClass( 'js-selected' );
+				$objProp.next( 'ul' ).find( 'li.hide' ).removeClass( 'hide' );
+			} else {
+				$objProp.closest( 'ul' ).prev( 'span.header' ).show();
+				$objProp.closest( 'ul' ).prev( 'span.header' ).removeClass( 'js-selected' );
+				$objProp.closest( 'ul' ).prev( 'span.header' ).find( 'i.right-arrow' ).removeClass( 'down-arrow' ).addClass( 'right-arrow' );
+				// $( '#' + intUniqueId + ' .header.property-group-record[data-listid="' + intListId + '"] i.down-arrow' ).removeClass( 'down-arrow' ).addClass( 'right-arrow' );
+
+				$objProp.closest( 'ul' ).show();
+			}
+
+			$( '#' + intUniqueId + ' span.js-all-properties-caption' ).hide();
+
+			$( '#' + intUniqueId ).find( "input.form-search-field" ).bind( 'keyup', PropertyGroupCombo.SearchPropertyGroup );
+			$this.remove();
+
+			$( '#' + intUniqueId + ' .options span.header:not(.js-all-properties-caption, .js-all-properties )' ).each( function() {
+				var intSpanlistId = $( this ).data( 'listid' );
+				if( 0 == $( '#' + intUniqueId + ' .assigned li[data-listid=' + intSpanlistId + ']' ).length ) {
+					$( this ).show();
+					$( this ).removeClass( 'js-selected' );
+				}
+			} );
+		}
+
+	}
+
+	PropertyGroupCombo.SelectPropertyGroup = function( obj, intUniqueId, intUniqueName ) {
+		var $this = $( obj );
+
+		if( $this.closest( '.header' ).hasClass( 'js-all-properties' )
+			&& 0 < $( '#' + intUniqueId ).find( ".assigned ul li" ).length
+			&& !PropertyGroupCombo.showConfirmBox( intUniqueId ) ) {
+
+			return false;
+		}
+
+		if( 'Advanced-v2' == PropertyGroupCombo.type ) {
+			//all properties
+			PropertyGroupCombo.SelectPropertiesGroupV2( obj, intUniqueId, intUniqueName );
+		} else {
+
+			if( $this.closest( '.header' ).hasClass( 'js-all-properties' ) ) {
+				PropertyGroupCombo.SelectAllCaptionV2( intUniqueId );
+			}
+
+			var strElement = "<li id='selected-" + intUniqueId + "-" + $this.parent().data( "listid" ) + "' style='background:#E5E5E5;' data-listid='" + $this.parent().data( "listid" ) + "'";
+			strElement += "><label><i class='delete' title=" + __( 'Remove' ) + "></i>" + $this.parent().text() + "</label><input type='hidden' name='" + intUniqueName + "' value='" + $this.parent().data( "listid" ) + "' /></li>";
+
+			$this.closest( '#' + intUniqueId ).find( ".assigned ul" ).append( strElement );
+			$this.parent().hide();
+			$this.parent().addClass( 'js-selected' );
+			$this.parent().next( 'ul' ).hide();
+		}
+	}
+
+	PropertyGroupCombo.showConfirmBox = function( intUniqueId ) {
+		var response = confirm( __( "Selecting All Properties will remove earlier selections" ) );
+		if( response == true ) {
+			$( '#' + intUniqueId ).find( ".assigned ul li" ).each( function() {
+				if( false == $( this ).hasClass( 'js-historical-properties' ) ) {
+					$( this ).remove();
+				}
+			} );
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	PropertyGroupCombo.SelectPropertyV2 = function( obj, intUniqueId, intUniqueName ) {
+		var $this = $( obj );
+
+		if( false == $this.hasClass( 'property-group-record' ) ) return;
+
+		$( '#' + intUniqueId + ' .property-group-record[data-listid=' + $this.data( "listid" ) + ']' ).hide();
+		$( '#' + intUniqueId + ' .property-group-record[data-listid=' + $this.data( "listid" ) + ']' ).addClass( 'js-selected' );
+
+		var selectCount = $this.parent( 'ul' ).find( 'li.js-selected' ).length;
+
+		if( 0 == $( '#selected-' + intUniqueId + '-' + $this.data( 'listid' ) ).length ) {
+			var boolIsNonAdmin = PropertyGroupCombo.isNonAdmin( $this.closest( 'ul' ).prev( 'span.header' ) );
+			var strElement = "<li id='selected-" + intUniqueId + "-" + $this.data( "listid" ) + "' data-listid='" + $this.data( "listid" ) + "'";
+
+			if( true == boolIsNonAdmin ) {
+				strElement += "data-all-properties=non-admin";
+			} else {
+				strElement += "data-all-properties=admin";
+			}
+			strElement += " style='background:#E5E5E5;'><label><i class='delete' title=" + __( 'Remove' ) + "></i>" + $this.find('span.property-name').text() + "</label><input type='hidden' name='" + intUniqueName + "' value='" + $this.data( "listid" ) + "' /></li>";
+
+			$( "#" + intUniqueId + " .assigned ul" ).append( strElement );
+
+		}
+
+		if( 0 == $this.closest( 'ul' ).find( 'li:visible' ).length ) {
+			$objHeader = $this.closest( 'ul' ).prev( 'span' );
+			boolIsNonAdmin = PropertyGroupCombo.isNonAdmin( $objHeader );
+			if( boolIsNonAdmin ) {
+				$objHeader.hide();
+				$this.closest( 'ul' ).hide();
+			}
+
+		}
+
+	}
+
+	PropertyGroupCombo.SelectPropertiesGroupV2 = function( $obj, intUniqueId, intUniqueName ) {
+		$this = $( $obj );
+		boolIsNonAdmin = PropertyGroupCombo.isNonAdmin( $this );
+
+		//non Admin
+		if( boolIsNonAdmin ) {
+
+			$this.closest( '.header' ).next( 'ul' ).find( 'li' ).each( function() {
+				PropertyGroupCombo.SelectProperty( $( this ), intUniqueId, intUniqueName, boolIsNonAdmin );
+			} );
+		} else {
+			//Admin
+			if( typeof $this.parent().attr('data-include-historical-properties') !== 'undefined' && $this.parent().attr('data-include-historical-properties') === '1' ) {
+				var strElement = "<li id='selected-" + intUniqueId + "-" + $this.parent().data( "listid" ) + "' class='js-allProperty js-historical-properties' style='background:#E5E5E5;' data-listid='" + $this.parent().data( "listid" ) + "'";
+			} else {
+				var strElement = "<li id='selected-" + intUniqueId + "-" + $this.parent().data( "listid" ) + "' class='js-allProperty' style='background:#E5E5E5;' data-listid='" + $this.parent().data( "listid" ) + "'";
+			}
+			strElement += "><label><i class='delete' title=" + __( 'Remove' ) + "></i>" + $this.parent().text() + "</label><input type='hidden' name='" + intUniqueName + "' value='" + $this.parent().data( "listid" ) + "' /></li>";
+			$( '#' + intUniqueId ).find( ".assigned ul" ).append( strElement );
+
+			// when you remove the all properties from selected properties that will show on property list.
+			$( "#" + intUniqueId + " .assigned" ).on( "click", ".js-allProperty", function( event ) {
+				event.stopPropagation();
+				$( "#" + intUniqueId + " .options .header" ).next( "ul" ).find( "li" ).show();
+			} );
+		}
+
+		if( typeof $( "#old_customer_relationship_group_id" ).val() !== "undefined" ) {
+			psi.customerRelationshipGroups.confirmDialog = jQuery( "#dialog-confirm-for-all-properties" ).dialog( {
+				resizable: false,
+				width: 600,
+				height: 170,
+				dialogClass: 'nopad',
+				modal: true,
+				autoOpen: true
+			} );
+		}
+
+		$this.closest( '.header' ).hide();
+		$this.closest( '.header' ).addClass( 'js-selected' );
+		$this.closest( '.header' ).next( 'ul' ).hide();
+
+		if( $this.closest( '.header' ).hasClass( 'js-all-properties' ) ) {
+			PropertyGroupCombo.SelectAllCaptionV2( intUniqueId );
+		}
+
+		if( typeof $this.parent().attr('data-include-historical-properties') !== 'undefined' && $this.parent().attr('data-include-historical-properties') === '1' ) {
+			PropertyGroupCombo.SelectAllHistoricalCaptionV2( intUniqueId );
+		}
+
+	}
+
+	PropertyGroupCombo.RemovePropertyGroupV2 = function( obj, intUniqueId ) {
+		var $this = $( obj );
+		var intListId = $this.data( 'listid' );
+		$objProp = $( '#' + intUniqueId + ' .property-group-record[data-listid="' + intListId + '"]' );
+		$objProp.show();
+		$objProp.removeClass( 'js-selected' );
+
+		if( $objProp.hasClass( 'header' ) ) {
+			$objProp.find( 'i.down-arrow' ).addClass( 'right-arrow' ).removeClass( 'down-arrow' );
+			$objProp.next( 'ul' ).find( 'li.js-selected' ).removeClass( 'js-selected' );
+			$objProp.next( 'ul' ).find( 'li.hide' ).removeClass( 'hide' );
+		} else {
+			$objProp.closest( 'ul' ).prev( 'span.header' ).show();
+			$objProp.closest( 'ul' ).prev( 'span.header' ).removeClass( 'js-selected' );
+			$objProp.closest( 'ul' ).prev( 'span.header' ).find( 'i.right-arrow' ).addClass( 'down-arrow' ).removeClass( 'right-arrow' );
+
+			$objProp.closest( 'ul' ).show();
+		}
+
+		if( false == $this.hasClass( 'js-historical-properties' ) ) {
+			$( '#' + intUniqueId + ' span.js-all-properties-caption' ).hide();
+		} else {
+			$( '#' + intUniqueId + ' span.js-all-historical-properties-caption' ).hide();
+		}
+
+		$( '#' + intUniqueId ).find( "input.form-search-field" ).bind( 'keyup', PropertyGroupCombo.SearchPropertyGroup );
+		$this.remove();
+		// Temporary fix to make this work for Colony American client as they have 20K+ properties and this is killing our browsers [PHK]
+		if( 1000 <= $( '#' + intUniqueId + ' .options span.header:not(.js-all-properties-caption, .js-all-properties )' ).length ) {
+			if( $( '#' + intUniqueId + ' .options span.header.js-all-properties' ).data( 'listid' ) == intListId ) {
+				$( '#' + intUniqueId + ' .options span.header:not(.js-all-properties-caption, .js-all-properties )' ).show();
+			}
+			return;
+		}
+
+		if( false == $this.hasClass( 'js-historical-properties' ) ) {
+			$( '#' + intUniqueId + ' .options span.header:not(.js-all-properties-caption, .js-all-properties )' ).each( function() {
+				var intSpanlistId = $( this ).data( 'listid' );
+				var boolNonAdmin = PropertyGroupCombo.isNonAdmin( $( this ) );
+				if( false == boolNonAdmin ) {
+					if( 0 == $( '#' + intUniqueId + ' .assigned li[data-listid=' + intSpanlistId + ']' ).length ) {
+						$( this ).show();
+						$( this ).removeClass( 'js-selected' );
+					}
+				} else {
+					if( 0 < $( this ).next( 'ul' ).find( 'li:not(.js-selected)' ).length ) {
+						$( this ).show();
+					} else if( 0 == $( this ).next( 'ul' ).find( 'li' ).length ) {
+						$( this ).show();
+					}
+
+				}
+			} );
+		}
+
+	}
+
+	PropertyGroupCombo.SelectAllCaptionV2 = function( intUniqueId ) {
+
+		$( '#' + intUniqueId ).find( '.options .form-selectlist' ).each( function() {
+			if( typeof $( this ).find( 'span.header' ).data('include-historical-properties') === 'undefined' ) {
+				$( this ).find( 'span.header' ).hide();
+				$( this ).find( 'ul' ).hide();
+
+				if( 0 < $( this ).find( 'span.js-all-properties-caption' ).length ) {
+					$( this ).find( 'span.js-all-properties-caption' ).show();
+				} else {
+					var strText = __( 'All Properties are selected' );
+					$( this ).append( '<span class="header js-all-properties-caption">' + strText + '</span>' );
+				}
+			}
+
+		} );
+	}
+
+	PropertyGroupCombo.SelectAllHistoricalCaptionV2 = function( intUniqueId ) {
+		$( '#' + intUniqueId ).find( '.options .form-selectlist' ).each( function() {
+			if( typeof $( this ).find( 'span.header' ).data('include-historical-properties') !== 'undefined' ) {
+				$( this ).find( 'span.header' ).hide();
+				$( this ).find( 'ul' ).hide();
+
+				if( 0 < $( this ).find( 'span.js-all-properties-caption' ).length ) {
+					$( this ).find( 'span.js-all-properties-caption' ).show();
+				} else {
+					var strText = __( 'All Properties are selected' );
+					$( this ).append( '<span class="header js-all-historical-properties-caption">' + strText + '</span>' );
+				}
+			}
+
+		} );
+	}
+
+	PropertyGroupCombo.ExpandPropertyGroup = function( obj, intUniqueId ) {
+		var $this = $( obj );
+		if( 0 < $( '#' + intUniqueId + '_properties_' + $this.data( 'listid' ) ).find( 'li' ).length ) return;
+
+		var boolPmEnabledOnly = $( '#' + intUniqueId ).data( 'pm-enabled-only' );
+		var boolShowDisabledProperties = $( '#' + intUniqueId ).data( 'show-disabled-properties' );
+		var arrintBlockedPropertyGroups = ( 'undefined' === typeof $( '#' + intUniqueId ).data( 'blocked_property_groups' ) ) ? [] : $( '#' + intUniqueId ).data( 'blocked_property_groups' ).split( ',' );
+		var boolBlockAllProperties = ( 'undefined' === typeof $( '#' + intUniqueId ).data( 'block_all_property_groups' ) ) ? false : $( '#' + intUniqueId ).data( 'block_all_property_groups' );
+		var boolIncludeHistoricalProperties = ( 'undefined' === typeof $this.data('include-historical-properties') ) ? '0' : '1';
+
+		psi.patterns.ajaxRequest( {
+			strElementSelector: '' + intUniqueId + '_properties_' + $this.data( 'listid' ),
+			url: this.strURLViewPropertiesByPropertyGroup + '&property_group[id]=' + $this.data( 'listid' ) + '&property_group_uniqid=' + intUniqueId + '&ps_product_ids=' + $( '#' + intUniqueId ).data( 'ps-product-ids' ) + ( true == boolPmEnabledOnly ? '&pm_enabled_only=1' : '' ) + ( true == boolShowDisabledProperties ? '&show_disabled_properties=1' : '' ) + '&include_historical_properties='+boolIncludeHistoricalProperties,
+			boolShowOverlayOnDialog: false,
+			success: function( strResponse ) {
+				try {
+
+					var arrmixPropertyGroups = $.parseJSON( strResponse );
+					var intUniqueId = arrmixPropertyGroups['property_group_uniqid'];
+					var strFieldName = $( '#' + intUniqueId ).data( 'field-name' );
+					var intParentPropertyGroupId = arrmixPropertyGroups['property_group_id'];
+					arrmixPropertyGroups = arrmixPropertyGroups['property_groups'];
+					var intPropertyGroupsCount = arrmixPropertyGroups.length;
+					var strPropertyGroupsData = '';
+					var strSelectedPropertyGroup = '';
+
+					if( 'simple' == $( '#' + intUniqueId + '_properties_' + intParentPropertyGroupId ).attr( 'custom_type' ) ) {
+						if( 0 < $( '#property_gorup_id_' + intParentPropertyGroupId + ':checked' ).length ) {
+							strSelectedPropertyGroup = 'style="display:none;" disabled';
+						} else strSelectedPropertyGroup = '';
+						for( var i = 0; i < arrmixPropertyGroups.length; i++ ) {
+
+							if( '0' == boolIncludeHistoricalProperties && 0 == $( '#' + intUniqueId + '_properties_' + PropertyGroupCombo.intAllPropertyGroupId + ' .property-group-record[data-listid="' + arrmixPropertyGroups[i]['id'] + '"]' ).length ) {
+								continue;
+							}
+
+							strPropertyGroupsData += '<li class="property-group-record" data-listid="' + arrmixPropertyGroups[i]['id'] + '" >\
+														<label>';
+
+							if( -1 == $.inArray( arrmixPropertyGroups[i]['id'] + '', arrintBlockedPropertyGroups ) ) {
+								strPropertyGroupsData += '<input type="checkbox" name="' + strFieldName + '" value="' + arrmixPropertyGroups[i]['id'] + '" class="form-checkbox" ' + strSelectedPropertyGroup + '  />'
+							}
+
+							strPropertyGroupsData += '<span class="property-name margin0">' + arrmixPropertyGroups[i]['name'] + '</span>';
+							if( null !== arrmixPropertyGroups[i]['lookup_code'] ) {
+								strPropertyGroupsData += ' <p class="hide">'+ arrmixPropertyGroups[i]['lookup_code'];
+							}
+							strPropertyGroupsData += '</p></label></li>';
+						}
+
+						$this.find( "input[type='checkbox']" ).show();
+						PropertyGroupCombo.bindSelectAllEvents( intUniqueId, $this );
+
+					} else {
+						var boolIsFilterPropertyIds = false;
+
+						if( 0 < $( '#' + intUniqueId + '_properties_' + PropertyGroupCombo.intAllPropertyGroupId + ' li:not(.filtered)' ).length ) {
+							boolIsFilterPropertyIds = true;
+						}
+
+						for( var i = 0; i < arrmixPropertyGroups.length; i++ ) {
+							if( 0 < $( "#selected-" + intUniqueId + "-" + arrmixPropertyGroups[i]['id'] + "" ).length ) strSelectedPropertyGroup = 'hide';
+							else strSelectedPropertyGroup = '';
+
+							if( '0' == boolIncludeHistoricalProperties && 0 == $( '#' + intUniqueId + '_properties_' + PropertyGroupCombo.intAllPropertyGroupId + ' .filtered[data-listid="' + arrmixPropertyGroups[i]['id'] + '"]' ).length ) {
+								continue;
+							}
+
+							strPropertyGroupsData += '<li class="property-group-record ' + strSelectedPropertyGroup + '" data-listid="' + arrmixPropertyGroups[i]['id'] + '">\
+														<label>';
+							if( -1 == $.inArray( arrmixPropertyGroups[i]['id'] + '', arrintBlockedPropertyGroups ) && false == boolBlockAllProperties ) {
+								strPropertyGroupsData += '<i class="add"></i>';
+							}
+
+							strPropertyGroupsData += '<span class="property-name margin0">' + arrmixPropertyGroups[i]['name'] + '</span>';
+							if( null !== arrmixPropertyGroups[i]['lookup_code'] ) {
+								strPropertyGroupsData += ' <p class="hide">' + arrmixPropertyGroups[i]['lookup_code'];
+							}
+
+							strPropertyGroupsData += '</p></label>\
+													</li>';
+						}
+
+						$this.find( "i.add" ).show();
+					}
+					var strMsg = __('No Properties.');
+
+					if( '' == strPropertyGroupsData ) strPropertyGroupsData = '<li>'+ strMsg +'</li>';
+					$( '#' + intUniqueId + '_properties_' + intParentPropertyGroupId ).html( strPropertyGroupsData );
+
+					psi.patterns.removeLoadingImage( { strElementSelector: intUniqueId + '_properties_' + intParentPropertyGroupId } );
+				} catch( e ) {
+					//$( '#property_group_properties_' + intPropertyGroupId ).html( strResponse );
+				}
+
+			}
+		} );
+	}
+
+	PropertyGroupCombo.bindEssentials = function( intUniqueId, strFieldName ) {
+
+		if( 'Advanced-v2' == PropertyGroupCombo.type || 'Advanced' == PropertyGroupCombo.type ) {
+
+			//Multi Assign Lists with hidden select list
+			$( '#' + intUniqueId + '.form-multiassign-add .addbutton' ).not( ".binded" ).on( "click", function() {
+				var el = $( this );
+				var parent = $( el ).closest( ".form-multiassign-add" );
+				var advancedmultiselect = $( parent ).find( ".form-advancedmultiselect" );
+				$( advancedmultiselect ).show();
+			} ).addClass( "binded" );
+
+			// For new clear all button for property selector
+			if( $( "#" + intUniqueId + " .assigned" ).find( "ul li" ).length == 0 ) {
+				$( "#" + intUniqueId + " .assigned" ).find( ".js-clear-all" ).addClass( "disabled" );
+			}
+
+			$( '#' + intUniqueId + '.form-multiassign-add' ).not( ".binded" ).hoverIntent( {
+				over: function() {
+				},
+				timeout: 300,
+				out: function() {
+					$( this ).find( ".form-advancedmultiselect" ).fadeOut( "fast" );
+				}
+			} ).addClass( "binded" );
+
+			$( ".property_list_" + $( '#property_group_type_selector_' + intUniqueId ).val(), $( '#' + intUniqueId + '_selector' ) ).show();
+
+			strBlockedPropertyGroups = $( '#' + intUniqueId ).data( 'blocked_property_groups' );
+			strAccessablePropertyGroups = $( '#' + intUniqueId ).data( 'accessable_property_group_ids' );
+			var boolBlockAllProperties = ( 'undefined' === typeof $( '#' + intUniqueId ).data( 'block_all_property_groups' ) ) ? false : $( '#' + intUniqueId ).data( 'block_all_property_groups' );
+			var boolAccessAllProperties = ( 'undefined' === typeof $( '#' + intUniqueId ).data( 'access_all_property_groups' ) ) ? false : $( '#' + intUniqueId ).data( 'access_all_property_groups' );
+
+			if( 'undefined' === typeof strBlockedPropertyGroups ) {
+				arrintBlockedPropertyGroups = [];
+			} else {
+				arrintBlockedPropertyGroups = $( '#' + intUniqueId ).data( 'blocked_property_groups' ).split( ',' );
+			}
+
+			if( 'undefined' === typeof strAccessablePropertyGroups ) {
+				var arrintAccessablePropertyGroups = [];
+			} else {
+				var arrintAccessablePropertyGroups = $( '#' + intUniqueId ).data( 'accessable_property_group_ids' ).split( ',' );
+			}
+
+			$( "#" + intUniqueId + " .options ul" ).unbind( "click" ).on( 'click', 'li', function() {
+
+				if( 'Advanced' == PropertyGroupCombo.type ) {
+					if( ( -1 == $.inArray( $( this ).data( 'listid' ) + '', arrintBlockedPropertyGroups ) && false == boolBlockAllProperties ) && ( ( -1 != $.inArray( $( this ).data( 'listid' ) + '', arrintAccessablePropertyGroups ) ) || true == boolAccessAllProperties ) ) {
+						PropertyGroupCombo.SelectProperty( this, intUniqueId, strFieldName );
+						if( typeof $( "#old_customer_relationship_group_id" ).val() !== "undefined" ) {
+							psi.reassociateOccupantGroups.mapPropertyOnInsert( this, psi.customerRelationshipGroups.exitTags.addOccupantGroupProperty, $( "#old_customer_relationship_group_id" ).val() );
+						}
+						$( "#" + intUniqueId + " .assigned" ).find( ".js-clear-all" ).removeClass( "disabled" );
+					}
+				} else {
+					if( -1 == $.inArray( $( this ).data( 'listid' ) + '', arrintBlockedPropertyGroups ) && false == boolBlockAllProperties ) {
+						PropertyGroupCombo.SelectProperty( this, intUniqueId, strFieldName );
+						if( typeof $( "#old_customer_relationship_group_id" ).val() !== "undefined" ) {
+							psi.reassociateOccupantGroups.mapPropertyOnInsert( this, psi.customerRelationshipGroups.exitTags.addOccupantGroupProperty, $( "#old_customer_relationship_group_id" ).val() );
+						}
+						$( "#" + intUniqueId + " .assigned" ).find( ".js-clear-all" ).removeClass( "disabled" );
+					}
+				}
+
+
+			} );
+
+			$( "#" + intUniqueId + " .assigned" ).unbind( "click" ).on( "click", "li", function() {
+
+				if( 'Advanced' == PropertyGroupCombo.type ) {
+					if( ( -1 != $.inArray( $( this ).data( 'listid' ) + '', arrintAccessablePropertyGroups ) ) || true == boolAccessAllProperties ) {
+						if( typeof $( "#old_customer_relationship_group_id" ).val() === "undefined" ) {
+							PropertyGroupCombo.RemovePropertyGroup( this, intUniqueId );
+						}
+						if( $( "#" + intUniqueId + " .assigned" ).find( "ul li" ).length == 0 ) {
+							$( "#" + intUniqueId + " .assigned" ).find( ".js-clear-all" ).addClass( "disabled" );
+						}
+					}
+				} else {
+					if( typeof $( "#old_customer_relationship_group_id" ).val() === "undefined" ) {
+						PropertyGroupCombo.RemovePropertyGroup( this, intUniqueId );
+					}
+					if( $( "#" + intUniqueId + " .assigned" ).find( "ul li" ).length == 0 ) {
+						$( "#" + intUniqueId + " .assigned" ).find( ".js-clear-all" ).addClass( "disabled" );
+					}
+				}
+
+			} );
+
+			if( true == $( '#' + intUniqueId ).data( 'show_only_groups' ) ) {
+				$( "#" + intUniqueId + " .options .header" ).unbind( "click" );
+			}
+
+			$( "#" + intUniqueId + " .options .header .add" ).unbind( "click" ).bind( {
+				click: function( event ) {
+					event.stopPropagation();
+					PropertyGroupCombo.SelectPropertyGroup( this, intUniqueId, strFieldName );
+					$( "#" + intUniqueId + " .assigned" ).find( ".js-clear-all" ).removeClass( "disabled" );
+				}
+			} );
+
+			if( false == $( '#' + intUniqueId ).data( 'show_only_groups' ) ) {
+				$( "#" + intUniqueId + " .options .form-selectlist" ).on( 'click', '.header',
+					function() {
+						if( false == $( this ).hasClass( 'nocollapse' ) ) {
+							PropertyGroupCombo.ExpandPropertyGroup( this, intUniqueId );
+						}
+					}
+				);
+			}
+
+			if( 'Advanced-v2' == PropertyGroupCombo.type || 'Advanced' == PropertyGroupCombo.type ) {
+
+				$( '#' + intUniqueId ).find( '.assigned ul li' ).each( function() {
+					$this = $( this );
+					intListId = $this.data( 'listid' );
+					$( '#' + intUniqueId ).find( '.property-group-record[data-listid="' + intListId + '"]' ).hide();
+					$( '#' + intUniqueId ).find( '.property-group-record[data-listid="' + intListId + '"]' ).addClass( 'js-selected' );
+				} );
+
+				$objAllProp = $( '#' + intUniqueId ).find( '.options span.js-all-properties' );
+
+				if( true == PropertyGroupCombo.isNonAdmin( $objAllProp ) && 0 == $objAllProp.next( 'ul' ).find( 'li:not(.js-selected)' ).length ) {
+					$objAllProp.addClass( 'js-selected' );
+					PropertyGroupCombo.SelectAllCaptionV2( intUniqueId );
+				} else if( $objAllProp.hasClass( 'js-selected' ) ) {
+					PropertyGroupCombo.SelectAllCaptionV2( intUniqueId );
+				}else if( 1 == $( '#' + intUniqueId ).find( '.assigned ul li' ).length && 100000235 == $( '#' + intUniqueId ).find( '.assigned ul li' ).data( 'listid') ) {
+					$objAllProp.addClass( 'js-selected' );
+					PropertyGroupCombo.SelectAllCaptionV2( intUniqueId );
+				}
+			}
+
+			$( '#' + intUniqueId ).find( "input.form-search-field" ).unbind( "keyup" ).bind( "keyup", PropertyGroupCombo.SearchPropertyGroup );
+
+		} else {
+			$( ".property_list_" + $( '#property_group_type_selector_' + intUniqueId ).val(), "#" + intUniqueId ).show();
+
+			if( true == $( '#' + intUniqueId ).data( 'show_only_groups' ) ) {
+				$( "#" + intUniqueId + " .options .header" ).unbind( "click" );
+			}
+
+			PropertyGroupCombo.bindSelectAllEvents( intUniqueId );
+			if( false == $( '#' + intUniqueId ).data( 'show_only_groups' ) ) {
+				$( "#" + intUniqueId + " .options .form-selectlist" ).on( 'click', '.header',
+					function() {
+						if( false == $( this ).hasClass( 'nocollapse' ) ) {
+							PropertyGroupCombo.ExpandPropertyGroup( this, intUniqueId );
+						}
+					}
+				);
+			}
+		}
+
+	}
+
+	PropertyGroupCombo.bindSelectAllEvents = function( intUniqueId, $obj ) {
+
+		$objSelectAll = PropertyGroupCombo.getAllPropertyObject( intUniqueId );
+		boolIsNonAdminById = PropertyGroupCombo.isNonAdmin( intUniqueId );
+
+		if( $objSelectAll.closest( ".header" ).next( "ul" ).find( "li input[type='checkbox']" ).length == $objSelectAll.closest( ".header" ).next( "ul" ).find( "li input[type='checkbox']:checked" ).length ) {
+			$objSelectAll.prop( 'checked', true );
+		}
+
+		if( $objSelectAll.is( ':checked' ) ) {
+			PropertyGroupCombo.SelectAllProperties( $objSelectAll, intUniqueId, boolIsNonAdminById );
+		}
+
+		$( "#" + intUniqueId + " input[type='checkbox']" ).off( "click" ).on( 'click', function( event ) {
+			event.stopPropagation();
+			$this = $( this );
+			if( true == $this.hasClass( 'js-all-properties' ) ) {
+
+				PropertyGroupCombo.SelectAllProperties( $objSelectAll, intUniqueId, boolIsNonAdminById );
+				$( "#" + intUniqueId + " .header input[type='checkbox']:not(.js-all-properties)" ).each( function() {
+					$( this ).prop( 'checked', false );
+					boolIsNonAdminByObj = PropertyGroupCombo.isNonAdmin( this );
+					PropertyGroupCombo.SelectAllProperties( this, intUniqueId, boolIsNonAdminByObj );
+					$( this ).parent( '.header' ).next( 'ul' ).find( "input[type='checkbox']:checked" ).prop( 'checked', false );
+				} );
+			} else {
+
+				if( 0 < $this.parent( 'span.header' ).length ) {
+					boolIsNonAdminByObj = PropertyGroupCombo.isNonAdmin( this );
+					PropertyGroupCombo.SelectAllProperties( this, intUniqueId, boolIsNonAdminByObj );
+
+					if( 0 == $( "#" + intUniqueId + " .header input[type='checkbox']:checked:not(.js-all-properties)" ).length
+						&& 0 == $objSelectAll.parent( 'span.header' ).next( 'ul' ).find( "input[type='checkbox']:checked" ).length ) {
+						$objSelectAll.prop( 'checked', true );
+					} else {
+						$objSelectAll.prop( 'checked', false );
+					}
+					if( $objSelectAll.closest( "span" ).next( 'ul' ).find( "input[type='checkbox']" ).length == $objSelectAll.closest( "span" ).next( 'ul' ).find( "input[type='checkbox']:checked" ).length
+						|| 0 == $objSelectAll.closest( "span" ).next( 'ul' ).find( "input[type='checkbox']:checked" ).length ) {
+						PropertyGroupCombo.SelectAllProperties( $objSelectAll, intUniqueId, boolIsNonAdminById );
+					}
+				}
+
+				if( 0 < $this.closest( 'ul' ).length && 0 < $this.closest( 'ul' ).prev( 'span.header' ).find( "input[type='checkbox'].js-all-properties" ).length
+					&& 0 == $( "#" + intUniqueId + " .header input[type='checkbox']:checked:not(.js-all-properties)" ).length
+					&& 0 == $( "#" + intUniqueId + " .header input[type='checkbox']:not(.js-all-properties)" ).closest( 'span.header' ).next( 'ul' ).find( "input[type='checkbox']:checked" ).length ) {
+
+					if( 0 == $this.closest( 'ul' ).find( "[type='checkbox']:checked" ).length ) {
+						$objSelectAll.prop( 'checked', true );
+						PropertyGroupCombo.SelectAllProperties( $objSelectAll, intUniqueId, boolIsNonAdminById );
+					} else if( $this.closest( 'ul' ).find( "[type='checkbox']:checked" ).length != $this.closest( 'ul' ).find( "[type='checkbox']" ).length ) {
+						$objSelectAll.prop( 'checked', false );
+					} else if( $this.closest( 'ul' ).find( "[type='checkbox']:checked" ).length == $this.closest( 'ul' ).find( "[type='checkbox']" ).length ) {
+						$objSelectAll.prop( 'checked', true );
+					}
+
+				}
+			}
+		} );
+
+		$( $obj ).next( 'ul' ).on( "click", "li.property-group-record input[type='checkbox']", function( event ) {
+			event.stopPropagation();
+			if( $objSelectAll.is( ':checked' ) ) {
+				$objSelectAll.prop( 'checked', false );
+				PropertyGroupCombo.SelectAllProperties( $objSelectAll, intUniqueId, boolIsNonAdminById );
+			}
+
+			if( 0 == $( "#" + intUniqueId + " input[type='checkbox']:checked:not(.js-all-properties)" ).length ) {
+				$objSelectAll.prop( 'checked', true );
+			} else {
+				$objSelectAll.prop( 'checked', false );
+			}
+
+			if( $objSelectAll.closest( "span" ).next( 'ul' ).find( "input[type='checkbox']" ).length == $objSelectAll.closest( "span" ).next( 'ul' ).find( "input[type='checkbox']:checked" ).length
+				|| 0 == $objSelectAll.closest( "span" ).next( 'ul' ).find( "input[type='checkbox']:checked" ).length ) {
+				PropertyGroupCombo.SelectAllProperties( $objSelectAll, intUniqueId, boolIsNonAdminById );
+			}
+		} );
+	}
+
+	PropertyGroupCombo.getAllPropertyObject = function( intUniqueId ) {
+		return $( "#" + intUniqueId + " .header input[type='checkbox'].js-all-properties" );
+	}
+
+	PropertyGroupCombo.isNonAdmin = function( obj ) {
+		$this = $( obj );
+
+		if( 'Simple' == PropertyGroupCombo.type ) {
+			if( 'object' == typeof( obj ) ) {
+				strAllPropPermission = $( obj ).data( 'all-properties' );
+			} else {
+				strAllPropPermission = $( "#" + obj + " .header input[type='checkbox'].js-all-properties" ).data( 'all-properties' );
+			}
+		} else {
+			strAllPropPermission = $this.closest( '.header' ).data( 'all-properties' );
+		}
+
+		if( 'non-admin' == strAllPropPermission ) {
+			return true;
+		}
+		return false;
+	}
+
+	PropertyGroupCombo.SelectAllProperties = function( obj, intUniqueId, boolCheckboxShow ) {
+		var $this = $( obj );
+		var $objCheckBox = $this.closest( ".header" ).next( "ul" ).find( "li input" );
+
+		if( !boolCheckboxShow ) {
+			if( $this.is( ':checked' ) ) {
+				$objCheckBox.hide().attr( 'disabled', true );
+			} else {
+				$objCheckBox.show().attr( 'disabled', false );
+			}
+		} else {
+			if( $this.is( ':checked' ) ) {
+				$objCheckBox.prop( 'checked', true );
+			} else {
+				$objCheckBox.prop( 'checked', false );
+			}
+		}
+	}
+
+	PropertyGroupCombo.togglePropList = function( strType, objParentElement ) {
+
+		var searchContainer = $( '.property_list_' + strType, objParentElement ),
+			searchInput = objParentElement.find( 'input.form-search-field' ),
+			selectedOptionIndex = objParentElement.find( ".form-select option[value='" + strType + "']" ).index();
+
+		$( '.list', objParentElement ).hide();
+		searchContainer.show();
+
+		if( true == objParentElement.find( 'div.form-selectlist ul:eq(0)' ).is( ':visible' ) && selectedOptionIndex === 0 ) {
+			searchInput.data( 'ul-list-items-visible', true );
+		} else {
+			searchInput.data( 'ul-list-items-visible', false );
+		}
+
+		if( selectedOptionIndex === 0 ) {
+			searchInput.data( 'ul-list-items-visible', true );
+		}
+	}
+
+	PropertyGroupCombo.SearchPropertyGroup = function() {
+		var $this = jQuery( this ),
+			searchText = $this.val(),
+			parentWrapper = $this.parent( 'div.form-advancedmultiselect' ),
+			searchTextContainer = parentWrapper.find( 'div.form-selectlist:visible:eq(0)' );
+
+		if( $this.data( 'ul-list-items-visible' ) === undefined ) {
+			if( searchTextContainer.find( 'ul:eq(0)' ).is( ':visible' ) ) {
+				$this.data( 'ul-list-items-visible', true );
+			} else {
+				$this.data( 'ul-list-items-visible', false );
+			}
+		}
+
+		if( parentWrapper.find( 'span.js-all-properties' ).hasClass( 'js-selected' ) ) {
+			return;
+		}
+
+		if( searchText ) {
+			searchTextContainer.children().hide().each( function() {
+				var $this = jQuery( this ), nodeName = ($this[0].nodeName).toLowerCase();
+
+				if( nodeName === 'span' ) {
+					if( $this.is( ":not(.js-selected, .js-all-properties-caption):containsi('" + searchText + "')" ) ) {
+						$this.show().find( 'i:eq(0)' ).removeClass( 'down-arrow' ).addClass( 'right-arrow' );
+						$this.next( 'ul' ).hide().find( 'li:not(.js-selected)' ).show();
+					}
+				} else if( nodeName === 'ul' ) {
+					if( $this.find( 'li:not(.js-selected):containsi("' + searchText + '")' ).length > 0 ) {
+						$this.prev( 'span:not(.js-selected)' ).show().find( 'i:eq(0)' ).removeClass( 'right-arrow' ).addClass( 'down-arrow' );
+						$this.find( 'li:not(.js-selected)' ).hide().end().show();
+						$this.find( 'li:not(.js-selected):containsi("' + searchText + '")' ).show();
+					}
+				}
+
+			} );
+		} else {
+			if( $this.data( 'ul-list-items-visible' ) ) {
+				searchTextContainer.children( 'span:not(.js-selected, .js-all-properties-caption)' ).show().find( 'i:eq(0)' ).removeClass( 'right-arrow' ).addClass( 'down-arrow' );
+				searchTextContainer.children( 'ul' ).show().find( 'li:not(.js-selected)' ).show();
+			} else {
+				searchTextContainer.children( 'span:not(.js-selected, .js-all-properties-caption)' ).show().find( 'i:eq(0)' ).removeClass( 'down-arrow' ).addClass( 'right-arrow' );
+				searchTextContainer.children( 'ul' ).hide().find( 'li:not(.js-selected)' ).show();
+			}
+		}
+	}
+}

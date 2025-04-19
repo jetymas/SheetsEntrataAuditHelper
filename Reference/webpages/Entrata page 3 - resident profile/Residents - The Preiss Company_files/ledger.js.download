@@ -1,0 +1,795 @@
+ledger = (function( $ ) {
+	var _strLedgerContainer;
+
+	var init = function( strLedgerContainer ) {
+		psi.patterns.bindEssentials();
+
+		_strLedgerContainer = strLedgerContainer;
+
+		$( _strLedgerContainer ).off( 'click' );
+		ledgerTabInit();
+		showNonResidentFriendlyBalance();
+	};
+
+	var showNonResidentFriendlyBalance = function() {
+
+		var strLeaseBalance        = $( '#lease_selector_div' ).find( '.customer_balance' ).val();
+		var intDefaultLedgerFilter = $( '.default_ledger_filter' ).val();
+		var intLedgerId = $( this ).find( 'a' ).data( 'ledger-filter-id' );
+
+		$('[id*="tab_view_ledger_wrapper_"]').find( '#ledger_filter_balance_' + intDefaultLedgerFilter ).html( strLeaseBalance );
+
+		if( $('#tab_view_ledger_wrapper_' + intDefaultLedgerFilter ).hasClass('selected') || null === intLedgerId ) {
+			$( '#lease_selector_div' ).find( '#customer_financial_balance' ).html( strLeaseBalance );
+		}
+
+		var fltNonResidentFriendlyLeaseBalance = $('.js-print-current-view').data('non-resident-friendly-lease-balance');
+		$( document ).find('.js-print-current-view').data("lease-balance", fltNonResidentFriendlyLeaseBalance);
+
+		$( '#tab_view_write_offs, .write_off_balance_container' ).show();
+	};
+
+	var ledgerTabInit = function() {
+		$( _strLedgerContainer ).on( 'click', '#open_items', function() {
+			$( _strLedgerContainer ).find( "#full_ledger" ).removeAttr( 'checked' );
+			$( this ).attr( 'checked', 'checked' );
+
+			$( _strLedgerContainer ).find( '#resident_view,#show_reversals,#show_temporary,#show_future_repayments' ).each( function() {
+				$( this ).prop( 'checked', false );
+			} );
+
+			$( _strLedgerContainer ).find( '.js-full-ledger' ).each( function() {
+				$( this ).addClass( 'hide' );
+				$( this ).css( 'display', '' );
+			} );
+			bulkLedgerActions.manageBulkActionsVisibility( false );
+			ledgerActionRequest();
+			showNonResidentFriendlyBalance();
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '#full_ledger', function() {
+			$( _strLedgerContainer ).find( "#open_items" ).removeAttr( 'checked' );
+			$( this ).attr( 'checked', 'checked' );
+
+			$( _strLedgerContainer ).find( '#resident_view,#show_reversals,#show_temporary,#show_future_repayments' ).each( function() {
+				$( this ).prop( 'checked', false );
+			} );
+
+			$( _strLedgerContainer ).find( '.js-full-ledger#reversals' ).removeClass( 'hide' );
+			bulkLedgerActions.manageBulkActionsVisibility( false );
+			ledgerActionRequest();
+			showNonResidentFriendlyBalance();
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '#resident_view,#show_reversals,#show_temporary,#show_future_repayments', function() {
+			if( $( this ).is( '#resident_view' ) && $( _strLedgerContainer ).find( '.js-radios:checked' ).is( '#full_ledger' ) ) {
+				if( $( this ).prop("checked") ) {
+					$( '.js-full-ledger#temporary_transactions' ).css( 'display', 'none' );
+				}
+			}
+
+			if( $( this ).is( '#resident_view' ) ) {
+				if( $( this ).prop("checked") && $('#tab_view_write_offs').length ) {
+					showResidentFriendlyBalance();
+				} else {
+					showNonResidentFriendlyBalance();
+				}
+			}
+			bulkLedgerActions.manageBulkActionsVisibility( false );
+			ajaxActionRequest();
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '.js-ledger-item-row', function() {
+			var url = $( this ).closest( 'tr' ).data( 'url' );
+			var detailsName = $( this ).closest( 'tr' ).data( 'popup-title' );
+			loadTransactionDetails( url, detailsName );
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '.js-visible-buttons', function() {
+
+			var arrmixLoadDialogueContent = {
+				'strUrl': $( this ).data( 'url' ),
+				'strContentId': $( this ).data( 'content-id' ),
+				'title': $( this ).data( 'title' ),
+				'width': $( this ).data( 'width' ) ? $( this ).data( 'width' ) : 1400,
+				'height': $( this ).data( 'height' ) ? $( this ).data( 'height' ) : 'auto'
+			};
+			createArTransaction( arrmixLoadDialogueContent );
+
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '.js-expand-tax', function() {
+			handleDrillClick( $( this ) );
+
+			var intLedgerItemId = $( this ).data( 'ledger-item-id' );
+			$( this ).parent().siblings( ".js-tax-detail-" + intLedgerItemId ).toggle();
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '.js-apply-payment', function() {
+
+			var arrmixLoadDialogueContent = {
+				'strUrl': $( this ).data( 'url' ),
+				'strContentId': $( this ).data( 'content-id' ),
+				'title': $( this ).data( 'title' )
+			};
+
+			applyPayment( arrmixLoadDialogueContent );
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '#auto_allocate', function() {
+			$( this ).removeAttr( 'id' );
+			$( this ).attr( { 'role':'link', 'aria-disabled':'true' } );
+			performAutoAllocate();
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '.js-expand-trans', function() {
+			var intLedgerItemId     = $( this ).data( 'ledger-item-id' );
+
+			var intShowInvoiceColumn = $( this ).data( 'ledger-show-invoice-column' );
+			if( undefined === intShowInvoiceColumn ) {
+				intShowInvoiceColumn = 0;
+			}
+			handleDrillClick( $( this ) );
+
+			if( true === $( this ).find( "i" ).hasClass( 'less-light' ) ) {
+				var strSerializeFilter    = $( '#ar_transactions_filter_frm' ).serialize();
+				var intLedgerFilterId     = $( _strLedgerContainer ).find( '.js-tab-property-ledgers.selected' ).find('a').data('ledger-filter-id');
+				var arrTransactionIds     = $( this ).parent().find( '.js-transaction-ids' ).val();
+				var strParentTransaction  = $( this ).parent().find( '.summarized-under' ).val();
+				var arrTaxTransIds        = $( this ).parent().find( '.js-tax-tooltip' ).data('tax-ids');
+				var strSection            = $( '#customer_system_container' ).find( '.js-radios:checked' ).data( 'section' );
+
+				if( arrTaxTransIds ) {
+					arrTransactionIds = arrTransactionIds.concat( ',', arrTaxTransIds );
+				}
+
+				var selectTransactions = false;
+				if( $( this ).parent().find( '.bulk-action-transaction' ).is(':checked') ) {
+					selectTransactions = true;
+				}
+
+				psi.patterns.ajaxRequest( {
+					data: strSerializeFilter,
+					strElementSelector: '.js-trans-detail-' + intLedgerItemId,
+					url: ledger.arrstrExitTags['view_transaction_details'] + '&ledger_filter_id=' + intLedgerFilterId + '&section_loaded=' + strSection + '&ledger_items[id]=' + arrTransactionIds + '&select_transactions=' + selectTransactions + '&parent_transaction=' + strParentTransaction + '&show_invoice_column=' + intShowInvoiceColumn
+				} );
+				$( this ).parent().siblings( '.js-trans-detail-' + intLedgerItemId ).toggle();
+			} else {
+				$( this ).parent().siblings( '.js-trans-detail-' + intLedgerItemId ).toggle();
+			}
+
+			if( true === $( this ).parent().find( '.js-expand-summarized-tax' ).hasClass( 'light-gray' ) ) {
+				handleDrillClick( $( this ).parent().find( '.js-expand-summarized-tax' ) );
+			}
+
+			$( this ).parent().siblings( '.js-tax-detail-' + intLedgerItemId ).css( 'display', 'none' );
+		} );
+
+		// This is dead code, we have to remove this with its occurrences
+		$( _strLedgerContainer ).on( 'click', '.js-expand-summarized-tax', function() {
+			var intLedgerItemId = $( this ).data( 'ledger-item-id' );
+			var strSerializeFilter = $( '#ar_transactions_filter_frm' ).serialize();
+			var intLedgerFilterId = $( _strLedgerContainer ).find( '.js-tab-property-ledgers.selected' ).find('a').data('ledger-filter-id');
+			var arrTransactionIds = $( this ).parent().find( '.js-transaction-ids' ).val();
+			var strSection = $( '#customer_system_container' ).find( '.js-radios:checked' ).data( 'section' );
+
+			handleDrillClick( $( this ) );
+
+			if( true === $( this ).find( "i" ).hasClass( 'less-light' ) ) {
+				psi.patterns.ajaxRequest( {
+					data: strSerializeFilter,
+					strElementSelector: '.js-tax-detail-' + intLedgerItemId,
+					url: ledger.arrstrExitTags['view_summarized_taxes'] + '&ledger_filter_id=' + intLedgerFilterId + '&section_loaded=' + strSection + '&taxed_items[id]=' + arrTransactionIds
+				} );
+				$( this ).parent().siblings( '.js-tax-detail-' + intLedgerItemId ).toggle();
+			} else {
+				$( this ).parent().siblings( '.js-tax-detail-' + intLedgerItemId ).toggle();
+			}
+
+			if( true === $( this ).parent().find( '.js-expand-trans' ).hasClass( 'light-gray' ) ) {
+				handleDrillClick( $( this ).parent().find( '.js-expand-trans' ) );
+			}
+
+			$( this ).parent().siblings( '.js-trans-detail-' + intLedgerItemId ).css( 'display', 'none' );
+		} );
+
+		$( _strLedgerContainer ).find( '.js-generate-statement' ).off().on( 'click', function() {
+			var strSerializeFilter  = $( '#ar_transactions_filter_frm' ).serialize();
+			var section             = $( _strLedgerContainer ).find( '.js-radios:checked').data( 'section');
+			var intLedgerFilterId   = $( _strLedgerContainer ).find( '.js-tab-property-ledgers.selected' ).find('a').data('ledger-filter-id');
+
+			var arrmixLoadDialogueContent = {
+				'strUrl': $( this ).data( 'url' ),
+				'strContentId': $( this ).data( 'content-id' ),
+				'strUrlExtension': $( this ).data( 'url-extension' )+'&section='+section+'&ledger_filter_id='+intLedgerFilterId+'&'+strSerializeFilter,
+				'title': $( this ).data( 'title' )
+			};
+			createGenerateStatement( arrmixLoadDialogueContent );
+		} );
+
+		$( _strLedgerContainer ).find( '.js-generate-customer-invoice' ).off().on( 'click', function() {
+			var section             = $( _strLedgerContainer ).find( '.js-radios:checked').data( 'section');
+			var intLedgerFilterId   = $( _strLedgerContainer ).find( '.js-tab-property-ledgers.selected' ).find('a').data('ledger-filter-id');
+
+			var arrmixLoadDialogueContent = {
+				'strUrl': $( this ).data( 'url' ),
+				'strContentId': $( this ).data( 'content-id' ),
+				'strUrlExtension': $( this ).data( 'url-extension' )+'&section='+section+'&ledger_filter_id='+intLedgerFilterId,
+				'title': $( this ).data( 'title' )
+			};
+			createGenerateCustomerInvoice( arrmixLoadDialogueContent );
+		} );
+
+		$( _strLedgerContainer ).find( '.js-print-current-view' ).off().on( 'click', function() {
+			var section = $( _strLedgerContainer ).find( '.js-radios:checked').data( 'section');
+			var statementType = __( 'OPEN ITEMS' );
+			if( 'view_full_ledger' === section ) {
+				statementType = __( 'FULL LEDGER' );
+			}
+
+			var fltLeaseBalance = $(this).data('lease-balance');
+			printArTransactions( 'view_ledger_items', $(this).data('print-css'), true, '', '', statementType, fltLeaseBalance );
+		} );
+
+		$( _strLedgerContainer ).find( '.js-export-full-ledger' ).on( 'click', function() {
+			var strSerializeFilter  = $( '#ar_transactions_filter_frm' ).serialize();
+			var intLedgerFilterId   = $( _strLedgerContainer ).find( '.js-tab-property-ledgers.selected' ).find('a').data('ledger-filter-id');
+			var strUrl              = $( this ).data( 'url' );
+
+			var strUrlName		= ledger.arrstrExitTags[strUrl] + '&ledger_filter_id=' + intLedgerFilterId + '&' + strSerializeFilter;
+			location.href       = strUrlName;
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '.js-tab-property-ledgers', function() {
+
+			var intReloadLeaseSelector = 0;
+			var strDivId = $( this ).find( 'a' ).data( 'title' );
+			var strTabName = $( this ).find( 'a' ).data( 'tab-name' );
+			var strUrl = $( this ).find( 'a' ).data( 'url' );
+			var intLedgerId = $( this ).find( 'a' ).data( 'ledger-filter-id' );
+			var strArCodeTypes = $( this ).find( 'a' ).data( 'ar-code-types' );
+			var intDefaultLedgerFilterId = $(this).find('a').data( 'default-ledger-filter-id' );
+
+			if( 1 === intDefaultLedgerFilterId || '' === intLedgerId ) {
+				intReloadLeaseSelector = 1;
+			}
+
+			changeTab( strDivId, strTabName, strUrl, intLedgerId, strArCodeTypes, intReloadLeaseSelector );
+			showNonResidentFriendlyBalance();
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '.js-sortable-column', function() {
+			var _self = $( this );
+			// $( '#loaded_from_parent' ).val('');
+
+			if( true === _self.hasClass( 'selected' ) ) {
+				if( true === _self.find( 'i' ).hasClass( 'desc' ) ) {
+					_self.find( 'i' ).removeClass( 'desc' );
+					_self.find( 'i' ).addClass( 'asc' );
+				} else {
+					_self.find( 'i' ).removeClass( 'asc' );
+					_self.find( 'i' ).addClass( 'desc' );
+				}
+
+				if( 'desc' === _self.data( 'sort-order' ) ) {
+					_self.data( 'sort-order', 'asc' );
+				} else {
+					_self.data( 'sort-order', 'desc' );
+				}
+			}
+
+			$( '.js-sortable-column' ).each( function() {
+				$( this ).removeClass( 'selected' );
+				$( this ).find( 'i' ).addClass( 'hide' );
+			} );
+
+			_self.addClass( 'selected' );
+			_self.find( 'i' ).removeClass( 'hide' );
+
+			var strSortBy = _self.data( 'sort-by' );
+			var strSortOrder = _self.data( 'sort-order' );
+
+			$( '#sort_by' ).val( strSortBy );
+			$( '#sort_order' ).val( strSortOrder );
+			bulkLedgerActions.manageBulkActionsVisibility( false );
+			ajaxActionRequest();
+		} );
+
+		$( _strLedgerContainer ).on( 'click', '.js-generate-row-invoice', function() {
+			var section             = $( _strLedgerContainer ).find( '.js-radios:checked').data( 'section');
+			var intLedgerFilterId   = $( _strLedgerContainer ).find( '.js-tab-property-ledgers.selected' ).find('a').data('ledger-filter-id');
+
+			var arrmixLoadDialogueContent = {
+				'strUrl': $( this ).data( 'url' ),
+				'strContentId': $( this ).data( 'content-id' ),
+				'strUrlExtension': $( this ).data( 'url-extension' )+'&section='+section+'&ledger_filter_id='+intLedgerFilterId,
+				'title': $( this ).data( 'title' )
+			};
+			createGenerateCustomerInvoice( arrmixLoadDialogueContent );
+		} );
+	};
+
+	var ledgerActionRequest = function() {
+		var strSection = $( '#customer_system_container' ).find( '.js-radios:checked' ).data( 'section' );
+		var intLedgerFilterId   = $( '#customer_system_container' ).find( '.js-tab-property-ledgers.selected' ).find( 'a' ).data('ledger-filter-id');
+
+		psi.patterns.ajaxRequest( {
+			strElementSelector: '#view_ledger_items',
+			url: ledger.arrstrExitTags[strSection] + '&ledger_filter_id=' + intLedgerFilterId
+		} );
+	};
+
+	var ajaxActionRequest = function() {
+		var strSerializeFilter = $( '#ar_transactions_filter_frm' ).serialize();
+		var strSection = $( '#customer_system_container' ).find( '.js-radios:checked' ).data( 'section' );
+		var intLedgerFilterId   = $( '#customer_system_container' ).find( '.js-tab-property-ledgers.selected' ).find( '.property_ledger_filter_id' ).val();
+
+		var boolBillbackApTransactions = $('#tab_view_billback_transactions').hasClass('selected');
+		var boolInterCompanyApTransactions = $('#tab_view_inter_company_ar_transactions').hasClass('selected');
+		psi.patterns.ajaxRequest( {
+			data: strSerializeFilter,
+			strElementSelector: '#view_ledger_items',
+			url: ledger.arrstrExitTags[strSection] + '&ledger_filter_id=' + intLedgerFilterId + '&is_inter_company_ap_transactions=' + boolInterCompanyApTransactions + '&is_billback_ap_transactions=' + boolBillbackApTransactions
+		} );
+	};
+
+	var showResidentFriendlyBalance = function() {
+		var strSerializeFilter = $( '#ar_transactions_filter_frm' ).serialize();
+		var intLedgerFilterId   = $( '#customer_system_container' ).find( '.js-tab-property-ledgers.selected' ).find( '.property_ledger_filter_id' ).val();
+
+		psi.patterns.ajaxRequest( {
+			data: strSerializeFilter,
+			url: ledger.arrstrExitTags['hide_show_write_off'] + '&ledger_filter_id=' + intLedgerFilterId,
+			success: function( response ) {
+				if( 'object' === typeof response ) {
+					if( 'success' === response.status ) {
+						var strLeaseBalance                     = response.data.lease_balance;
+						var fltNonResidentFriendlyLeaseBalance  = response.data.non_resident_friendly_balance;
+						var fltLeaseBalance                     = response.data.lease_balance_numeric;
+
+						$( '#lease_selector_div' ).find( '#customer_financial_balance' ).html( strLeaseBalance );
+						var intDefaultLedgerFilter = $( '.default_ledger_filter' ).val();
+						$( '#ledger_filter_balance_' + intDefaultLedgerFilter ).html( strLeaseBalance );
+						$( document ).find('.js-print-current-view').data("lease-balance", fltLeaseBalance);
+						$( document ).find('.js-print-current-view').data("non-resident-friendly-lease-balance",fltNonResidentFriendlyLeaseBalance );
+
+						$( '#lease_selector_div' ).find( '.customer_balance' ).val( i18nUtils.currency( fltNonResidentFriendlyLeaseBalance, 'p:2;n:()' ) );
+						$( '#tab_view_write_offs, .write_off_balance_container' ).hide();
+					}
+				}
+			}
+		} );
+	};
+
+	var loadTransactionDetails = function( strEditArTransactionLink, strDetailName ) {
+		var strWidth = '1100';
+		if( 'Payment' == strDetailName ){
+			strWidth = '1250';
+		}
+		var dialog = psi.patterns.loadDialog( {
+			width: strWidth,
+			height: 600,
+			strUrl: strEditArTransactionLink,
+			strContentId: 'ar_transaction',
+			title: strDetailName
+		} );
+
+		dialog.bind( "dialogclose", function( event, ui ) {
+			$('.bt-popup').btOff();
+			var strDivId = 'customer_system_container';
+
+			if( 1 == reloadLedger ) {
+				psi.patterns.showLoadingImage( { strElementSelector: '#customer_system_container' } );
+				psi.patterns.ajaxRequest( {
+					strElementSelector:'#' + strDivId,
+					url: ledger.arrstrExitTags['view_ledger_container'],
+					success: psi.patterns.removeLoadingImage( { strElementSelector: '#customer_system_container' } )
+				} );
+				reloadLedger = 0;
+			}
+			return true;
+		} );
+	};
+
+	var handleDrillClick = function( objParentRow ) {
+		objParentRow.toggleClass( 'light-gray' );
+		objParentRow.find( "i" ).toggleClass( 'less-light' );
+	};
+
+	var showTemporaryTransactionsFilter = function( boolIsTemporaryExists, boolShowTemporary ) {
+		if( boolIsTemporaryExists ) {
+			$( "#customer_system_container" ).find( ".js-full-ledger#temporary_transactions" ).show();
+			$( "#customer_system_container" ).find( ".js-full-ledger#temporary_transactions" ).removeClass( 'hide' );
+			$( "#customer_system_container" ).find( "#show_temporary" ).prop( 'disabled', false );
+			$( "#customer_system_container" ).find( "#show_temporary" ).prop( 'checked', boolShowTemporary );
+		} else {
+			$( "#customer_system_container" ).find( ".js-full-ledger#temporary_transactions" ).hide();
+			$( "#customer_system_container" ).find( ".js-full-ledger#temporary_transactions" ).addClass( 'hide' );
+			$( "#customer_system_container" ).find( "#show_temporary" ).prop( 'disabled', true );
+		}
+	};
+
+	var showResidentFriendlyFilter = function( boolIsResidentFriendlyAvailable, boolShowResidentFriendly ) {
+		if( boolIsResidentFriendlyAvailable ) {
+			$( "#customer_system_container" ).find( "#resident_friendly_mode" ).show();
+			$( '#resident_view' ).prop( 'disabled', false );
+
+			if( boolShowResidentFriendly ) {
+				$( '#resident_view' ).prop( 'checked', true );
+			}
+		} else {
+			$( "#customer_system_container" ).find( "#resident_friendly_mode" ).hide();
+			$( '#resident_view' ).prop( 'disabled', true ).prop( 'checked', false );
+		}
+	};
+
+	var showReversalFilter = function( boolShowReversal ) {
+				$( '#show_reversals' ).prop( 'checked', boolShowReversal );
+	};
+
+	var showResidentLedgerBalance = function( fltResidentLedgerBalances ) {
+		var strTabDisplayName = $( '#customer_system_container' ).find( '.js-tab-property-ledgers.selected' ).find( 'a' ).data( 'tab-display-name' );
+		var strTabLedgerFilterId = $( '#customer_system_container' ).find( '.js-tab-property-ledgers.selected' ).find( 'a' ).data( 'ledger-filter-id' );
+
+		$( '#customer_system_container' ).find( '#ledger_filter_' + strTabLedgerFilterId ).html( __( strTabDisplayName ) );
+		$( '#customer_system_container' ).find( '#ledger_filter_balance_' + strTabLedgerFilterId ).html( fltResidentLedgerBalances );
+
+		var intDefaultLedgerFilter = $( '.default_ledger_filter' ).val();
+
+		if( $('#tab_view_ledger_wrapper_' + intDefaultLedgerFilter).hasClass('selected') ) {
+			$( '#lease_selector_div' ).find( '.customer_balance' ).val( fltResidentLedgerBalances );
+		}
+
+	};
+
+	var selectClickedColumn = function() {
+		var strActualSortBy = $( "#customer_system_container" ).find( '#sort_items_by' ).val();
+		var strActualSortOrder = $( "#customer_system_container" ).find( '#sort_items_order' ).val();
+
+		$( "#customer_system_container" ).find( '#sort_by' ).val( strActualSortBy );
+		$( "#customer_system_container" ).find( '#sort_order' ).val( strActualSortOrder );
+
+		$( "#customer_system_container" ).find( ".js-sortable-column" ).each( function() {
+
+			var parentSortBy = $( this ).data( 'sort-by' );
+
+			if( strActualSortBy === $( this ).data( 'sort-by' ) ) {
+				$( this ).addClass( 'selected' );
+				$( this ).find( 'i' ).removeClass( 'hide' );
+
+				$( this ).closest( 'table' ).find( '.js-' + parentSortBy ).addClass( 'selected' );
+
+				if( false === $( this ).find( 'i' ).hasClass( strActualSortOrder ) ) {
+					if( true === $( this ).find( 'i' ).hasClass( 'desc' ) ) {
+						$( this ).find( 'i' ).removeClass( 'desc' );
+						$( this ).find( 'i' ).addClass( 'asc' );
+					} else {
+						$( this ).find( 'i' ).removeClass( 'asc' );
+						$( this ).find( 'i' ).addClass( 'desc' );
+					}
+				}
+
+				$( this ).data( 'sort-by', strActualSortBy );
+				$( this ).data( 'sort-order', strActualSortOrder );
+			} else {
+				$( this ).removeClass( 'selected' );
+				$( this ).find( 'i' ).addClass( 'hide' );
+
+				$( this ).closest( 'table' ).find( '.js-' + parentSortBy ).removeClass( 'selected' );
+			}
+		} );
+	};
+
+	var createArTransaction = function( arrmixLoadDialogueContent ) {
+		psi.patterns.loadDialog( {
+			width: arrmixLoadDialogueContent.width,
+			height: arrmixLoadDialogueContent.height,
+			strUrl: ledger.arrstrExitTags[arrmixLoadDialogueContent.strUrl],
+			strContentId: arrmixLoadDialogueContent.strContentId,
+			title: arrmixLoadDialogueContent.title
+		} );
+		return false;
+	};
+
+	var createGenerateCustomerInvoice = function( arrmixLoadDialogueContent ) {
+		psi.patterns.loadDialog( {
+			width: 1040,
+			height: 600,
+			autoFocus: false,
+			strUrl: ledger.arrstrExitTags[arrmixLoadDialogueContent.strUrl] + '' + arrmixLoadDialogueContent.strUrlExtension,
+			strContentId: arrmixLoadDialogueContent.strContentId,
+			title: arrmixLoadDialogueContent.title
+		} );
+		return false;
+	};
+
+	var createGenerateStatement = function( arrmixLoadDialogueContent ) {
+		psi.patterns.loadDialog( {
+			width: 600,
+			height: 350,
+			strUrl: ledger.arrstrExitTags[arrmixLoadDialogueContent.strUrl] + '' + arrmixLoadDialogueContent.strUrlExtension,
+			strContentId: arrmixLoadDialogueContent.strContentId,
+			title: arrmixLoadDialogueContent.title
+		} );
+		return false;
+	};
+
+	var applyPayment = function( arrmixLoadDialogueContent ) {
+		var intLedgerFilterId = $( _strLedgerContainer ).find( '.js-tab-property-ledgers.selected' ).find('a').data('ledger-filter-id');
+
+		psi.patterns.loadDialog( {
+			width: 1400,
+			height: 'auto',
+			strUrl: ledger.arrstrExitTags[arrmixLoadDialogueContent.strUrl] + '&ledger_filter_id=' + intLedgerFilterId,
+			strContentId: arrmixLoadDialogueContent.strContentId,
+			title: arrmixLoadDialogueContent.title,
+			onCloseCallback: function() {
+				$( '#customer_system_container' ).find( 'js-apply_payment' ).dialog( 'close' );
+				psi.patterns.showLoadingImage( { strElementSelector: '#customer_system_container' } );
+				psi.patterns.ajaxRequest( {
+					strElementSelector: '#view_ledger_wrapper',
+					url: ledger.arrstrExitTags['view_ledger_wrapper'] + '&ledger_filter_id=' + intLedgerFilterId,
+					success: psi.patterns.removeLoadingImage( { strElementSelector: '#customer_system_container' } )
+				} );
+			}
+		} );
+		return false;
+	};
+
+	var performAutoAllocate = function() {
+
+		var propertyLedgerFilterId = $( '#customer_system_container' ).find( '.js-tab-property-ledgers.selected' ).find( '.property_ledger_filter_id' ).val();
+		var strSection = $( '#customer_system_container' ).find( '.js-radios:checked' ).data( 'section' );
+
+		psi.patterns.ajaxRequest( {
+			url: ledger.arrstrExitTags['auto_allocate'] + '&ledger_filter_id=' + propertyLedgerFilterId + '&section' + strSection,
+			success: (function() {
+				psi.patterns.showLoadingImage( {
+					strElementSelector: '#customer_system_container'
+				} );
+				psi.patterns.ajaxRequest( {
+					strElementSelector: '#quickView',
+					url: ledger.arrstrExitTags['view_quick_view']
+				} );
+				psi.patterns.ajaxRequest( {
+					strElementSelector: '#view_ledger_wrapper',
+					url: ledger.arrstrExitTags['view_ledger_wrapper'] + '&ledger_filter_id=' + propertyLedgerFilterId,
+					success: psi.patterns.removeLoadingImage( { strElementSelector: '#customer_system_container' } )
+				} );
+			}),
+			failure: (function() {
+				$( this ).removeAttr( 'role aria-disabled' );
+				$( this ).attr( 'id','auto_allocate' );
+			} )
+		} );
+	};
+
+	var printArTransactions = function( id, cssFile, printImmediately, headerHTML, footerHTML, statementType, leaseBalance ) {
+
+		var contentID = unescape( id );
+
+		var cssFile = unescape( cssFile );
+		var headerHTML = unescape( headerHTML );
+		var footerHTML = unescape( footerHTML );
+		var statementType = unescape( statementType );
+		var headerName = __( 'Print' );
+		var strSerializeFilter  = $( '#ar_transactions_filter_frm' ).serialize();
+		var section = $( _strLedgerContainer ).find( '.js-radios:checked').data( 'section');
+
+		 psi.patterns.ajaxRequest({
+			url: ledger.arrstrExitTags['print_resident_statement'] + '&section=' + section + '&' + strSerializeFilter,
+			success: function ( strResponse ) {
+				$("#print_content").html(strResponse);
+
+				var printContent = document.getElementById('print_content');
+
+				if( leaseBalance ) {
+					balanceLabel = __( 'Current Balance:' );
+					if( 0 < leaseBalance ) {
+						var balanceLabel = __( 'Outstanding Balance:' );
+					} else if( leaseBalance == 0 ) {
+						balanceLabel = __( 'Balance:' );
+					}
+
+					$('#balance_lbl').html( balanceLabel );
+					$('#current_balance').html( i18nUtils.currency( parseFloat( leaseBalance ), 'p:2;n:()' ) );
+				}
+
+				jQuery(printContent).find('.taxes-tooltip, .js-tax-tooltip, .js-show-icon, .checkbox-readonly, .bulk-action-transaction, #select_all_transactions').addClass('hide');
+				jQuery(printContent).find('.val').css('color', '#000!important');
+				jQuery(printContent).find('.generate-multiple').html('Multiple');
+
+				printWin = window.open( '#', '', '' );
+				printWin.document.writeln( '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html401/loose.dtd">' );
+				printWin.document.writeln( '<html><head>' );
+				printWin.document.writeln( '<title>'+ headerName +'</title>' );
+
+				printWin.document.writeln( '<link href="' + cssFile + '" rel="stylesheet" type="text/css" >' );
+				printWin.document.writeln( '<script> window.onload=function(){ if( ' + printImmediately + ' ) window.print(); };' + '</' + 'script' + '>' );
+				printWin.document.writeln( '</head><body id="body" style="width:855px; margin:15px auto; margin-left:0px; font-family: Helvetica Neue, Helvetica, Arial, sans-serif; font-size:12px; line-height:15px; background:none !important; color:#000 !important;">' );
+
+				html = jQuery( '.print-header' ).html();
+
+				printWin.document.writeln( html );
+				printWin.document.writeln( '<h4 style="font-size:16px; line-height:19px; font-weight:bold;clear:both;">' );
+				printWin.document.writeln( statementType );
+				printWin.document.writeln( '</h4>' );
+				printWin.document.writeln( '<br>' );
+				printWin.document.writeln( '<table><tr><td style="width:750px;">' );
+				printWin.document.writeln( headerHTML );
+				strContent = printContent.innerHTML;
+				strContent = strContent.replace( "FILTER: progid:DXImageTransform.Microsoft.Gradient(endColorstr='#dfdfdf', startColorstr='#ffffff', gradientType='0');", '' );
+
+				printWin.document.writeln( strContent );
+				printWin.document.writeln( footerHTML );
+				printWin.document.writeln( '</td></tr></table></body></html>' );
+				printWin.document.close();
+				if( window.focus ) printWin.focus();
+			}
+		 });
+	};
+
+	var changeTab = function( strDivId, strTabName, strUrl, intLedgerId, strArCodeTypes, intReloadLeaseSelector ) {
+
+		$( ".financial-sidetabs-menu" ).find( "li" ).removeClass( "selected" );
+		$( "#tab_" + strTabName ).addClass( "selected" );
+
+		$( ".financial-sidetabs" ).hide();
+		$( "#" + strDivId ).fadeIn( '100' );
+
+		strUrl = strUrl + '&section_id=' + strDivId;
+		if( '' != intLedgerId ) {
+			strUrl = strUrl + '&ledger_filter_id=' + intLedgerId;
+		}
+
+		if( '' != strArCodeTypes ) {
+			strUrl = strUrl + '&ar_code_types=' + strArCodeTypes;
+		}
+
+		var propertyLedgerFilterId  = $( '.js-tab-property-ledgers.selected' ).find( 'a' ).data( 'ledger-filter-id' );
+		var default_ledger_filter   = $( '.default_ledger_filter' ).val();
+		var resident_ledger_balance = $( '#ledger_filter_balance_'+ default_ledger_filter ).html();
+
+		$( '#customer_system_container' ).find( '.js-apply-payment' ).removeAttr( 'data-ledger-filter-id' );
+		$( '#customer_system_container' ).find( '.js-apply-payment' ).data( 'ledger-filter-id', propertyLedgerFilterId );
+
+		psi.patterns.ajaxRequest( {
+			strElementSelector: '#' + strDivId,
+			url: strUrl
+		} );
+
+		var isFromResidentSystem = $('#is_from_resident_system').val();
+		if( 1 == intReloadLeaseSelector && 1 == isFromResidentSystem) {
+			$('#repayment_due_now').removeClass( 'hide' );
+			updateBalanceInheader( resident_ledger_balance );
+		}else{
+			$('#repayment_due_now').addClass( 'hide' );
+		}
+
+	};
+
+	var popUps = ( function( $ ) {
+
+		var loadPaymentDetails = function( paymentId ) {
+			var dialog = psi.patterns.loadDialog( {
+								width:1250,
+								height:600,
+								strUrl:ledger.arrstrExitTags['view_ar_payment']+'&source=resident_ledger&ar_payment[id]='+paymentId,
+								strContentId:'ar_transaction',
+								title:__("Payment")
+						} );
+
+			var lid = $('#lease_id').val();
+			var cid = $('#customer_id').val();
+
+			if( $.isNumeric( lid ) && $.isNumeric( cid ) ) {
+				dialog.bind( "dialogclose", function( event, ui ) {
+					$('.bt-popup').btOff();
+					var strDivId = 'customer_system_container';
+
+					if( 1 == reloadLedger ) {
+						psi.patterns.ajaxRequest( {
+							strElementSelector:'#' + strDivId,
+							url:ledger.arrstrExitTags['view_ledger_container']
+						} );
+						selectCustomerTab( 'customer_financial_tab' );
+						reloadLedger = 0;
+					}
+					return true;
+				});
+			} else {
+				dialog.bind( "dialogclose", function( event, ui ) {
+					$('.bt-popup').btOff();
+				} );
+			}
+		};
+
+		var loadChargeDetails = function( param, title ) {
+			var dialogBoxtitle = title || __('Charge');
+			var dialog = psi.patterns.loadDialog( {
+								width:1250,
+								height:600,
+								strUrl:param,
+								strContentId:'ar_transaction',
+								title:dialogBoxtitle
+						} );
+
+			dialog.bind( "dialogclose", function( event, ui ) {
+				$('.bt-popup').btOff();
+				var strDivId = 'customer_system_container';
+
+				if( 1 == reloadLedger ) {
+					psi.patterns.ajaxRequest( {
+						strElementSelector:'#' + strDivId,
+						url:ledger.arrstrExitTags['view_ledger_container']
+					} );
+					reloadLedger = 0;
+				}
+				return true;
+			} );
+		};
+
+		var loadSplitPaymentDetails = function( paymentId, arPaymentSplitId ) {
+			var dialog = psi.patterns.loadDialog( {
+								width:1250,
+								height:600,
+								strUrl:ledger.arrstrExitTags['view_ar_payment']+'&source=resident_ledger&ar_payment[id]='+paymentId+'&ar_payment_split[id]='+arPaymentSplitId,
+								strContentId:'ar_transaction',
+								title:__("Payment")
+						});
+
+			dialog.bind( "dialogclose", function(event, ui) {
+				$('.bt-popup').btOff();
+				var strDivId = 'customer_system_container';
+
+				if( 1 == reloadLedger ) {
+					psi.patterns.ajaxRequest( {
+						strElementSelector:'#' + strDivId,
+						url:ledger.arrstrExitTags['view_ledger_container']
+					} );
+					reloadLedger = 0;
+				}
+				return true;
+			});
+		};
+
+		return {
+			loadChargeDetails : loadChargeDetails,
+			loadPaymentDetails : loadPaymentDetails,
+			loadSplitPaymentDetails : loadSplitPaymentDetails
+		};
+	})( jQuery );
+
+	var processLedgerFilter = function() {
+		var intLedgerFilterId = $( _strLedgerContainer ).find( '.js-tab-property-ledgers.selected' ).find('a').data('ledger-filter-id');
+
+		if( $('#open_items').is(':checked') ) {
+			var container = 'open_item';
+		} else {
+			var container = 'full_ledger';
+		}
+
+		var strUrl = ledger.arrstrExitTags['create_ledger_filter'];
+
+		bulkLedgerActions.manageBulkActionsVisibility( false );
+
+		psi.patterns.ajaxRequest( {
+			strElementSelector: '#view_ledger_items',
+			url: strUrl + '&container='+ container + '&ledger_filter_id=' + intLedgerFilterId,
+			data: $("#ledger_filter_form, #ar_transactions_filter_frm").serialize(),
+			method: 'post'
+		} );
+	};
+
+	return {
+		init: init,
+		showTemporaryTransactionsFilter: showTemporaryTransactionsFilter,
+		showResidentFriendlyFilter: showResidentFriendlyFilter,
+		showReversalFilter: showReversalFilter,
+		showResidentLedgerBalance: showResidentLedgerBalance,
+		selectClickedColumn: selectClickedColumn,
+		processLedgerFilter: processLedgerFilter,
+		loadTransactionDetails: loadTransactionDetails,
+		popUps: popUps
+	};
+})( jQuery );

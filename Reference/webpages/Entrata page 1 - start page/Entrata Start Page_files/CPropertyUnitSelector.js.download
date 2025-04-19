@@ -1,0 +1,172 @@
+function CPropertyUnitSelector() {
+
+	this.show = function( options ) {
+		var defaultOptions = {
+				strUrl							: '/?module=property_unit_searchxxx&action=view_unit_spaces',
+				applicationId					: '',
+				leaseStartDate					: '',
+				propertyId						: '',
+				floorplanId						: '',
+				isFetchAllUnits					: 0,
+				OnSaveUnitCallBack				: '',
+				boolHideFloorplanUnitDetails 	: 0,
+				boolIsHideLeaseTerms			: 0,
+				moveinDate						: '',
+				isRenewal						: 0,
+				SelectorId						: '',
+				leaseTerm						: '',
+				leaseIntervalTypeId				: '',
+				leaseTermId						: '',
+				leaseStartWindowId				: '',
+				bedRoom							: '',
+				bathRoom						: '',
+				spaceConfigurationId			: '',
+				hasPets							: 0,
+				maxRent							: '',
+				isFromEvent						: '',
+				isUnitTransfer					: 0,
+				isFromEditApplication			: 0,
+				isFromQuote						: 0,
+				isApplyNewRate					: 0,
+				isFromClone						: 0,
+				isShowReservationCode           : 0,
+				applicationPropertyId			: '',
+				militaryPayGradeId              : '',
+				unitTypeId						: '',
+				propertyFloorplanId				: '',
+				leaseId	            			: '',
+				isFromResident                  : 0,
+				isFromCentralization			: 0,
+				isFromPreferredUnit				: 0
+			};
+
+		if( options ) {
+			jQuery.extend( defaultOptions, options );
+		};
+
+		if( 1 == defaultOptions.isCrossPropertyTransferEnabled ) {
+			strUrl = '/?module=advance_unit_selectorxxx&action=view_unit_spaces_for_schedule_transfer';
+		} else if( 1 == defaultOptions.loadAdvanceUnitSelector ) {
+			strUrl = '/?module=advance_unit_selectorxxx&action=view_unit_spaces';
+		} else if( 1 == defaultOptions.loadAdvanceUnitSelectorMilitary ) {
+			strUrl = '/?module=advance_unit_selectorxxx&action=view_unit_spaces_for_military';
+			strUrl += '&selected_occupancy_type_id=' + defaultOptions.selectedOccupancyTypeId;
+			strUrl += '&unit_search[is_from_prospect]=1';
+			strUrl += ( '' != defaultOptions.leaseTermId ) ? '&unit_search[lease_term_id]='+defaultOptions.leaseTermId : '';
+			strUrl += ( '' != defaultOptions.leaseStartDate ) ? '&unit_search[lease_start_date]='+defaultOptions.leaseStartDate : '';
+		} else if ( 1 == defaultOptions.loadStudentUnitSelector ) {
+			strUrl = '/?module=student_unit_searchxxx&action=view_unit_spaces_for_student';
+		} else {
+			strUrl = defaultOptions.strUrl;
+		}
+
+		strUrl += ( '' != defaultOptions.applicationId ) ? '&application_id='+defaultOptions.applicationId : '';
+		strUrl += ( '' != defaultOptions.leaseStartDate ) ? '&unit_search[lease_start_date]='+defaultOptions.leaseStartDate : '';
+		strUrl += ( '' != defaultOptions.propertyId ) ? '&unit_search[property_id]='+defaultOptions.propertyId : '';
+		strUrl += ( '' != defaultOptions.floorplanId ) ? '&unit_search[property_floorplan_id]='+defaultOptions.floorplanId : '';
+		strUrl += ( '' != defaultOptions.OnSaveUnitCallBack ) ? '&unit_search[on_save_call_back]='+defaultOptions.OnSaveUnitCallBack : '';
+		strUrl += ( '' != defaultOptions.isFetchAllUnits ) ? '&unit_search[is_fetch_all_units]='+defaultOptions.isFetchAllUnits : '';
+		strUrl += ( '' != defaultOptions.boolHideFloorplanUnitDetails ) ? '&is_hide_floorplan_unit_details='+defaultOptions.boolHideFloorplanUnitDetails : '';
+		strUrl += ( '' != defaultOptions.boolIsHideLeaseTerms ) ? '&is_hide_lease_terms='+defaultOptions.boolIsHideLeaseTerms : '';
+		strUrl += ( '' != defaultOptions.moveinDate ) ? '&unit_search[lease_start_date]='+defaultOptions.moveinDate : '';
+		strUrl += ( '' != defaultOptions.isRenewal ) ? '&unit_search[is_renewal]='+defaultOptions.isRenewal : '';
+		strUrl += ( '' != defaultOptions.isFromEditApplication ) ? '&unit_search[is_from_edit_application]='+defaultOptions.isFromEditApplication : '';
+		strUrl += ( '' != defaultOptions.SelectorId ) ? '&unit_search[selector_id]='+defaultOptions.SelectorId : '';
+		strUrl += ( '' != defaultOptions.leaseTerm ) ? '&unit_search[lease_terms][]='+defaultOptions.leaseTerm : '';
+		strUrl += ( '' != defaultOptions.leaseIntervalTypeId ) ? '&unit_search[lease_interval_type_id]='+defaultOptions.leaseIntervalTypeId : '';
+		strUrl += ( '' != defaultOptions.leaseTermId ) ? '&unit_search[lease_term_ids][]='+defaultOptions.leaseTermId : '';
+		strUrl += ( '' != defaultOptions.leaseStartWindowId ) ? '&unit_search[lease_start_window_id]='+defaultOptions.leaseStartWindowId : '';
+		strUrl += ( '' != defaultOptions.bedRoom ) ? '&unit_search[number_of_bedrooms]='+defaultOptions.bedRoom : '';
+		strUrl += ( '' != defaultOptions.bathRoom ) ? '&unit_search[number_of_bathrooms]='+defaultOptions.bathRoom : '';
+		strUrl += ( '' != defaultOptions.spaceConfigurationId ) ? '&unit_search[space_configuration_id]='+defaultOptions.spaceConfigurationId : '';
+		strUrl += ( '' != defaultOptions.hasPets ) ? '&unit_search[has_pets]='+defaultOptions.hasPets : '';
+		strUrl += ( '' != defaultOptions.maxRent ) ? '&unit_search[max_rent]='+defaultOptions.maxRent : '';
+		strUrl += ( '' != defaultOptions.isFromEvent ) ? '&unit_search[is_from_event]='+defaultOptions.isFromEvent : '';
+		strUrl += ( '' != defaultOptions.isFromQuote ) ? '&unit_search[is_from_quote]='+defaultOptions.isFromQuote : '';
+		strUrl += ( '' != defaultOptions.isApplyNewRate ) ? '&unit_search[is_apply_new_rate]='+defaultOptions.isApplyNewRate : '';
+		strUrl += ( '' != defaultOptions.isFromClone ) ? '&unit_search[is_from_clone]='+defaultOptions.isFromClone : '';
+		strUrl += ( '' != defaultOptions.isFromCentralization ) ? '&unit_search[is_from_centralization]='+defaultOptions.isFromCentralization : '';
+		strUrl += ( '' != defaultOptions.isShowReservationCode ) ? '&unit_search[is_show_reservation_code]='+defaultOptions.isShowReservationCode : '';
+		strUrl += ( '' != defaultOptions.applicationPropertyId ) ? '&application_property_id='+defaultOptions.applicationPropertyId : '';
+		strUrl += ( '' != defaultOptions.militaryPayGradeId ) ? '&unit_search[pay_grade_id]='+defaultOptions.militaryPayGradeId : '';
+		strUrl += ( '' != defaultOptions.leaseId ) ? '&lease[id]='+defaultOptions.leaseId : '';
+		strUrl += ( '' != defaultOptions.isUnitChangeAfterTransfer ) ? '&unit_search[change_unit_after_transfer]='+defaultOptions.isUnitChangeAfterTransfer : '';
+		strUrl += ( '' != defaultOptions.leaseStartDate ) ? '&unit_search[custom_start_date]='+defaultOptions.leaseStartDate : '';
+		strUrl += ( '' != defaultOptions.leaseEndDate ) ? '&unit_search[custom_end_date]='+defaultOptions.leaseEndDate : '';
+		strUrl += ( '' != defaultOptions.isCrossPropertyTransferEnabled ) ? '&unit_search[is_cross_property_transfer_enabled]='+defaultOptions.isCrossPropertyTransferEnabled : '';
+		strUrl += ( '' != defaultOptions.isFromResident ) ? '&unit_search[is_from_resident]='+defaultOptions.isFromResident : '';
+		strUrl += ( '' != defaultOptions.immediateMoveinDate ) ? '&unit_search[immediate_movein_date]='+defaultOptions.immediateMoveinDate : '';
+		strUrl += ( '' != defaultOptions.isFromPreferredUnit ) ? '&unit_search[is_from_preferred_unit]='+defaultOptions.isFromPreferredUnit : '';
+		strUrl += '&is_unit_transfer=' + defaultOptions.isUnitTransfer;
+		strUrl += '&unit_type_id=' + defaultOptions.unitTypeId;
+		strUrl += '&property_floorplan[id]=' + defaultOptions.propertyFloorplanId;
+		strUrl = encodeURI( strUrl );
+
+		var dlg_title = '';
+
+		if( 1 == defaultOptions.isFromQuote ) {
+			dlg_title = __('Generate Quote');
+		} else if( 1 == defaultOptions.loadStudentUnitSelector ) {
+			dlg_title = __('Select Preferred Unit Space');
+		} else if(1 == defaultOptions.isFromCentralization) {
+			dlg_title = __('Select Unit');
+		}else {
+			dlg_title = __('Unit Search');
+		}
+
+		if( 1 == defaultOptions.isCrossPropertyTransferEnabled || 1 == defaultOptions.loadAdvanceUnitSelector || 1 == defaultOptions.loadStudentUnitSelector || 1 == defaultOptions.loadAdvanceUnitSelectorMilitary ) {
+			psi.patterns.addDialogContent({
+				strContentId: 'unit_search_dlg',
+				strUrl: strUrl,
+				title: dlg_title
+			});
+		} else {
+			if(1 == defaultOptions.isFromCentralization ){
+				psi.patterns.loadMeridianDialog({
+					width: 1194,
+					height: 746,
+					strUrl: strUrl,
+					strContentId: 'unit_search_dlg',
+					title: dlg_title,
+					autoFocus: false,
+					formSubmitContainerCheck: false,
+					close: function (event, ui) {
+						if( 1 == defaultOptions.isGenerateQuote ) {
+							$( '.cnt-about-tab' ).removeClass( 'loaded' );
+							$( '.cnt-about-tab' ).trigger( 'click' );
+						}
+
+						if(1 == $('#is_from_quote').val() && 1 == $('#is_delete_quotes_from_unit_search').val()) {
+							psi.patterns.ajaxRequest({
+								url: '/?module=application_quotesxxx&action=delete_quotes',
+								strElementSelector: ''
+							});
+						}
+						$('.flex-entrata-wrapper').css('overflow','auto');
+					}
+				});
+				$( '.mrdn-header-action-icons' ).remove();
+				$('.ui-dialog-titlebar').append('<div class="mrdn-header-action-icons"><div class="action-icon pointer" onclick="jQuery(\'#is_from_clone\').val(0);jQuery(\'#is_from_clone_process\').val(0);jQuery(\'#is_from_preferred_unit\').val(0);jQuery(\'#unit_search_dlg\').dialog(\'close\');return false;"><img class="x-icon2" alt="" src="./Entrata/images/modules/centralization/x.svg"></div></div>');
+			}else{
+				psi.patterns.loadDialog({
+					width: 1300,
+					height: 730,
+					strUrl: strUrl,
+					strContentId: 'unit_search_dlg',
+					title: dlg_title,
+					autoFocus: false,
+					formSubmitContainerCheck: false,
+					close: function (event, ui) {
+						if(1 == $('#is_from_quote').val() && 1 == $('#is_delete_quotes_from_unit_search').val()) {
+							psi.patterns.ajaxRequest({
+								url: '/?module=application_quotesxxx&action=delete_quotes',
+								strElementSelector: ''
+							});
+						}
+					}
+				});
+			}
+
+		}
+	}
+}

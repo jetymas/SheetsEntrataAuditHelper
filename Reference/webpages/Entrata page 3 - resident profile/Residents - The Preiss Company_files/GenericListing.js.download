@@ -1,0 +1,800 @@
+psi.objGenericListing = function() {
+
+	var intPageNumber = {};
+	var strSortBy = {};
+	var strSortDirection = {};
+	var strSelectedTab;
+	var strNavigationMenuId;
+	var strReplaceAt;
+	var boolIsBaseTab;
+	var intPagingSize = 50;
+	var objContainer;
+
+	var init = function() {
+		objContainer = this.objContainer;
+		strReplaceAt = '#' + this.strReplaceAt;
+
+		// Bind navigation item click events
+		objContainer.find( '.js-navigation-item' ).click( function() {
+			loadTab( $( this ).data().moduleName );
+		} );
+
+		// Bind click handler for left-navigation-item
+		objContainer.find( '.js-left-navigation-item' ).on( 'click', function() {
+			handleLeftNavigationItemClick( $( this ) );
+		} );
+
+		document.onkeydown = function KeyPress(e) {
+			if ( 70 == e.which && true == e.altKey && 1 > $('.modal-body').length ) {
+				e.preventDefault();
+				objContainer.find('#view-data-filters2').show();
+				$("<div class='filter-overlay'></div>").prependTo("body");
+			}
+		};
+	};
+
+	var initFilter = function() {
+		var objContainer = this.objContainer,
+			$objStatusFilter = objContainer.find( '#status_filter' ),
+			strUrl = objContainer.attr( "custom_load_url" );
+
+		if( 'undefined' == typeof strUrl || '' == strUrl ) {
+			return;
+		}
+
+		objContainer.find( '.min-max-validation' ).off( 'blur', 'input.validate-amount' ).on( 'blur', 'input.validate-amount', function() {
+			$( this ).val( $( this ).val().replace( /[^0-9]/g, '' ) );
+		} );
+
+		objContainer.off( 'click', '.submit-filter' ).on( 'click', '.submit-filter', function() {
+			var objForm = objContainer.find( '#frm-view-data-filters2' ),
+				$objFilterErrors = objContainer.find( '#filter_errors' ),
+				errorMsgsHtml = '';
+
+			objContainer.find( '.date-validation' ).each( function() {
+				var filterKey = this.getAttribute( 'filter_key' ),
+					minDate = psi.objGenericListing.formatDate( objContainer.find( 'input[name="report_filter[' + filterKey + '][min-date]"]' ).val() ),
+					maxDate = psi.objGenericListing.formatDate( objContainer.find( 'input[name="report_filter[' + filterKey + '][max-date]"]' ).val() ),
+					strMonth = function( DefaultDate ) {
+						var tempMonth = (DefaultDate.getMonth() + 1).toString();
+						if( tempMonth.length < 2 ) {
+							return '0' + tempMonth;
+						} else {
+							return tempMonth;
+						}
+					};
+
+				var strDay = function( DefaultDate ) {
+					if( DefaultDate.getDate().toString().length < 2 ) {
+						return '0' + DefaultDate.getDate().toString();
+					} else {
+						return DefaultDate.getDate().toString();
+					}
+				};
+
+				var setDateValues = function( key, date ) {
+					if( 'Invalid Date' == date ) {
+						var $filter = objContainer.find( 'input[name="report_filter[' + filterKey + '][' + key + '-date]"]' );
+
+						if( true == objContainer.find( '[filter_key=' + filterKey + ']' ).attr( 'has_default' ) ) {
+							var DefaultDate = new Date( $filter.attr( 'default_value' ) ),
+								strYear = DefaultDate.getFullYear().toString().substring( 2, 4 );
+
+							$filter.siblings( '.month' ).val( strMonth( DefaultDate ) );
+							$filter.siblings( '.day' ).val( strDay( DefaultDate ) );
+							$filter.siblings( '.year' ).val( strYear );
+							$filter.parent().removeClass( 'binded' );
+						} else {
+							$filter.siblings( '.month' ).val( "" );
+							$filter.siblings( '.day' ).val( "" );
+							$filter.siblings( '.year' ).val( "" );
+							$filter.parent().removeClass( 'binded' );
+						}
+					}
+				};
+
+				if( minDate > maxDate ) {
+					errorMsgsHtml += objContainer.find( '#' + filterKey + '_filter' ).find( 'label' ).html() + ': ';
+					errorMsgsHtml += __( 'The minimum date must be earlier than the maximum date.' ) + '<br>';
+				} else {
+					if( 'Invalid Date' !== minDate.toString() ) {
+						setDateValues( 'min', minDate );
+					}
+					if( 'Invalid Date' !== maxDate.toString() ) {
+						setDateValues( 'max', maxDate );
+					}
+				}
+				psi.patterns.bindEssentials();
+			} );
+
+			objContainer.find( '.min-max-validation' ).each( function() {
+				var filterKey = this.getAttribute( 'filter_key' );
+				var minAmount = parseInt( objContainer.find( 'input[name="report_filter[' + filterKey + '][min-amount]"]' ).val() );
+				var maxAmount = parseInt( objContainer.find( 'input[name="report_filter[' + filterKey + '][max-amount]"]' ).val() );
+
+				if( minAmount > maxAmount ) {
+					errorMsgsHtml += objContainer.find( '#' + filterKey + '_filter' ).find( 'label' ).html() + ': ';
+					errorMsgsHtml += __( 'The minimum value must be less than the maximum value.' ) + '<br>';
+				}
+			} );
+
+			if( errorMsgsHtml ) {
+				$objFilterErrors.show().html( errorMsgsHtml );
+				return false;
+			}
+
+			$objFilterErrors.hide().html( '' );
+			objContainer.find( ' .js-view-data-close' ).click();
+
+			setTimeout(
+				function() {
+					psi.patterns.ajaxRequest( {
+						strElementSelector: '.' + objContainer.attr('id') + '-listing',
+						data: objForm.serialize(),
+						url: strUrl
+					} );
+				}, 200
+			);
+		} );
+
+		objContainer.off( 'click', '.reset-filter' ).on( 'click', '.reset-filter', function() {
+
+			objContainer.find( ' .js-view-data-close' ).click();
+			strUrl = strUrl + '&reset_filter=1';
+
+			setTimeout(
+				function() {
+					psi.patterns.ajaxRequest( { strElementSelector: objContainer, url: strUrl } );
+				}, 200
+			);
+		} );
+
+		objContainer.off( 'blur', 'input.quick-search' ).on( 'blur', 'input.quick-search', function() {
+
+			if( 3 >= objContainer.find( 'input.quick-search' ).val() ) return;
+
+			objContainer.find( ' .js-view-data-close' ).click();
+			var QuickSearchUrl = strUrl + '&quick_search=' + objContainer.find( 'input.quick-search' ).val();
+
+			setTimeout(
+				function() {
+					psi.patterns.ajaxRequest( { strElementSelector: objContainer.find( '.' + objContainer.attr('id') + '-listing' ), url: QuickSearchUrl } );
+				}, 200
+			);
+		} );
+
+		$objStatusFilter.find( '.form-advancedmultiselect #status_filter_items .form-checkbox' ).first().hide();
+
+		$objStatusFilter.find( '.form-advancedmultiselect #status_filter_items ul' ).first().find( 'input' ).on( 'click', function( event ) {
+			var $allActiveStatus = $objStatusFilter.find( '.form-advancedmultiselect #status_filter_items' ).find( 'ul' ).first().find( 'li:eq(0)' ),
+				$allStatus = $objStatusFilter.find( '.form-advancedmultiselect #status_filter_items' ).find( 'ul' ).first().find( 'li:eq(1)' );
+
+			$objStatusFilter.find( '.form-advancedmultiselect #status_filter_items' ).find( 'input' ).each( function( index, element ) {
+				if( '99' != $( element ).val() && '0' != $( element ).val() ) {
+					$( element ).prop( 'checked', false );
+				}
+			} );
+
+			if( $allActiveStatus.find( 'input' ).val() == event.target.value ) {
+				objContainer.find( '#status_filter_items' ).find( 'span' ).first().html( '<i class="down-arrow"></i>' + __( 'All Active Status' ) );
+				$allStatus.find( 'input' ).attr( 'checked', false );
+				$allActiveStatus.find( 'input' ).attr( 'checked', true );
+			}
+
+			if( $allStatus.find( 'input' ).val() == event.target.value ) {
+				objContainer.find( '#status_filter_items' ).find( 'span' ).first().html( '<i class="down-arrow"></i>' + __( 'All Status' ) );
+				$allActiveStatus.find( 'input' ).attr( 'checked', false );
+				$allStatus.find( 'input' ).attr( 'checked', true );
+			}
+		} );
+
+		$objStatusFilter.find( '.form-advancedmultiselect #status_filter_items' ).find( 'input' ).click( function( event ) {
+			var boolAnyChecked = false;
+
+			if( '99' != event.target.value && '0' != event.target.value ) {
+				$objStatusFilter.find( '.form-advancedmultiselect #status_filter_items' ).find( 'input' ).each( function( index, element ) {
+					if( true == $( element ).prop( 'checked' ) ) {
+						boolAnyChecked = true;
+					}
+				} );
+
+				var $allActiveStatus = $objStatusFilter.find( '.form-advancedmultiselect #status_filter_items' ).find( 'ul' ).first().find( 'li:eq(0)' ),
+					$allStatus = $objStatusFilter.find( '.form-advancedmultiselect #status_filter_items' ).find( 'ul' ).first().find( 'li:eq(1)' );
+
+				if( true == boolAnyChecked ) {
+					$allActiveStatus.find( 'input' ).prop( 'checked', false );
+					$allStatus.find( 'input' ).prop( 'checked', false );
+				} else {
+					$allActiveStatus.find( 'input' ).prop( 'checked', true );
+				}
+			}
+		} );
+
+		objContainer.on( 'change', '#listing_filter_id', function( e ) {
+			e.preventDefault();
+
+			if( '' !== $( this ).val() ) {
+				objContainer.find( '.js-view-data-close' ).click();
+
+				psi.patterns.ajaxRequest( {
+					strElementSelector: objContainer.parents( strReplaceAt ),
+					url: strUrl + '&listing_filter_id=' + $( this ).val()
+				} );
+			} else {
+				objContainer.find( '.save-filter-set' ).show();
+				objContainer.find( '.update-filter-set' ).hide();
+				objContainer.find( '.delete-filter-set' ).hide();
+				objContainer.find( '.js-filter-name' ).val( '' );
+				objContainer.find( '.js-filter-id' ).val( '' );
+			}
+		} );
+
+		objContainer.find( '.filter-set li' ).on( 'click', function() {
+			if( $( this ).hasClass( 'save-filter-set' ) || $( this ).hasClass( 'update-filter-set' ) )
+				psi.objGenericListing.saveFilter();
+			else if( $( this ).hasClass( 'delete-filter-set' ) )
+				psi.objGenericListing.deleteFilter();
+		} );
+	};
+
+	var saveFilter = function() {
+		var objContainer = this.objContainer;
+
+		var strDialogClass = 'js-save-filter-id-' + this.objContainer.attr( 'id' );
+
+		objContainer.find( ".js-save-filter-dialog" ).dialog( {
+			dialogClass : 'nopad ' + strDialogClass,
+			closeText: __( 'Close' ),
+			modal: true,
+			title: __( 'Save Filter' ),
+			width: 400,
+			height: 230,
+			close: function() {
+				$( this ).dialog( 'destroy' );
+			}
+		} );
+
+		var objDialog = $( '.'+ strDialogClass );
+
+		// Popup closing
+		objDialog.find( '.cancel-filter' ).on( 'click', function() {
+			objDialog.find( '.ui-dialog-titlebar-close' ).click();
+			objDialog.find( '#notice_dialog_confirm' ).dialog( 'destroy' );
+		} );
+
+		objDialog.find( 'p.error' ).remove();
+		objDialog.find( '.js-view-data-close' ).click();
+
+		objDialog.find( '.js-save-filter' ).on( 'click', function() {
+
+			objDialog.find( 'p.error' ).remove();
+
+			var intFilterId = objDialog.find( '.js-filter-id' ).val();
+			var strFilterName = objDialog.find( '.js-filter-name' ).val();
+			var boolDuplicateName = false;
+
+			if( '' === $.trim( strFilterName ) ) {
+				objDialog.find( '.js-save-filter-div' ).before( '<p class="alert error slim"><i></i>' + __( 'Filter name is required.' ) + '</p>' );
+				return false;
+			}
+
+			objContainer.find( "#listing_filter_id > option" ).each( function() {
+				if( '' !== intFilterId ) {
+					if( intFilterId !== $( this ).val() && strFilterName === $( this ).text() ) {
+						boolDuplicateName = true;
+					}
+				} else if( strFilterName === $( this ).text() ) {
+					boolDuplicateName = true;
+				}
+			} );
+			strSaveFilterUrl = objContainer.attr( "save_filter_url" ) + '&filter_name=' + objDialog.find( '.js-filter-name' ).val() + '&filter_id=' + objDialog.find( '.js-filter-id' ).val();
+
+			if( true === boolDuplicateName ) {
+				objDialog.find( '.js-save-filter-div' ).before( '<p class="alert error slim"><i></i>' + __( 'Filter name is already exists.' ) + '</p>' );
+				return false;
+			}
+
+			objDialog.find( '.ui-dialog-titlebar-close' ).click();
+			objContainer.find( '.js-view-data-close' ).click();
+
+			psi.patterns.ajaxRequest( {
+				strElementSelector: objContainer.parents( strReplaceAt ),
+				url: strSaveFilterUrl,
+				data: objContainer.find( '#frm-view-data-filters2' ).serialize( true )
+			} );
+		} );
+	}
+
+	var deleteFilter = function() {
+		var objContainer = this.objContainer;
+
+		var strDialogClass = 'js-delete-filter-id-' + this.objContainer.attr( 'id' );
+
+		objContainer.find( ".js-delete-filter-dialog" ).dialog( {
+			dialogClass : 'nopad ' + strDialogClass,
+			closeText: __( 'Close' ),
+			modal: true,
+			title: __( 'Delete Filter' ),
+			width: 400,
+			height: 230,
+			close: function() {
+				$( this ).dialog( 'destroy' );
+			}
+		} );
+
+		var objDialog = $( '.'+ strDialogClass );
+
+		// Popup closing
+		objDialog.find( '.cancel-filter' ).on( 'click', function() {
+			objDialog.find( '.ui-dialog-titlebar-close' ).click();
+			objDialog.find( '#notice_dialog_confirm' ).dialog( 'destroy' );
+		} );
+
+		objDialog.find( '.js-view-data-close' ).click();
+
+		objDialog.find( '.js-delete-filter' ).on( 'click', function() {
+			objDialog.find( '.ui-dialog-titlebar-close' ).click();
+
+			objContainer.find( '.js-view-data-close' ).click();
+			psi.patterns.ajaxRequest( {
+				url: objContainer.attr( "delete_filter_url" ) + '&filter_id=' + objContainer.find( '.js-filter-id' ).val(),
+				strElementSelector: objContainer.parents( strReplaceAt )
+			} );
+		} );
+	}
+
+	var formatDate = function( strInputDate ) {
+
+		var InputDate = new Date( strInputDate ); //parse the date initially
+
+		if( InputDate != "Invalid Date" ) {
+
+			var arrInputDate = strInputDate.split( /[/-]/ ); //regex to look for / or - delimited dates
+
+			if( arrInputDate[2].length == 2 ) { //if the input has a 2 digit year
+
+				var y = InputDate.getFullYear();
+
+				if( y < 1950 ) { //and the parser decided it's before 1950
+					InputDate.setFullYear( y + 100 ); //add a century
+				}
+			}
+		}
+
+		return InputDate;
+	};
+
+	var initPagination = function( intPageNumber ) {
+		var objContainer = this.objContainer;
+
+		intPageNumber = intPageNumber / 1 * 1;
+
+		objContainer.find( ".page-prev:not(.disabled)" ).click( function() {
+
+			psi.objGenericListing.loadPage( '&next_page_no=' + ( --intPageNumber < 0 ? 0 : intPageNumber ) ); //To prevent DB ERROR => OFFSET must not be negative
+
+		} );
+
+		objContainer.find( ".page-next:not(.disabled)" ).click( function() {
+
+			psi.objGenericListing.loadPage( '&next_page_no=' + (++intPageNumber) );
+
+		} );
+	};
+
+	var loadPage = function( strAppendUrl, func_success, boolReloadInBackground, strContainerId  ) {
+
+		if( 'undefined' == typeof strAppendUrl ) strAppendUrl = '';
+		if( 'undefined' == typeof func_success ) func_success = '';
+		if( 'undefined' == typeof boolReloadInBackground ) boolReloadInBackground = false;
+
+		var objContainer = this.objContainer;
+		strContainerId = ( 'undefined' == typeof strContainerId ) ? objContainer.find( '.' + objContainer.attr('id') + '-listing' ) : strContainerId;
+		var tableId = objContainer.find( "#printGridContent" ).find( "table:first" ).attr( "id" );
+
+		var strTabUrl = objContainer.find( "table#" + tableId ).attr( "custom_load_url" );
+
+		if( 'undefined' == typeof strTabUrl || '' == strTabUrl ) {
+			return;
+		}
+
+		tableId = 'table-header';
+
+		if( 'undefined' != typeof psi.objGenericListing.strSortBy[tableId] && '' != psi.objGenericListing.strSortBy[tableId] ) {
+			strAppendUrl += "&sort_by=" + psi.objGenericListing.strSortBy[tableId];
+		}
+
+		if( 'undefined' != typeof psi.objGenericListing.strSortDirection[tableId] && '' != psi.objGenericListing.strSortDirection[tableId] ) {
+			strAppendUrl += "&sort_direction=" + psi.objGenericListing.strSortDirection[tableId];
+		}
+
+		if( false == boolReloadInBackground ) {
+			psi.patterns.ajaxRequest( {
+				strElementSelector: strContainerId,
+				url: strTabUrl + strAppendUrl,
+				data: objContainer.find( '#frm-view-data-filters2' ).serialize(),
+				success: function( response, status, xhr ) {
+					objContainer.find( '.' + objContainer.attr('id') + '-listing' ).html( response );
+					psi.patterns.removeLoadingImage( { strElementSelector: strContainerId } );
+
+					if( func_success instanceof Function ) {
+						func_success( response, status, xhr );
+					}
+				},
+				complete: function() {
+					psi.patterns.bindEssentials();
+				}
+			} );
+		} else {
+			$.ajax( {
+				url: strTabUrl + strAppendUrl,
+				data: objContainer.find( '#frm-view-data-filters2' ).serialize(),
+				success: function( response, status, xhr ) {
+					objContainer.find( '.' + objContainer.attr('id') + '-listing' ).html( response );
+
+					if( func_success instanceof Function ) {
+						func_success( response, status, xhr );
+					}
+				}
+			} );
+		}
+	};
+
+	var initSorting = function( strReqSortby, strDefaultSortby, strDefaultSortDirection, boolHighlightSortedColumn ) {
+
+		if( 'undefined' == typeof strReqSortby ) strReqSortby = '';
+
+		if( 'undefined' == typeof strDefaultSortby ) strDefaultSortby = 'payment_datetime';
+
+		if( 'undefined' == typeof strDefaultSortDirection ) strDefaultSortDirection = 'DESC';
+
+		if( 'undefined' == typeof boolHighlightSortedColumn ) boolHighlightSortedColumn = false;
+
+		var objContainer = this.objContainer;
+
+		var objTableHeader = objContainer.find( "#table-header" ),
+			strTableId = objTableHeader.attr( "id" ),
+			intIndex = -1;
+
+		if( 'undefined' == typeof objTableHeader || 'undefined' == typeof strTableId ) {
+			return;
+		}
+
+		if( '' == strReqSortby || 'undefined' == typeof psi.objGenericListing.strSortBy[strTableId] || '' == psi.objGenericListing.strSortBy[strTableId] ) {
+
+			intIndex = objTableHeader.find( "th.sortable[sort_by='"+strDefaultSortby+"']" ).addClass( 'selected' ).append( "<i class='"+ strDefaultSortDirection.toLowerCase() +"'></i>").index();
+
+			psi.objGenericListing.strSortDirection[strTableId] = strDefaultSortDirection;
+			psi.objGenericListing.strSortBy[strTableId] = strDefaultSortby;
+
+		} else {
+			intIndex = objTableHeader.find( "th.sortable[sort_by='"+psi.objGenericListing.strSortBy[strTableId]+"']" ).addClass( 'selected' ).append( "<i class='"+psi.objGenericListing.strSortDirection[strTableId].toLowerCase()+"'></i>").index();
+		}
+
+		if( true == boolHighlightSortedColumn ) {
+			psi.objGenericListing.highlightColumn( intIndex );
+		}
+
+		objTableHeader.find( 'th.sortable' ).on( 'click', function() {
+
+			if( 0 < $( this ).find( 'i' ).length && true == $( this ).find( 'i' ).hasClass( 'asc' ) ) {
+				psi.objGenericListing.strSortDirection[strTableId] = 'DESC';
+			} else {
+				psi.objGenericListing.strSortDirection[strTableId] = 'ASC';
+			}
+
+			var strSortBy = $( this ).attr( 'sort_by' );
+
+			if( 'undefined' == typeof strSortBy || '' == strSortBy ) {
+				return;
+			}
+
+			psi.objGenericListing.strSortBy[strTableId] = strSortBy;
+			var obj = $( this );
+
+			psi.objGenericListing.loadPage( '', function() {
+
+				if( 0 < obj.find( 'i' ).length ) {
+					obj.find( 'i' ).removeClass().addClass( psi.objGenericListing.strSortDirection[strTableId].toLowerCase() );
+				} else {
+
+					obj.siblings().each( function() {
+						$( this ).removeClass( 'selected' );
+						$( this ).find( 'i' ).remove();
+					} );
+					obj.addClass( 'selected' );
+					obj.append( "<i class='asc'></i>" );
+				}
+
+				if( true == boolHighlightSortedColumn ) {
+					psi.objGenericListing.highlightColumn( obj.index() );
+				}
+			}, false, '.' + objContainer.attr('id') + '-listing' );
+
+		} );
+	};
+
+	var highlightColumn = function( intColumnIndex ) {
+		var objContainer = this.objContainer;
+
+		objContainer.find( '#printGridContent' ).find( 'table:first tr td' ).each( function() {
+			if( intColumnIndex == $( this ).index() ) {
+				$( this ).addClass( 'selected' );
+			} else {
+				$( this ).removeClass( 'selected' );
+			}
+		} );
+	};
+
+	var shiftKeySelectionCheckboxes = function( strCheckboxClass ) {
+
+		setTimeout(function(){
+			var lastChecked = null;
+			var objContainer = this.objContainer;
+
+			var chkboxes = objContainer.find( '.' + strCheckboxClass + '' );
+			chkboxes.click( function( e ) {
+				if( !lastChecked ) {
+					lastChecked = this;
+					return;
+				}
+
+				if( e.shiftKey ) {
+					var start = chkboxes.index( this );
+					var end = chkboxes.index( lastChecked );
+
+					chkboxes.slice( Math.min( start, end ), Math.max( start, end ) + 1 ).prop( 'checked', this.checked );
+
+				}
+				lastChecked = $this;
+			} );
+		},250);
+	};
+
+	var loadTab = function( strModuleName ) {
+		var objListItem = this.objContainer.find( '[data-module-name="' + strModuleName + '"]' );
+		objListItem.addClass( 'selected' );
+		this.objContainer.children().not( '[data-module-name="' + strModuleName + '"]' ).removeClass( 'selected' );
+		window.location = objListItem.data().url;
+	};
+
+	var handleLeftNavigationItemClick = function( objLeftNavigationItem ) {
+		// Handle dialog box if data-dialog-box is set
+		if( 'undefined' !== typeof objLeftNavigationItem.data().dialogBox ) {
+			openDialogBox( objLeftNavigationItem.data().dialogBox );
+		}
+
+	};
+
+	var openDialogBox = function( dialogBoxOptions ) {
+		// Refer CDialogBox.class.php for php implementation of loadDialog, loadLargeDialog, addDialogContent, etc.
+		// @TODO: Implement CDialogBox->$m_arrstrOtherOptions
+		switch( dialogBoxOptions.type ) {
+			case 'loadDialog':
+				psi.patterns.loadDialog( {
+					title: dialogBoxOptions.title,
+					strContentId: dialogBoxOptions.strContentId,
+					strUrl: dialogBoxOptions.url,
+					width: dialogBoxOptions.width,
+					height: dialogBoxOptions.height,
+					onCloseCallback: dialogBoxOptions.onCloseCallback
+				} );
+				break;
+
+			case 'loadLargeDialog':
+				psi.patterns.loadLargeDialog( {
+					title: dialogBoxOptions.title,
+					strUrl: dialogBoxOptions.url,
+					onCloseCallback: dialogBoxOptions.onCloseCallback
+				} );
+				break;
+
+			case 'addDialogContent':
+				psi.patterns.addDialogContent( {
+					title: dialogBoxOptions.title,
+					strUrl: dialogBoxOptions.url,
+					onCloseCallback: (dialogBoxOptions.onCloseCallback)
+				} );
+				break;
+
+			case 'loadOverlay':
+				psi.patterns.loadOverlay( {
+					strContentId: dialogBoxOptions.strContentId,
+					strUrl: dialogBoxOptions.url,
+					width: dialogBoxOptions.width,
+					height: dialogBoxOptions.height
+				} );
+				break;
+
+			default:
+				console.error( 'Unhandled dialog box type ' + dialogBoxOptions.type );
+				break;
+
+		}
+	};
+
+	var initLazyLoadSorting = function( strTableId, strReqSortBy, strDefaultSortby, strDefaultSortDirection ) {
+		var objContainer = this.objContainer;
+		var objTableHeader = objContainer.find( "#" + strTableId );
+		var	strTableHeader = "th";
+		var strTabUrl = objContainer.find('#' + strTableId).attr( 'custom_load_url' );
+
+		if( 'undefined' == typeof strReqSortby ) {
+			strReqSortby = '';
+		}
+
+		if( 'undefined' == typeof strDefaultSortby ) {
+			strDefaultSortby = 'customer_name';
+		}
+
+		if( 'undefined' == typeof strDefaultSortDirection ) {
+			strDefaultSortDirection = 'ASC';
+		}
+
+		if( 'undefined' == typeof strTabUrl || '' == strTabUrl ) {
+			return;
+		}
+
+		if( '' == strReqSortBy || ( 'undefined' == typeof psi.objGenericListing.strSortBy[strTableId] || '' == psi.objGenericListing.strSortBy[strTableId] ) ) {
+			objContainer.find( "#" + strTableId ).find( strTableHeader + ".sortable[sort_by='"+strDefaultSortby+"']" ).addClass( 'selected' ).append( "<i class='"+ strDefaultSortDirection.toLowerCase() +"'></i>" );
+			psi.objGenericListing.strSortDirection[strTableId] = strDefaultSortDirection;
+			psi.objGenericListing.strSortBy[strTableId] = strDefaultSortby;
+		} else {
+			objContainer.find( "#" + strTableId ).find( strTableHeader + ".sortable[sort_by='" + psi.objGenericListing.strSortBy[strTableId]+"']" ).addClass( 'selected' ).append( "<i class='" + psi.objGenericListing.strSortDirection[strTableId].toLowerCase()+"'></i>" );
+		}
+
+		if( 2 > objContainer.find( '#' + strTableId + ' > tbody > tr:not(.hide)' ).length ) {
+			return;
+		}
+
+		objContainer.find('#'+strTableId).find( strTableHeader + '.sortable' ).on('click', function () {
+
+			if( 0 < $(this).find('i').length && true == $(this).find('i').hasClass('asc') ) {
+				psi.objGenericListing.strSortDirection[strTableId] = 'DESC';
+			} else {
+				psi.objGenericListing.strSortDirection[strTableId] = 'ASC';
+			}
+
+			var strSortBy = $(this).attr('sort_by');
+
+			if( 'undefined' == typeof strSortBy || '' == strSortBy ) {
+				return;
+			}
+
+			psi.objGenericListing.strSortBy[strTableId] = strSortBy;
+			var obj = $(this);
+			psi.patterns.ajaxRequest( { strElementSelector: objContainer.find( '#' + strTableId ), url: strTabUrl + '&sort_by=' + psi.objGenericListing.strSortBy[strTableId] + '&sort_direction=' + psi.objGenericListing.strSortDirection[strTableId] + '&next_page_no=0',
+				success: function( strResponse ) {
+					objTableHeader.find('tbody').html( strResponse );
+
+					if( 0 < obj.find('i').length ) {
+						obj.find('i').removeClass().addClass( psi.objGenericListing.strSortDirection[strTableId].toLowerCase() );
+					} else {
+
+						obj.siblings().each( function() {
+							$(this).removeClass( 'selected' );
+							$(this).find('i').remove();
+						});
+						obj.addClass( 'selected' );
+						obj.append( "<i class='asc'></i>" );
+					}
+
+					objContainer.find( '#'+ strTableId ).data( "ajax-in-process", false );
+
+					psi.objGenericListing.initLazyLoadPagination( strTableId );
+
+					psi.patterns.removeLoadingImage( { strElementSelector: objContainer.find( '#' + strTableId ) } );
+
+					// Uncheck the bulk select checkbox and remove the message
+					objContainer.find( '#' + strTableId ).find( 'input[type=checkbox]:first' ).prop( "checked", false );
+				}
+			});
+		});
+	};
+
+	var initLazyLoadPagination = function( strTableId, strOnScrollElementSelector ) {
+		var objContainer = this.objContainer;
+
+		var objTableHeader = objContainer.find( "#" + strTableId ),
+			strTabUrl = objTableHeader.attr( "custom_load_url" );
+
+		if( 'undefined' == typeof strTabUrl || '' == strTabUrl ) {
+			return;
+		}
+
+		if( psi.objGenericListing.intPagingSize <= objContainer.find( '#' + strTableId + ' > tbody > tr:not(.hide)' ).length ) {
+			var strQueryString = '';
+
+			if( 'undefined' != typeof psi.objGenericListing.strSortBy[strTableId] && '' != psi.objGenericListing.strSortBy[strTableId] ) {
+				strQueryString += "&sort_by=" + psi.objGenericListing.strSortBy[strTableId];
+			}
+
+			if( 'undefined' != typeof psi.objGenericListing.strSortDirection[strTableId] && '' != psi.objGenericListing.strSortDirection[strTableId] ) {
+				strQueryString += "&sort_direction=" + psi.objGenericListing.strSortDirection[strTableId];
+			}
+
+			objTableHeader.data( "next_page_no", 1 );
+
+			// If strOnScrollElementSelector is not passed then it will take window.document. We can customize it as per requirement.
+			psi.patterns.lazyLoad({
+				strElementSelector: objTableHeader,
+				strOnScrollElementSelector: strOnScrollElementSelector,
+				url: strTabUrl + strQueryString,
+				scrollEndValue: 80,
+				data: objTableHeader.data(),
+				customBeforeSend: function() {
+					objTableHeader.data( "next_page_no", objTableHeader.data( "next_page_no" ) + 1 );
+				},
+				success: function( res ) {
+					// checking data to prevent further ajax requests
+					if( $( res ).filter( 'tr' ).length >= psi.objGenericListing.intPagingSize ) {
+						objTableHeader.find( ".js-loading-data" ).remove();
+						objTableHeader.append( res );
+						objTableHeader.data( "ajax-in-process", false );
+					} else {
+						objTableHeader.find( ".js-loading-data" ).remove();
+						objTableHeader.append( res );
+						objTableHeader.data( "ajax-in-process", true );
+					}
+					psi.objGenericListing.selectCheckboxes( strTableId );
+				}
+			});
+		}
+	};
+
+	// Select the checkboxes after pagination, if checkAll checkbox selected
+	var selectCheckboxes = function( strTableId ) {
+		var objContainer = this.objContainer;
+
+		if( true == objContainer.find( '#' + strTableId ).find( 'input[type=checkbox]:first' ).prop( "checked" )  ) {
+			objContainer.find( "#"+ strTableId ).find( "input[type=checkbox]:visible:not(:disabled)" ).prop( 'checked', true ).trigger('change');
+		}
+	}
+
+	var toggleCheckBoxes = function( objCheckBox, strContentClass ) {
+		var objContainer = this.objContainer;
+
+		// @TODO we can add the limit for selecting the check boxes by passing the third intMaxSelectedRecordCount parameter
+		if( true == objCheckBox.checked ) {
+			objContainer.find( "#"+ strContentClass ).find( "input[type=checkbox]:visible:not(:disabled)" ).prop('checked', objCheckBox.checked ).trigger('change');
+		} else {
+			objContainer.find( "#"+ strContentClass ).find( "input[type=checkbox]:visible:not(:disabled)" ).prop('checked', objCheckBox.checked ).trigger('change');
+		}
+	}
+
+	var reloadCurrentTab = function( strTableId, strElementId ) {
+		var objContainer = this.objContainer;
+		var strUrl = objContainer.find( '#' + strTableId ).attr('custom_load_url');
+		strUrl = strUrl + '&sort_by=' + psi.objGenericListing.strSortBy[strTableId] + '&sort_direction=' + psi.objGenericListing.strSortDirection[strTableId];
+		psi.patterns.ajaxRequest( { strElementSelector: objContainer.find( '#' + strElementId ), url: strUrl } );
+	}
+
+	return {
+		objContainer: objContainer,
+		init: init,
+		intPageNumber: intPageNumber,
+		strSortBy: strSortBy,
+		strSortDirection: strSortDirection,
+		intPagingSize: intPagingSize,
+		initFilter: initFilter,
+		initPagination: initPagination,
+		initLazyLoadPagination: initLazyLoadPagination,
+		initLazyLoadSorting: initLazyLoadSorting,
+		reloadCurrentTab: reloadCurrentTab,
+		selectCheckboxes: selectCheckboxes,
+		toggleCheckBoxes: toggleCheckBoxes,
+		loadPage: loadPage,
+		initSorting: initSorting,
+		formatDate: formatDate,
+		highlightColumn: highlightColumn,
+		saveFilter: saveFilter,
+		deleteFilter: deleteFilter,
+		shiftKeySelectionCheckboxes: shiftKeySelectionCheckboxes,
+		loadTab: loadTab,
+		strSelectedTab: strSelectedTab,
+		boolIsBaseTab: boolIsBaseTab,
+		strTopNavigationMenuId: strNavigationMenuId,
+		handleLeftNavigationItemClick: handleLeftNavigationItemClick
+	};
+
+}();

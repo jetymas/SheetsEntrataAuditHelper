@@ -321,7 +321,66 @@ const ColumnHelpers = {
     }
     
     return false;
-  }
+  },
+  /**
+   * Extracts the value following a given label in the PDF.
+   * @param {string} label - The label to search for (e.g., 'Start Date', 'End Date', etc.)
+   * @param {object} [options] - Optional parameters (e.g., { page: 1 })
+   * @returns {Promise<string|null>} - The value found after the label, or null if not found
+   */
+  async extractFieldFromPdf(label, options = {}) {
+    // Optionally navigate to a specific page
+    if (options.page) {
+      await this.navigateToPdfPage(options.page);
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+    // Find the label in the PDF
+    const found = await this.findTextInPdf(label);
+    if (!found) return null;
+
+    // Try to extract the value after the label
+    // (This is a stub; real implementation would parse the DOM or PDF viewer)
+    // For now, attempt to find the next sibling text node after the label
+    const pdfViewer = document.querySelector('.pdf-viewer, .pdfViewer, embed, iframe');
+    if (!pdfViewer) return null;
+
+    // Try to find the label element
+    const walker = document.createTreeWalker(pdfViewer, NodeFilter.SHOW_TEXT, null, false);
+    let foundNode = null;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.textContent && node.textContent.trim().includes(label)) {
+        foundNode = node;
+        break;
+      }
+    }
+    if (foundNode) {
+      // Try to extract the text after the label within the same node
+      const after = foundNode.textContent.split(label)[1];
+      if (after && after.trim()) {
+        // Heuristic: take the first word/number after the label
+        const match = after.trim().match(/^[:\s-]*([\w\d\/.\-,\$]+)[\s\n]?/);
+        if (match && match[1]) {
+          return match[1].trim();
+        }
+        return after.trim();
+      }
+      // Or the next text node
+      if (walker.nextNode()) {
+        const nextText = walker.currentNode.textContent.trim();
+        if (nextText) {
+          // Heuristic: take the first word/number
+          const match = nextText.match(/^([\w\d\/.\-,\$]+)/);
+          if (match && match[1]) {
+            return match[1].trim();
+          }
+          return nextText;
+        }
+      }
+    }
+    return null;
+  },
+
 };
 
 export default ColumnHelpers;
