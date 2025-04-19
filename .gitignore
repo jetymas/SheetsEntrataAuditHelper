@@ -32,12 +32,38 @@ Thumbs.db
 *.tmp
 
 # Sensitive files
-/reference/webpages/
-/reference/images/
-/reference/column_implementation.txt
+/archive/
 
-# Notes directory
-/notes/
+# The new documentation structure is tracked (do NOT ignore docs/)
 
-# TODO file
-TODO.md
+# Ignore persistent environment and build files
+.env
+.env.local
+
+# Ignore OS and IDE files
+.DS_Store
+Thumbs.db
+/.idea/
+/.vscode/
+
+# Ignore logs and coverage
+npm-debug.log*
+yarn-debug.log*
+*.log
+/coverage/
+
+# Ignore build output
+/dist/
+/build/
+
+# Ignore temporary files
+*.tmp
+
+# Node modules
+/node_modules/
+
+# Browser saved HTML asset folders
+*_files/
+
+# Ignore only sensitive docs
+
