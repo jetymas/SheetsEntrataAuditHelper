@@ -7,8 +7,8 @@
 - [x] Write Jest tests for `extractFieldFromPdf` in `tests/column-helpers.test.js`
 - [x] **Implement remaining column modules (R–AO) via TDD**: All columns R–AO are implemented and tested. See notes/column-modules/list.md for tracking.
 - [x] **Integrate helpers into Chrome extension (content script)**: All column modules and helpers are now dynamically loaded and invoked in the content script. User confirmation workflow for AO and similar columns is functional. See notes/todo.md for details.
-- [ ] **Integrate helpers into popup UI**: Connect column modules and helpers to popup UI, including user confirmation flows. See notes/popup-ui.md for progress.
-  - [ ] Validate user confirmation dialogs for Column AO via simulated events.
+- [x] **Integrate helpers into popup UI**: Connect column modules and helpers to popup UI, including user confirmation flows. See notes/popup-ui.md for progress.
+  - *Completed*: Wiring popup.js, unit tests, and confirmation dialogs.
 - [ ] **Review and refactor helpers/modules**: Ensure DRYness, clarity, and JSDoc coverage. Update or add tests as needed.
 - [x] **Add E2E tests with Puppeteer**: Validate user flows in the extension. Track Puppeteer test files and coverage here. (e.g., `tests/e2e/audit.e2e.test.js` passing)
 - [ ] **Write E2E tests for content script & background flows**: Cover scenarios in content.js and background.js via Puppeteer.
@@ -17,5 +17,7 @@
 
 ## Completed Tasks
 ### Popup UI Integration
+- [x] Integrate column modules and helpers into `popup.js`, including user confirmation dialogs for AO.
+### Audit
 - [x] Wire up popup.js to invoke column-modules and audit handlers on button clicks.
 - [x] Add Jest unit tests for popup.js logic (e.g., spreadsheet URL parsing, button states.)

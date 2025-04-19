@@ -1,5 +1,7 @@
 // Import column modules for audit flow
 import columnModules from './column-modules/index.js';
+// Import helpers for navigation and element interactions
+import ColumnHelpers from './column-modules/column-helpers.js';
 
 // Initialize popup UI after DOM is ready
 function initPopup() {
@@ -44,7 +46,12 @@ function initPopup() {
         updateStatusUI({ message: result.message || `Processed ${mod.name}`, progress: Math.round((count / modules.length) * 100) });
         // Handle confirmation if needed
         if (result.requiresConfirmation) {
-          await showVerificationDialog(result.prompt);
+          // Prepare prompt data from module
+          const promptData = mod.displayData(row, col, { result, record: {} });
+          // Navigate to Documents tab for verification
+          await ColumnHelpers.navigateToPage('Documents');
+          // Show verification dialog with promptData
+          await showVerificationDialog(promptData);
         }
       } catch (e) {
         console.error(`Module ${mod.id} error:`, e);
