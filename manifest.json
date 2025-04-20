@@ -21,7 +21,7 @@
     "client_id": "813695383875-rl8nkfrca4s05q1b382707o2jke551qn.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/spreadsheets",
-	  "https://www.googleapis.com/auth/drive.file"
+      "https://www.googleapis.com/auth/drive.file"
     ]
   },
   "content_security_policy": {

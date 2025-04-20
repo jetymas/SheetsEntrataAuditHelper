@@ -7,6 +7,7 @@ This guide provides detailed instructions on how to use the Entrata Lease Audit 
 1. **Install the Extension**: Follow the installation steps in the README.md file.
 
 2. **Prepare Your Audit Spreadsheet**: Make sure your Google Sheet follows the required format:
+
    - Header row on row 8
    - Columns for resident details, lease dates, rent amounts, etc.
    - Columns for verification results (will be updated by the extension)
@@ -18,6 +19,7 @@ This guide provides detailed instructions on how to use the Entrata Lease Audit 
 1. **Launch the Extension**: Click the extension icon in your Chrome toolbar.
 
 2. **Configure the Audit**:
+
    - Paste your Google Sheet URL in the "Google Sheet URL" field
    - Select the audit type (New Lease or Renewal)
 
@@ -26,12 +28,14 @@ This guide provides detailed instructions on how to use the Entrata Lease Audit 
 4. **Authorization**: If this is your first time using the extension with this Google account, you'll be prompted to authorize access to your Google Sheets.
 
 5. **Navigation**: The extension will:
+
    - Navigate to the Entrata residents page
    - Find the resident from your spreadsheet
    - Open their profile and navigate to the Documents tab
    - Open the lease document
 
 6. **Field Verification**:
+
    - For each field being verified, a popup will appear showing:
      - The field name (e.g., "Lease Start Date")
      - The value found in the lease document
@@ -39,11 +43,13 @@ This guide provides detailed instructions on how to use the Entrata Lease Audit 
    - The relevant section of the PDF will be scrolled into view
 
 7. **Verification Actions**:
+
    - **Confirm**: If both values match and are correct, click "Confirm"
    - **Skip**: If you need to skip this field for any reason, click "Skip" and optionally add a comment
    - **Flag as Mismatch**: If there's a discrepancy between the values, click "Flag as Mismatch" and optionally add a comment
 
 8. **Real-time Updates**: Your Google Sheet will be updated in real-time as you verify each field:
+
    - Confirmed fields: Checkboxes will be checked (TRUE)
    - Skipped or flagged fields: Comments will be added with your notes
 
@@ -78,7 +84,6 @@ This guide provides detailed instructions on how to use the Entrata Lease Audit 
 ## Best Practices
 
 - **Regular Audits**: Run audits frequently to catch discrepancies early.
-  
 - **Review Flagged Items**: After an audit completes, review all flagged items in the spreadsheet.
 
 - **Documentation**: Use the comment feature to document reasons for mismatches or skips.

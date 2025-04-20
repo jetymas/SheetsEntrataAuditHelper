@@ -66,6 +66,7 @@ A Chrome extension to streamline lease audits for properties using the Entrata p
 ## Spreadsheet Format
 
 The extension assumes your Google Sheet follows this structure:
+
 - Header row is on row 8
 - Resident data begins on row 9
 - Required columns:
@@ -79,6 +80,7 @@ The extension assumes your Google Sheet follows this structure:
 ## Technical Details
 
 This extension uses:
+
 - Chrome Extension Manifest V3
 - Google Sheets API for spreadsheet integration
 - Content scripts for Entrata page interaction

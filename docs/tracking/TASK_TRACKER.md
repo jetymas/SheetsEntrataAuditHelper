@@ -1,6 +1,11 @@
 # DEVELOPMENT TASK TRACKER for Entrata Lease Audit Assistant
 
+## Task Migration Log
+
+- **2025-04-20:** Migrated all completed checklist items and reviewed file entries from `TODO.md` to `docs/tracking/complete/TODO_complete.md`. `TODO.md` now tracks only active/incomplete tasks. Migration performed by Cascade as part of regular audit workflow and documentation best practices.
+
 ## High-level Milestones
+
 1. Project Setup
 2. Core Audit Logic
 3. Content Script
@@ -15,12 +20,14 @@
 ---
 
 ## 1. Project Setup
+
 1.1. Create `manifest.json` with version, permissions (`tabs`, `activeTab`, `identity`, etc.).
 1.2. Configure build tooling (webpack or Rollup) to bundle `src/js` into `dist/` folder.
 1.3. Add linting/formatting (ESLint, Prettier) and pre-commit hooks.
 1.4. Ensure `reference/webpages` served via local HTTP server for tests.
 
 ## 2. Core Audit Logic
+
 - [x] 2.1. Finalize `BaseAuditType` abstract methods and error handling.
 - [x] 2.2. Implement `LeaseAudit`:
   - Filter records by date and status.
@@ -30,27 +37,33 @@
 - [x] 2.4. Refine state management and progress reporting.
 
 ## 3. Content Script
+
 3.1. Create `content-script.js` to handle messages:
-  - `ping` → respond immediately.
-  - `setupAudit` → sort/filter DOM elements, return success.
-  - `processField` → extract data for a given column.
-3.2. Write selectors based on `reference/webpages` HTML.
-3.3. Test message listeners and DOM interactions.
+
+- `ping` → respond immediately.
+- `setupAudit` → sort/filter DOM elements, return success.
+- `processField` → extract data for a given column.
+  3.2. Write selectors based on `reference/webpages` HTML.
+  3.3. Test message listeners and DOM interactions.
 
 ## 4. Column Modules
+
 4.1. Under `src/js/column-modules/`, create module for each column letter (e.g., `G.js`, `J.js`, …).
 4.2. Each exports:
-  - `isApplicable(record)`
-  - `run(tabId, record)` → uses `chrome.tabs.sendMessage` to content script.
-4.3. Write unit tests for each module using jsdom-loaded HTML fixtures.
+
+- `isApplicable(record)`
+- `run(tabId, record)` → uses `chrome.tabs.sendMessage` to content script.
+  4.3. Write unit tests for each module using jsdom-loaded HTML fixtures.
 
 ## 5. Front-end (Popup) UI
+
 5.1. Design `popup.html` with Start/Stop buttons and progress display.
 5.2. Implement `popup.js` to send messages to background (controller).
 5.3. Style UI; show error and success messages.
 5.4. Test popup interactions.
 
 ## 6. Testing
+
 - [x] 6.1 **Unit Tests** (Jest):
   - Sheets API error paths.
   - AuditController start/stop flows and error injection.
@@ -66,6 +79,7 @@
 - [x] 6.4 Add fixtures under `tests/fixtures/` for spreadsheets and HTML.
 
 ## 7. CI/CD Pipeline
+
 - [ ] 7.1 GitHub Actions:
   - [ ] `lint` & `unit tests` on pull request
   - [ ] `integration tests` on merge to main
@@ -73,39 +87,47 @@
 - [ ] 7.2 Enforce coverage ≥90%.
 
 ## 8. Documentation
+
 8.1. Update `README.md`:
-  - Installation
-  - Build & Run
-  - Testing
-  - Directory Structure
-8.2. Add `CONTRIBUTING.md` guidelines.
-8.3. Diagram architecture in `docs/`.
+
+- Installation
+- Build & Run
+- Testing
+- Directory Structure
+  8.2. Add `CONTRIBUTING.md` guidelines.
+  8.3. Diagram architecture in `docs/`.
 
 ## 9. Packaging & Release
+
 9.1. Bundle extension assets into `.zip` or `.crx`.
 9.2. Bump version in `manifest.json` and `package.json`.
 9.3. Publish to Chrome Web Store; update changelog.
 
 ## 10. Manual QA & Validation
+
 10.1. Install unpacked extension locally; test audit flows.
 10.2. Verify with real Entrata staging pages.
 10.3. Test edge cases: slow network, tab closure, popup interactions.
 10.4. Log issues and iterate.
 
 ## Methods by File
+
 - **src/js/sheets.js**
+
   - `getAuthToken()`
   - `fetchSheetData(spreadsheetId, sheetName = 'Lease Audit', headerRow = 8)`
   - `updateSheetCell(spreadsheetId, sheetName, cellRef, value)`
   - `addSheetComment(spreadsheetId, sheetName, cellRef, comment)`
 
 - **src/js/AuditController.js**
+
   - `constructor()`
   - `getState()`
   - `start({ spreadsheetId, auditType })`
   - `stop()`
 
 - **src/js/audit-types/base-audit.js**
+
   - `constructor(spreadsheetId, sheetName)`
   - `setUp()`
   - `findNext()`
@@ -116,6 +138,7 @@
   - `hasBlackFill(record, columnLetter)`
 
 - **src/js/audit-types/lease-audit.js**
+
   - `constructor(spreadsheetId, sheetName)`
   - `setUp()`
   - `findNext()`

@@ -7,5 +7,14 @@
     "noEmit": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.js", "tests/**/*.js", "src/js/audit-types/base-audit.mjs", "src/js/updateStatus.mjs", "src/js/sheets.mjs", "src/js/content.mjs", "src/js/audit-types/renewal-audit.mjs", "src/js/audit-types/lease-audit.mjs"]
+  "include": [
+    "src/**/*.js",
+    "tests/**/*.js",
+    "src/js/audit-types/base-audit.mjs",
+    "src/js/updateStatus.mjs",
+    "src/js/sheets.mjs",
+    "src/js/content.mjs",
+    "src/js/audit-types/renewal-audit.mjs",
+    "src/js/audit-types/lease-audit.mjs"
+  ]
 }

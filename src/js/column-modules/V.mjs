@@ -9,13 +9,13 @@
  * @param {object} rowData - data of current row
  * @returns {*} - value for column V
  */
-import ColumnHelpers from './column-helpers.js';
+import ColumnHelpers from "./column-helpers.mjs";
 
 const ColumnV = {
-  id: 'SecurityDeposit',
-  name: 'Security Deposit',
-  sheetColumn: 'Security Deposit',
-  resultColumn: 'V',
+  id: "SecurityDeposit",
+  name: "Security Deposit",
+  sheetColumn: "Security Deposit",
+  resultColumn: "V",
 
   isApplicable(record) {
     return !ColumnHelpers.hasBlackFill(record, this.sheetColumn);
@@ -23,14 +23,15 @@ const ColumnV = {
 
   async run(row, col, context) {
     const expected = context.record[this.sheetColumn];
-    const pdfValue = await ColumnHelpers.extractFieldFromPdf('Security Deposit');
+    const pdfValue =
+      await ColumnHelpers.extractFieldFromPdf("Security Deposit");
     const match = pdfValue === expected;
     return {
       success: true,
       pdfValue,
       expectedValue: expected,
       match,
-      requiresUserConfirmation: !match
+      requiresUserConfirmation: !match,
     };
   },
 
@@ -40,9 +41,9 @@ const ColumnV = {
       pdfValue: context.result.pdfValue,
       expectedValue: context.result.expectedValue,
       match: context.result.match,
-      requiresUserConfirmation: context.result.requiresUserConfirmation
+      requiresUserConfirmation: context.result.requiresUserConfirmation,
     };
-  }
+  },
 };
 
 export default ColumnV;

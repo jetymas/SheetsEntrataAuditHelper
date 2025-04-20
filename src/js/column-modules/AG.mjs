@@ -4,14 +4,16 @@
  * Instructions: find text "(Guarantor)". 3. Prompt the user to acknowledge if the page is signed. 4. If the user acknowledges
  */
 
+import ColumnHelpers from "./column-helpers.mjs";
+
 /**
  * Process row data for column AG
  * @param {object} rowData - data of current row
  * @returns {*} - value for column AG
  */
-function processAG(rowData) {
+function processAG(_rowData) {
   // TODO: implement based on spec
   return null;
 }
 
-export default { processAG };;
+export default { processAG };

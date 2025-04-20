@@ -1,9 +1,11 @@
 # RIGOROUS TEST PLAN for Entrata Lease Audit Assistant
 
 ## 1. Objective
+
 Ensure the Chrome extension and its audit logic work reliably and handle real-world Entrata pages, diverse data sets, and edge cases.
 
 ## 2. Scope
+
 - Unit tests (logic, error handling)
 - Integration tests (API mocks, data flows)
 - End-to-end tests (with reference HTML pages)
@@ -14,6 +16,7 @@ Ensure the Chrome extension and its audit logic work reliably and handle real-wo
 ---
 
 ## 3. Unit Testing
+
 - **Sheets module**: cover fetchSheetData, updateSheetCell, addSheetComment error paths (HTTP 4xx/5xx, token errors, malformed JSON).
 - **AuditController**: simulate start/stop, verify state transitions, error injection in fetch/update calls.
 - **BaseAuditType**: methods nextField, markFieldProcessed, hasBlackFill under varied record shapes.
@@ -24,6 +27,7 @@ Ensure the Chrome extension and its audit logic work reliably and handle real-wo
 ---
 
 ## 4. Integration Testing
+
 - Use jsdom to load `reference/webpages/**/*.html` into DOM.
 - Mock `chrome.tabs.create`, `.get`, `.sendMessage`, and `chrome.runtime.sendMessage` to interact with DOM.
 - Verify that selectors and messages in audit types match actual page structure.
@@ -34,6 +38,7 @@ Ensure the Chrome extension and its audit logic work reliably and handle real-wo
 ---
 
 ## 5. End-to-End (E2E) Testing
+
 - Automate real browser runs:
   - Install extension in headless Chrome (use Puppeteer).
   - Load sample Google Sheet data and reference Entrata pages locally (serve via local webserver).
@@ -45,6 +50,7 @@ Ensure the Chrome extension and its audit logic work reliably and handle real-wo
 ---
 
 ## 6. Manual Testing Checklist
+
 1. Install extension in developer mode.
 2. Load mock sheet (with test records) and open Entrata reference pages.
 3. Trigger audit; confirm alerts and prompts.
@@ -55,6 +61,7 @@ Ensure the Chrome extension and its audit logic work reliably and handle real-wo
 ---
 
 ## 7. Performance & Reliability
+
 - Measure total execution time for N records (e.g., 10, 100, 500).
 - Test under slow network (throttle API calls).
 - Ensure no memory leaks and error recovery (retry logic).
@@ -62,6 +69,7 @@ Ensure the Chrome extension and its audit logic work reliably and handle real-wo
 ---
 
 ## 8. Continuous Integration
+
 - Integrate Jest coverage report (>90% statements).
 - Add GitHub Actions workflow:
   - Run lint, unit, integration tests on PR.
@@ -70,6 +78,7 @@ Ensure the Chrome extension and its audit logic work reliably and handle real-wo
 ---
 
 ## 9. Test Data & Fixtures
+
 - Create sample spreadsheets with:
   - Complete records, missing fields, black-fill flags.
   - Renewal vs. new lease scenarios.
@@ -78,6 +87,7 @@ Ensure the Chrome extension and its audit logic work reliably and handle real-wo
 ---
 
 ## 10. Maintenance & Review
+
 - Review tests after any DOM update in Entrata.
 - Update selectors and timeouts accordingly.
 - Schedule periodic run against live Entrata pages in staging.

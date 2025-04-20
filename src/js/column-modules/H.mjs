@@ -1,10 +1,10 @@
-import ColumnHelpers from './column-helpers.js';
+import ColumnHelpers from "./column-helpers.mjs";
 
 const ColumnH = {
-  id: 'OccupancyType/SpaceOption',
-  name: 'Occupancy Type / Space Option',
-  sheetColumn: 'Occupancy Type / Space Option',
-  resultColumn: 'H',
+  id: "OccupancyType/SpaceOption",
+  name: "Occupancy Type / Space Option",
+  sheetColumn: "Occupancy Type / Space Option",
+  resultColumn: "H",
 
   isApplicable(record) {
     return !ColumnHelpers.hasBlackFill(record, this.sheetColumn);
@@ -19,13 +19,18 @@ const ColumnH = {
       expectedValue: expected,
       normalizedPdfValue: found ? expected : null,
       normalizedExpectedValue: expected,
-      match: found
+      match: found,
     };
   },
 
   displayData(row, col, context) {
-    return { fieldName: this.name, pdfValue: context.result.pdfValue, expectedValue: context.result.expectedValue, match: context.result.match };
-  }
+    return {
+      fieldName: this.name,
+      pdfValue: context.result.pdfValue,
+      expectedValue: context.result.expectedValue,
+      match: context.result.match,
+    };
+  },
 };
 
 export default ColumnH;

@@ -1,6 +1,6 @@
 /**
  * ColumnHelper - Common utilities for column modules
- * 
+ *
  * This file provides helper functions for column modules to use
  */
 
@@ -28,12 +28,19 @@ const ColumnHelpers = {
    */
   async navigateToPage(pageName) {
     console.log(`Navigating to ${pageName} page...`);
-    
+
     // Look for the page tab
-    const pageElements = Array.from(document.querySelectorAll('a, button, div, li, span, nav a, nav button, nav div, .nav-item, [role="tab"]'))
-      .filter(el => el.textContent && 
-        (el.textContent.trim() === pageName || 
-         el.textContent.trim().includes(pageName)))
+    const pageElements = Array.from(
+      document.querySelectorAll(
+        "a, button, div, li, span, nav a, nav button, nav div, .nav-item, [role=\"tab\"]",
+      ),
+    )
+      .filter(
+        (el) =>
+          el.textContent &&
+          (el.textContent.trim() === pageName ||
+            el.textContent.trim().includes(pageName)),
+      )
       .sort((a, b) => {
         // Prioritize exact matches
         const aExact = a.textContent.trim() === pageName;
@@ -44,17 +51,17 @@ const ColumnHelpers = {
         // Otherwise prioritize shorter text (less likely to be a container)
         return a.textContent.length - b.textContent.length;
       });
-    
+
     if (pageElements.length > 0) {
       const pageTab = pageElements[0];
       console.log(`Found ${pageName} tab:`, pageTab.textContent);
       pageTab.click();
-      
+
       // Wait for the page to load (implement a proper check based on the page)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       return true;
     }
-    
+
     console.log(`${pageName} tab not found`);
     return false;
   },
@@ -66,37 +73,39 @@ const ColumnHelpers = {
    */
   async findAndClickDocument(documentPattern) {
     console.log(`Looking for document matching pattern: ${documentPattern}`);
-    
+
     // Create regex pattern
     const pattern = new RegExp(documentPattern);
-    
+
     // Look for elements containing the pattern in the documents list
-    const docRows = Array.from(document.querySelectorAll('tr, div.document-row, a, div, td, span')).filter(el =>
-      el.textContent && 
-      pattern.test(el.textContent)
+    const docRows = Array.from(
+      document.querySelectorAll("tr, div.document-row, a, div, td, span"),
+    ).filter((el) => el.textContent && pattern.test(el.textContent));
+
+    console.log(
+      `Found ${docRows.length} potential documents matching pattern "${documentPattern}"`,
     );
-    
-    console.log(`Found ${docRows.length} potential documents matching pattern "${documentPattern}"`);
-    
+
     if (docRows.length > 0) {
       // Log what we found
       docRows.forEach((row, i) => {
         console.log(`Document ${i + 1}:`, row.textContent?.trim());
       });
-    
+
       // Find the click target within the document row (link, button, etc.)
-      const clickTarget = docRows[0].querySelector('a') ||
-        docRows[0].querySelector('button') ||
+      const clickTarget =
+        docRows[0].querySelector("a") ||
+        docRows[0].querySelector("button") ||
         docRows[0];
-      
-      console.log('Clicking on:', clickTarget.textContent?.trim());
+
+      console.log("Clicking on:", clickTarget.textContent?.trim());
       clickTarget.click();
-      
+
       // Wait for document to load
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       return true;
     }
-    
+
     console.log(`No documents matching "${documentPattern}" pattern found`);
     return false;
   },
@@ -108,55 +117,65 @@ const ColumnHelpers = {
    */
   async navigateToPdfPage(pageNumber) {
     console.log(`Navigating to PDF page ${pageNumber}...`);
-    
+
     // Look for page input field
-    const pageInput = document.querySelector('input[type="text"][aria-label*="Page"], input[type="number"][aria-label*="Page"]');
-    
+    const pageInput = document.querySelector(
+      "input[type=\"text\"][aria-label*=\"Page\"], input[type=\"number\"][aria-label*=\"Page\"]",
+    );
+
     if (pageInput) {
       // Set value and dispatch events to trigger navigation
       pageInput.value = pageNumber.toString();
-      pageInput.dispatchEvent(new Event('change', { bubbles: true }));
-      pageInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      
+      pageInput.dispatchEvent(new Event("change", { bubbles: true }));
+      pageInput.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+
       // Wait for page to load
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       return true;
     }
-    
+
     // Try using page navigation buttons
-    const nextPageButton = document.querySelector('button[aria-label*="Next"], [role="button"][aria-label*="Next"]');
-    const prevPageButton = document.querySelector('button[aria-label*="Previous"], [role="button"][aria-label*="Previous"]');
-    
+    const nextPageButton = document.querySelector(
+      "button[aria-label*=\"Next\"], [role=\"button\"][aria-label*=\"Next\"]",
+    );
+    const prevPageButton = document.querySelector(
+      "button[aria-label*=\"Previous\"], [role=\"button\"][aria-label*=\"Previous\"]",
+    );
+
     if (nextPageButton || prevPageButton) {
       // Get current page number
-      const currentPageText = document.querySelector('span:contains("of"), div:contains("of")');
+      const currentPageText = document.querySelector(
+        "span:contains(\"of\"), div:contains(\"of\")",
+      );
       let currentPage = 1;
-      
+
       if (currentPageText) {
         const match = currentPageText.textContent.match(/(\d+)\s*\/\s*(\d+)/);
         if (match) {
           currentPage = parseInt(match[1], 10);
         }
       }
-      
+
       // Navigate to desired page
       while (currentPage < pageNumber && nextPageButton) {
         nextPageButton.click();
         currentPage++;
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
-      
+
       while (currentPage > pageNumber && prevPageButton) {
         prevPageButton.click();
         currentPage--;
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
-      
-      await new Promise(resolve => setTimeout(resolve, 700));
+
+      await new Promise((resolve) => setTimeout(resolve, 700));
       return currentPage === pageNumber;
     }
-    
-    console.log('PDF page navigation controls not found');
+
+    console.log("PDF page navigation controls not found");
     return false;
   },
 
@@ -168,39 +187,41 @@ const ColumnHelpers = {
    */
   async scrollPdfViewer(direction, amount = 0.25) {
     console.log(`Scrolling PDF viewer ${direction}...`);
-    
+
     // Find the PDF container
-    const pdfContainer = document.querySelector('.pdf-viewer, .pdf-container, iframe.pdf-viewer');
-    
+    const pdfContainer = document.querySelector(
+      ".pdf-viewer, .pdf-container, iframe.pdf-viewer",
+    );
+
     if (pdfContainer) {
       let scrollAmount = 0;
       const containerHeight = pdfContainer.clientHeight;
-      
+
       switch (direction) {
-        case 'up':
-          scrollAmount = -1 * amount * containerHeight;
-          break;
-        case 'down':
-          scrollAmount = amount * containerHeight;
-          break;
-        case 'top':
-          scrollAmount = -1 * pdfContainer.scrollTop;
-          break;
-        case 'bottom':
-          scrollAmount = pdfContainer.scrollHeight;
-          break;
+      case "up":
+        scrollAmount = -1 * amount * containerHeight;
+        break;
+      case "down":
+        scrollAmount = amount * containerHeight;
+        break;
+      case "top":
+        scrollAmount = -1 * pdfContainer.scrollTop;
+        break;
+      case "bottom":
+        scrollAmount = pdfContainer.scrollHeight;
+        break;
       }
-      
+
       pdfContainer.scrollBy({
         top: scrollAmount,
-        behavior: 'smooth'
+        behavior: "smooth",
       });
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
       return true;
     }
-    
-    console.log('PDF container not found');
+
+    console.log("PDF container not found");
     return false;
   },
 
@@ -210,46 +231,46 @@ const ColumnHelpers = {
    * @param {string} type - The type of value (date, currency, etc.)
    * @returns {string} - The normalized value
    */
-  normalizeValue(value, type = 'text') {
-    if (!value) return '';
-    
+  normalizeValue(value, type = "text") {
+    if (!value) return "";
+
     switch (type) {
-      case 'date':
-        // Try to normalize date formats
-        if (value.includes('/') || value.includes('-')) {
-          try {
-            // Remove any non-numeric/slash characters
-            const cleanValue = value.replace(/[^\d\/\-]/g, '');
-            
-            // Try to parse as date
-            const date = new Date(cleanValue);
-            if (!isNaN(date.getTime())) {
-              // Return MM/DD/YYYY format for consistency
-              return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
-            }
-          } catch (e) {
-            // If date parsing fails, fall back to basic normalization
+    case "date":
+      // Try to normalize date formats
+      if (value.includes("/") || value.includes("-")) {
+        try {
+          // Remove any non-numeric/slash characters
+          const cleanValue = value.replace(/[^\d\/\-]/g, "");
+
+          // Try to parse as date
+          const date = new Date(cleanValue);
+          if (!isNaN(date.getTime())) {
+            // Return MM/DD/YYYY format for consistency
+            return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
           }
+        } catch {
+          // If date parsing fails, fall back to basic normalization
         }
-        break;
-      
-      case 'currency':
-        // Normalize currency values
-        if (typeof value === 'string') {
-          // Remove currency symbols, commas, and standardize
-          const cleanValue = value.replace(/[$,]/g, '').trim();
-          const numValue = parseFloat(cleanValue);
-          
-          if (!isNaN(numValue)) {
-            // Return as standard currency format with 2 decimal places
-            return numValue.toFixed(2);
-          }
+      }
+      break;
+
+    case "currency":
+      // Normalize currency values
+      if (typeof value === "string") {
+        // Remove currency symbols, commas, and standardize
+        const cleanValue = value.replace(/[$,]/g, "").trim();
+        const numValue = parseFloat(cleanValue);
+
+        if (!isNaN(numValue)) {
+          // Return as standard currency format with 2 decimal places
+          return numValue.toFixed(2);
         }
-        break;
+      }
+      break;
     }
-    
+
     // Basic normalization: lowercase, trim spaces, remove special chars
-    return value.toString().toLowerCase().trim().replace(/\s+/g, ' ');
+    return value.toString().toLowerCase().trim().replace(/\s+/g, " ");
   },
 
   /**
@@ -259,32 +280,34 @@ const ColumnHelpers = {
    */
   async findTextInPdf(text) {
     console.log(`Finding text in PDF: "${text}"`);
-    
+
     // Using the browser's built-in find function
     try {
       window.find(text);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       return true;
-    } catch (e) {
-      console.warn('Browser find function failed:', e);
+    } catch {
+      console.warn("Browser find function failed");
     }
-    
+
     // Fallback: manually find and scroll to the element containing the text
     try {
       // Limit to elements that might contain text to reduce performance impact
-      const elements = document.querySelectorAll('p, span, div, td, th, li, a, h1, h2, h3, h4, h5, h6, label');
-      
+      const elements = document.querySelectorAll(
+        "p, span, div, td, th, li, a, h1, h2, h3, h4, h5, h6, label",
+      );
+
       for (const element of elements) {
         if (element.textContent && element.textContent.includes(text)) {
           // Use requestAnimationFrame to smooth out scrolling operations
-          await new Promise(resolve => {
+          await new Promise((resolve) => {
             requestAnimationFrame(() => {
-              element.scrollIntoView({behavior: 'smooth', block: 'center'});
-              
+              element.scrollIntoView({ behavior: "smooth", block: "center" });
+
               // Highlight the element temporarily
               const originalBackground = element.style.backgroundColor;
-              element.style.backgroundColor = 'yellow';
-              
+              element.style.backgroundColor = "yellow";
+
               // Use requestAnimationFrame for the timeout to avoid forced reflow
               setTimeout(() => {
                 requestAnimationFrame(() => {
@@ -294,14 +317,14 @@ const ColumnHelpers = {
               }, 2000);
             });
           });
-          
+
           return true;
         }
       }
-    } catch (e) {
-      console.warn('Manual find and scroll failed:', e);
+    } catch {
+      console.warn("Manual find and scroll failed");
     }
-    
+
     console.log(`Text "${text}" not found in PDF`);
     return false;
   },
@@ -312,14 +335,16 @@ const ColumnHelpers = {
    * @returns {boolean} - True if the text exists on the page
    */
   hasTextOnPage(text) {
-    const elements = document.querySelectorAll('p, span, div, td, th, li, a, h1, h2, h3, h4, h5, h6, label');
-    
+    const elements = document.querySelectorAll(
+      "p, span, div, td, th, li, a, h1, h2, h3, h4, h5, h6, label",
+    );
+
     for (const element of elements) {
       if (element.textContent && element.textContent.includes(text)) {
         return true;
       }
     }
-    
+
     return false;
   },
   /**
@@ -332,7 +357,7 @@ const ColumnHelpers = {
     // Optionally navigate to a specific page
     if (options.page) {
       await this.navigateToPdfPage(options.page);
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise((resolve) => setTimeout(resolve, 800));
     }
     // Find the label in the PDF
     const found = await this.findTextInPdf(label);
@@ -341,11 +366,18 @@ const ColumnHelpers = {
     // Try to extract the value after the label
     // (This is a stub; real implementation would parse the DOM or PDF viewer)
     // For now, attempt to find the next sibling text node after the label
-    const pdfViewer = document.querySelector('.pdf-viewer, .pdfViewer, embed, iframe');
+    const pdfViewer = document.querySelector(
+      ".pdf-viewer, .pdfViewer, embed, iframe",
+    );
     if (!pdfViewer) return null;
 
     // Try to find the label element
-    const walker = document.createTreeWalker(pdfViewer, NodeFilter.SHOW_TEXT, null, false);
+    const walker = document.createTreeWalker(
+      pdfViewer,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false,
+    );
     let foundNode = null;
     while (walker.nextNode()) {
       const node = walker.currentNode;
@@ -380,7 +412,6 @@ const ColumnHelpers = {
     }
     return null;
   },
-
 };
 
 export default ColumnHelpers;

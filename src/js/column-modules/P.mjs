@@ -1,10 +1,10 @@
-import ColumnHelpers from './column-helpers.js';
+import ColumnHelpers from "./column-helpers.mjs";
 
 const ColumnP = {
-  id: 'MonthlyConcessions',
-  name: 'Monthly Concessions',
-  sheetColumn: 'Monthly Concessions',
-  resultColumn: 'P',
+  id: "MonthlyConcessions",
+  name: "Monthly Concessions",
+  sheetColumn: "Monthly Concessions",
+  resultColumn: "P",
 
   isApplicable(record) {
     return !ColumnHelpers.hasBlackFill(record, this.sheetColumn);
@@ -12,14 +12,15 @@ const ColumnP = {
 
   async run(row, col, context) {
     const expected = context.record[this.sheetColumn];
-    const pdfValue = await ColumnHelpers.extractFieldFromPdf('Monthly Concession');
+    const pdfValue =
+      await ColumnHelpers.extractFieldFromPdf("Monthly Concession");
     const match = pdfValue === expected;
     return {
       success: true,
       pdfValue,
       expectedValue: expected,
       match,
-      requiresUserConfirmation: !match
+      requiresUserConfirmation: !match,
     };
   },
 
@@ -29,9 +30,9 @@ const ColumnP = {
       pdfValue: context.result.pdfValue,
       expectedValue: context.result.expectedValue,
       match: context.result.match,
-      requiresUserConfirmation: context.result.requiresUserConfirmation
+      requiresUserConfirmation: context.result.requiresUserConfirmation,
     };
-  }
+  },
 };
 
 export default ColumnP;

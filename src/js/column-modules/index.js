@@ -1,2 +1,2 @@
-export { default } from './index.mjs';
-export * from './index.mjs';
+export { default } from "./A.mjs";
+export * from "./A.mjs";

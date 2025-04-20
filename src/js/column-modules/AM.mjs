@@ -1,27 +1,27 @@
-import ColumnHelpers from './column-helpers.mjs';
+import ColumnHelpers from "./column-helpers.mjs";
 
 const ColumnAM = {
-  id: 'LeapDeclarationPageUploaded',
-  name: 'Leap Declaration Page Uploaded',
-  sheetColumn: 'Leap Declaration Page Uploaded',
-  resultColumn: 'AM',
+  id: "LeapDeclarationPageUploaded",
+  name: "Leap Declaration Page Uploaded",
+  sheetColumn: "Leap Declaration Page Uploaded",
+  resultColumn: "AM",
 
   isApplicable(record) {
     return !ColumnHelpers.hasBlackFill(record, this.sheetColumn);
   },
 
-  async run(row, col, context) {
+  async run(_row, _col, _context) {
     // User confirmation required
     return { success: true, requiresUserConfirmation: true };
   },
 
-  displayData(row, col, context) {
+  displayData(_row, _col, _context) {
     return {
       fieldName: this.name,
-      message: 'Please verify Leap Declaration Page Uploaded.',
-      requiresUserConfirmation: true
+      message: "Please verify Leap Declaration Page Uploaded.",
+      requiresUserConfirmation: true,
     };
-  }
+  },
 };
 
 export default ColumnAM;

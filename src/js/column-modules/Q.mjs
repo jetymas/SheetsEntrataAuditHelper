@@ -1,27 +1,27 @@
-import ColumnHelpers from './column-helpers.js';
+import ColumnHelpers from "./column-helpers.mjs";
 
 const ColumnQ = {
-  id: 'DNMatchesLease?',
-  name: 'DN Matches Lease?',
-  sheetColumn: 'DN Matches Lease?',
-  resultColumn: 'Q',
+  id: "DNMatchesLease?",
+  name: "DN Matches Lease?",
+  sheetColumn: "DN Matches Lease?",
+  resultColumn: "Q",
 
   isApplicable(record) {
     return !ColumnHelpers.hasBlackFill(record, this.sheetColumn);
   },
 
-  async run(row, col, context) {
+  async run(_row, _col, _context) {
     // User confirmation required for DNMatchesLease?
     return { success: true, requiresUserConfirmation: true };
   },
 
-  displayData(row, col, context) {
+  displayData(_row, _col, _context) {
     return {
       fieldName: this.name,
-      message: 'Please verify DN Matches Lease?.',
-      requiresUserConfirmation: true
+      message: "Please verify DN Matches Lease?.",
+      requiresUserConfirmation: true,
     };
-  }
+  },
 };
 
 export default ColumnQ;

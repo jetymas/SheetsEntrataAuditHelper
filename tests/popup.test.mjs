@@ -5,11 +5,11 @@ global.chrome = {
   storage: { local: { get: jest.fn((keys, cb) => cb({})), set: jest.fn() } },
   runtime: {
     sendMessage: jest.fn((msg, cb) => cb && cb({})),
-    onMessage: { addListener: jest.fn() }
-  }
+    onMessage: { addListener: jest.fn() },
+  },
 };
 
-describe('popup initPopup', () => {
+describe("popup initPopup", () => {
   beforeEach(() => {
     // Set up DOM
     document.body.innerHTML = `
@@ -26,24 +26,31 @@ describe('popup initPopup', () => {
     `;
   });
 
-  test('shows error when URL is empty', () => {
+  test("shows error when URL is empty", () => {
     initPopup();
-    const startBtn = document.getElementById('startAudit');
+    const startBtn = document.getElementById("startAudit");
     startBtn.click();
-    const errorDiv = document.getElementById('errorInfo');
-    expect(errorDiv.textContent).toBe('Please enter a Google Sheet URL');
-    expect(errorDiv.classList.contains('hidden')).toBe(false);
+    const errorDiv = document.getElementById("errorInfo");
+    expect(errorDiv.textContent).toBe("Please enter a Google Sheet URL");
+    expect(errorDiv.classList.contains("hidden")).toBe(false);
   });
 
-  test('extracts ID and starts flow', async () => {
+  test("extracts ID and starts flow", async () => {
     // TODO: mock columnModules and showVerificationDialog if needed
-    document.getElementById('spreadsheetUrl').value = 'https://docs.google.com/spreadsheets/d/TEST_ID/edit';
+    document.getElementById("spreadsheetUrl").value =
+      "https://docs.google.com/spreadsheets/d/TEST_ID/edit";
     initPopup();
-    const startBtn = document.getElementById('startAudit');
+    const startBtn = document.getElementById("startAudit");
     await startBtn.click();
-    expect(global.chrome.storage.local.set).toHaveBeenCalledWith({ spreadsheetUrl: expect.any(String) });
+    expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
+      spreadsheetUrl: expect.any(String),
+    });
     expect(global.chrome.runtime.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'startAudit', spreadsheetId: 'TEST_ID' })
-    , expect.any(Function));
+      expect.objectContaining({
+        action: "startAudit",
+        spreadsheetId: "TEST_ID",
+      }),
+      expect.any(Function),
+    );
   });
 });

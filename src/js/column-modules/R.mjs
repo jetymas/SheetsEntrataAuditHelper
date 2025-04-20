@@ -9,13 +9,13 @@
  * @param {object} rowData - data of current row
  * @returns {*} - value for column R
  */
-import ColumnHelpers from './column-helpers.js';
+import ColumnHelpers from "./column-helpers.mjs";
 
 const ColumnR = {
-  id: 'TotalRate',
-  name: 'Total Rate',
-  sheetColumn: 'Total Rate',
-  resultColumn: 'R',
+  id: "TotalRate",
+  name: "Total Rate",
+  sheetColumn: "Total Rate",
+  resultColumn: "R",
 
   isApplicable(record) {
     return !ColumnHelpers.hasBlackFill(record, this.sheetColumn);
@@ -23,14 +23,15 @@ const ColumnR = {
 
   async run(row, col, context) {
     const expected = context.record[this.sheetColumn];
-    const pdfValue = await ColumnHelpers.extractFieldFromPdf('TOTAL INSTALLMENT');
+    const pdfValue =
+      await ColumnHelpers.extractFieldFromPdf("TOTAL INSTALLMENT");
     const match = pdfValue === expected;
     return {
       success: true,
       pdfValue,
       expectedValue: expected,
       match,
-      requiresUserConfirmation: !match
+      requiresUserConfirmation: !match,
     };
   },
 
@@ -40,9 +41,9 @@ const ColumnR = {
       pdfValue: context.result.pdfValue,
       expectedValue: context.result.expectedValue,
       match: context.result.match,
-      requiresUserConfirmation: context.result.requiresUserConfirmation
+      requiresUserConfirmation: context.result.requiresUserConfirmation,
     };
-  }
+  },
 };
 
 export default ColumnR;

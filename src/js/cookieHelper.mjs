@@ -35,8 +35,8 @@ export function setCookie({ url, name, value, expirationDate }) {
     url,
     name,
     value,
-    sameSite: 'no_restriction', // Equivalent to SameSite=None
-    secure: true
+    sameSite: "no_restriction", // Equivalent to SameSite=None
+    secure: true,
   };
   if (expirationDate) {
     details.expirationDate = expirationDate;
@@ -52,4 +52,3 @@ export function setCookie({ url, name, value, expirationDate }) {
     });
   });
 }
-

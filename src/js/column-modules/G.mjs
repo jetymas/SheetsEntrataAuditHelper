@@ -1,10 +1,10 @@
-import ColumnHelpers from './column-helpers.js';
+import ColumnHelpers from "./column-helpers.mjs";
 
 const ColumnG = {
-  id: 'FloorPlan',
-  name: 'Floor Plan',
-  sheetColumn: 'Floor Plan',
-  resultColumn: 'G',
+  id: "FloorPlan",
+  name: "Floor Plan",
+  sheetColumn: "Floor Plan",
+  resultColumn: "G",
 
   isApplicable(record) {
     return !ColumnHelpers.hasBlackFill(record, this.sheetColumn);
@@ -19,13 +19,18 @@ const ColumnG = {
       expectedValue: expected,
       normalizedPdfValue: found ? expected : null,
       normalizedExpectedValue: expected,
-      match: found
+      match: found,
     };
   },
 
   displayData(row, col, context) {
-    return { fieldName: this.name, pdfValue: context.result.pdfValue, expectedValue: context.result.expectedValue, match: context.result.match };
-  }
+    return {
+      fieldName: this.name,
+      pdfValue: context.result.pdfValue,
+      expectedValue: context.result.expectedValue,
+      match: context.result.match,
+    };
+  },
 };
 
 export default ColumnG;

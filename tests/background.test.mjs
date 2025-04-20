@@ -1,33 +1,37 @@
 import { updateStatus } from "../src/js/updateStatus";
 
-describe('updateStatus', () => {
+describe("updateStatus", () => {
   beforeEach(() => {
     global.chrome = { runtime: { sendMessage: jest.fn() } };
   });
 
-  it('sends correct message with all parameters', () => {
-    updateStatus('msg', 50, 'complete', { currentRecord: 'Rec', currentField: 'Fld', error: 'Err' });
+  it("sends correct message with all parameters", () => {
+    updateStatus("msg", 50, "complete", {
+      currentRecord: "Rec",
+      currentField: "Fld",
+      error: "Err",
+    });
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
-      type: 'auditStatus',
-      message: 'msg',
+      type: "auditStatus",
+      message: "msg",
       progress: 50,
-      status: 'complete',
-      currentRecord: 'Rec',
-      currentField: 'Fld',
-      error: 'Err'
+      status: "complete",
+      currentRecord: "Rec",
+      currentField: "Fld",
+      error: "Err",
     });
   });
 
-  it('uses default parameters when optional arguments are omitted', () => {
-    updateStatus('hello');
+  it("uses default parameters when optional arguments are omitted", () => {
+    updateStatus("hello");
     expect(chrome.runtime.sendMessage).toHaveBeenCalledWith({
-      type: 'auditStatus',
-      message: 'hello',
+      type: "auditStatus",
+      message: "hello",
       progress: null,
-      status: 'in_progress',
+      status: "in_progress",
       currentRecord: null,
       currentField: null,
-      error: null
+      error: null,
     });
   });
 });
