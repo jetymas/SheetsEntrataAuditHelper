@@ -7,8 +7,10 @@
  */
 export async function scrollToPdfText(text) {
   // Using the browser's built-in find function
+  let found = false;
   try {
-    window.find(text);
+    found = window.find(text);
+    if (found) return true;
   } catch {
     console.warn("Browser find function failed");
     // Continue to fallback method
@@ -16,33 +18,36 @@ export async function scrollToPdfText(text) {
 
   // Fallback: manually find and scroll to the element containing the text
   try {
-    // Limit to elements that might contain text to reduce performance impact
     const elements = document.querySelectorAll(
-      "p, span, div, td, th, li, a, h1, h2, h3, h4, h5, h6, label"
+      "p, span, div, td, th, li, a, h1, h2, h3, h4, h5, h6, label",
     );
     for (const el of elements) {
-      if (el.textContent && el.textContent.includes(text)) {
+      if (el.textContent?.includes(text)) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.classList.add("highlighted-text");
         setTimeout(() => el.classList.remove("highlighted-text"), 2000);
-        break;
+        return true;
       }
     }
   } catch (e) {
     console.warn("Manual scroll fallback failed", e);
   }
+  return false;
 }
-
 
 /**
  * Find and click a resident in the residents list.
  */
 import { wait } from "./content-helpers.js";
 
-export async function findAndClickResident(firstName, lastName, tryNextPage = true) {
+export async function findAndClickResident(
+  firstName,
+  lastName,
+  tryNextPage = true,
+) {
   // First, try exact match with firstName and lastName
   const exactMatches = Array.from(
-    document.querySelectorAll("a, td, span")
+    document.querySelectorAll("a, td, span"),
   ).filter((el) => {
     if (!el.textContent) return false;
     const text = el.textContent.trim();
@@ -65,7 +70,7 @@ export async function findAndClickResident(firstName, lastName, tryNextPage = tr
 
   // If no exact match, try partial match
   const partialMatches = Array.from(
-    document.querySelectorAll("a, td, span")
+    document.querySelectorAll("a, td, span"),
   ).filter(
     (el) =>
       el.textContent &&
@@ -89,7 +94,7 @@ export async function findAndClickResident(firstName, lastName, tryNextPage = tr
     );
 
     // Find and click the "Next page" button
-    if (await clickNextPageButton()) {
+    if (clickNextPageButton()) {
       // Wait for the next page to load
       await wait(1500);
 
@@ -104,11 +109,10 @@ export async function findAndClickResident(firstName, lastName, tryNextPage = tr
   return false;
 }
 
-
 /**
  * Click the "Next page" button in the residents list.
  */
-export async function clickNextPageButton() {
+export function clickNextPageButton() {
   console.log("Looking for next page button...");
 
   // Find any element that looks like a "Next" button
@@ -130,7 +134,7 @@ export async function clickNextPageButton() {
       // And for common next page classes
       el.className.includes("next") ||
       // Check for pagination with numbers where the current page is highlighted
-      (el.textContent.match(/^\d+$/) &&
+      (/^\d+$/.exec(el.textContent) &&
         !el.classList.contains("active") &&
         !el.classList.contains("current") &&
         document.querySelector(".pagination") !== null)
@@ -187,7 +191,6 @@ export async function clickNextPageButton() {
   return false;
 }
 
-
 /**
  * Find a clickable parent element.
  */
@@ -212,7 +215,6 @@ export function findClickableParent(element) {
 
   return null;
 }
-
 
 /**
  * Navigate to Documents tab in resident profile.
@@ -252,7 +254,6 @@ export function navigateToDocumentsTab() {
   return false;
 }
 
-
 /**
  * Find and click on the lease document.
  */
@@ -289,7 +290,6 @@ export function findAndClickLeaseDocument() {
   return false;
 }
 
-
 /**
  * Go to the first page of residents.
  */
@@ -306,7 +306,6 @@ export function goToFirstPage() {
   return false;
 }
 
-
 /**
  * Set up the residents view (sorting, filters, etc.).
  */
@@ -317,11 +316,15 @@ export function setupResidentsView() {
   console.log("Setting up residents view...");
 }
 
-
 /**
  * Create the verification dialog.
  */
-export function createVerificationDialog(fieldName, pdfValue, expectedValue, match) {
+export function createVerificationDialog(
+  fieldName,
+  pdfValue,
+  _expectedValue,
+  _match,
+) {
   // Remove any existing dialog
   const existingDialog = document.getElementById("ea-verification-dialog");
   if (existingDialog) {
@@ -374,4 +377,3 @@ export function createVerificationDialog(fieldName, pdfValue, expectedValue, mat
   expectedValueBox.className = "ea-value-box";
   // ...rest of function from content.mjs...
 }
-

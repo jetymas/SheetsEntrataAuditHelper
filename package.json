@@ -5,7 +5,7 @@
   "description": "Chrome extension to streamline lease audits for Entrata property management system",
   "main": "src/js/background.js",
   "scripts": {
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config config/jest.config.mjs",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "tsconfig": "echo tsconfig loaded"
   },
   "keywords": [

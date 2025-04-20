@@ -15,9 +15,9 @@ await jest.unstable_mockModule(
 );
 
 const { default: ColumnHelpers } = await import(
-  "../src/js/column-modules/column-helpers.js"
+  "../src/js/column-modules/column-helpers.mjs"
 );
-const { default: ColumnR } = await import("../src/js/column-modules/R.js");
+const { default: ColumnR } = await import("../src/js/column-modules/R.mjs");
 
 describe("ColumnR", () => {
   beforeEach(() => {

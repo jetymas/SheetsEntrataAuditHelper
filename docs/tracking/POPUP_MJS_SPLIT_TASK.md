@@ -1,15 +1,18 @@
 # Modularization Plan: popup.mjs
 
 ## 1. Problem Analysis
+
 The `popup.mjs` file for the Entrata Lease Audit Assistant Chrome extension currently contains all popup UI logic, audit orchestration, and direct DOM manipulation in a single, monolithic script. This makes the code difficult to test, maintain, and extend. The file mixes UI concerns, audit workflow orchestration, and communication with both background scripts and content scripts.
 
 ## 2. Goals
+
 - **Separation of Concerns:** Break out UI logic, audit orchestration, and Chrome API communication into dedicated modules.
 - **Testability:** Enable unit testing for audit orchestration and UI logic independently.
 - **Maintainability:** Make it easy to update UI, audit flow, or communication logic without risk of breaking unrelated features.
 - **Documentation:** Provide clear rationale and tracking for each modularization step.
 
 ## 3. Breakdown of popup.mjs Responsibilities
+
 - **UI Initialization & DOM Event Binding** (initPopup)
 - **Audit Flow Orchestration** (processAuditFlow)
 - **Audit State Management** (currentAuditState, updateStatusUI)
@@ -18,6 +21,7 @@ The `popup.mjs` file for the Entrata Lease Audit Assistant Chrome extension curr
 - **Helpers for Spreadsheet ID Extraction, Validation, and Storage**
 
 ## 4. Proposed Modular Structure
+
 - `popup-ui.js` — Handles all DOM querying, event binding, and UI updates (status, progress, errors, dialogs).
 - `popup-orchestrator.js` — Manages the audit flow, invokes column modules, and coordinates between UI and background.
 - `popup-messaging.js` — Encapsulates Chrome extension messaging (sendMessage, onMessage, background communication).
@@ -25,6 +29,7 @@ The `popup.mjs` file for the Entrata Lease Audit Assistant Chrome extension curr
 - `popup-utils.js` — Utility functions for spreadsheet ID extraction, validation, and storage (chrome.storage).
 
 ## 5. Step-by-Step Modularization Plan
+
 1. **Extract UI Logic:**
    - Move all DOM queries, event listeners, and UI update functions (e.g., updateStatusUI, showVerificationDialog) into `popup-ui.js`.
    - UI module should expose functions for updating status, errors, progress, and dialogs.
@@ -49,11 +54,13 @@ The `popup.mjs` file for the Entrata Lease Audit Assistant Chrome extension curr
    - Summarize rationale, challenges, and results.
 
 ## 6. Risks & Considerations
+
 - **Chrome Extension Context:** Ensure that all modules interact with the DOM and Chrome APIs only in ways allowed by the popup context.
 - **State Synchronization:** UI and orchestrator must always reflect the latest audit state.
 - **Backward Compatibility:** All existing features and user flows must remain intact after refactor.
 
 ## 7. Next Steps
+
 - [ ] Begin with UI logic extraction to `popup-ui.js`.
 - [ ] Update this document after each extraction/refactor step.
 - [ ] Track issues, blockers, and rationale for architectural decisions.

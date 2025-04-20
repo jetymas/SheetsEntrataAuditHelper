@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import ColumnD from "../../../src/js/column-modules/D.mjs";
 import ColumnHelpers from "../../../src/js/column-modules/column-helpers.mjs";
 

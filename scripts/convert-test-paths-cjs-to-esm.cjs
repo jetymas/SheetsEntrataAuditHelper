@@ -15,7 +15,7 @@ testFiles.forEach((file) => {
   // Replace static import specifiers in tests (e.g. import X from '../src/js/...js')
   content = content.replace(
     /from ['"]\.\.\/src\/js\/(.+?)\.js['"]/g,
-    "from '../src/js/$2.mjs',"
+    "from '../src/js/$2.mjs',",
   );
   fs.writeFileSync(file, content, "utf8");
   console.log(`Patched ${file}`);

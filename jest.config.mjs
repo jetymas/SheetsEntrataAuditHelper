@@ -1,18 +1,22 @@
 export default {
   // Ensure project root is parent of config folder
-  rootDir: "../",
+  rootDir: ".",
   testEnvironment: "jsdom",
-  setupFilesAfterEnv: ["<rootDir>/config/jest.setup.js"],
+  setupFilesAfterEnv: ["<rootDir>/config/jest.setup.mjs"],
   moduleFileExtensions: ["js", "json", "mjs"],
   testMatch: [
     "**/tests/**/*.test.js",
     "**/tests/**/*.test.mjs",
     "<rootDir>/src/js/__tests__/**/*.test.js",
-    "<rootDir>/src/js/__tests__/**/*.test.mjs"
+    "<rootDir>/src/js/__tests__/**/*.test.mjs",
   ],
   // Exclude E2E and integration tests until setup is complete
-  testPathIgnorePatterns: ["<rootDir>/tests/e2e", "<rootDir>/tests/integration"],
-  transform: { "^.+\\.m?js$": "babel-jest" },
+  testPathIgnorePatterns: [
+    "<rootDir>/tests/e2e",
+    "<rootDir>/tests/integration",
+  ],
+  transform: { "^.+\\.m?[jt]sx?$": "babel-jest" },
+
   transformIgnorePatterns: ["/node_modules/"],
   moduleNameMapper: {
     // Map ESM .mjs modules

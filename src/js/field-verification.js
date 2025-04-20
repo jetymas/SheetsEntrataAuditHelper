@@ -2,8 +2,8 @@
 // Handles field verification and related business logic for Entrata Lease Audit Assistant
 
 import { extractPdfText, findValueInPdf } from "./pdf-utils.js";
-import { scrollToPdfText, createVerificationDialog } from "./content-ui.js";
-import { normalizeValue } from "./content-helpers.js";
+import { createVerificationDialog } from "./content-ui.js";
+import { normalizeValue, contentState, getCurrentPageType } from "./content-helpers.js";
 
 /**
  * Patch verifyField to use dynamic modules and handle user confirmation UI
@@ -97,6 +97,5 @@ export async function verifyField(column, module, expectedValue, sheetColumn) {
     },
   });
 }
-
 
 // Export any other business logic or value comparison helpers as needed

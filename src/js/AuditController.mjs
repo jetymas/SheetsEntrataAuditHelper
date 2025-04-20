@@ -27,12 +27,11 @@ class AuditController {
       currentField: null,
       error: null,
     };
-    updateStatus(
-      this.state.status,
-      this.state.progress,
-      this.state.status,
-      { currentRecord: this.state.currentRecord, currentField: this.state.currentField, error: this.state.error }
-    );
+    updateStatus(this.state.status, this.state.progress, this.state.status, {
+      currentRecord: this.state.currentRecord,
+      currentField: this.state.currentField,
+      error: this.state.error,
+    });
     try {
       const { headers, records } = await fetchSheetData(spreadsheetId);
       const Engine = auditType === "renewal" ? RenewalAudit : LeaseAudit;
@@ -50,7 +49,11 @@ class AuditController {
             this.state.status,
             this.state.progress,
             this.state.status,
-            { currentRecord: this.state.currentRecord, currentField: this.state.currentField, error: this.state.error }
+            {
+              currentRecord: this.state.currentRecord,
+              currentField: this.state.currentField,
+              error: this.state.error,
+            },
           );
           const result = await this.auditEngine.runField(record, field);
           if (result.match) {
@@ -77,38 +80,38 @@ class AuditController {
             this.state.status,
             this.state.progress,
             this.state.status,
-            { currentRecord: this.state.currentRecord, currentField: this.state.currentField, error: this.state.error }
+            {
+              currentRecord: this.state.currentRecord,
+              currentField: this.state.currentField,
+              error: this.state.error,
+            },
           );
         }
       }
       this.state.status = "complete";
-      updateStatus(
-        this.state.status,
-        this.state.progress,
-        this.state.status,
-        { currentRecord: this.state.currentRecord, currentField: this.state.currentField, error: this.state.error }
-      );
+      updateStatus(this.state.status, this.state.progress, this.state.status, {
+        currentRecord: this.state.currentRecord,
+        currentField: this.state.currentField,
+        error: this.state.error,
+      });
     } catch (e) {
       this.state.status = "error";
       this.state.error = e.message;
-      updateStatus(
-        this.state.error,
-        this.state.progress,
-        this.state.status,
-        { currentRecord: this.state.currentRecord, currentField: this.state.currentField, error: this.state.error }
-      );
+      updateStatus(this.state.error, this.state.progress, this.state.status, {
+        currentRecord: this.state.currentRecord,
+        currentField: this.state.currentField,
+        error: this.state.error,
+      });
     }
   }
 
   stop() {
     this._stopRequested = true;
     this.state.status = "stopped";
-    updateStatus(
-      this.state.status,
-      this.state.progress,
-      this.state.status,
-      { currentRecord: this.state.currentRecord, currentField: this.state.currentField }
-    );
+    updateStatus(this.state.status, this.state.progress, this.state.status, {
+      currentRecord: this.state.currentRecord,
+      currentField: this.state.currentField,
+    });
   }
 }
 

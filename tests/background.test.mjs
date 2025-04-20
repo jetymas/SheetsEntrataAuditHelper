@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import { updateStatus } from "../src/js/updateStatus";
 
 describe("updateStatus", () => {

@@ -12,9 +12,9 @@ await jest.unstable_mockModule(
 );
 
 const { default: ColumnHelpers } = await import(
-  "../src/js/column-modules/column-helpers.js"
+  "../src/js/column-modules/column-helpers.mjs"
 );
-const { default: ColumnAY } = await import("../src/js/column-modules/AY.js");
+const { default: ColumnAY } = await import("../src/js/column-modules/AY.mjs");
 
 describe("ColumnAY", () => {
   beforeEach(() => {

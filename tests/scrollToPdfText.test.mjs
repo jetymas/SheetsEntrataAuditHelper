@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import { scrollToPdfText } from "../src/js/content-helpers";
 
 describe("scrollToPdfText", () => {

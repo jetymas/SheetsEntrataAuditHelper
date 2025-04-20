@@ -3,6 +3,8 @@
  */
 import updateStatus from "../updateStatus.mjs";
 
+import { jest } from "@jest/globals";
+
 describe("updateStatus helper", () => {
   beforeEach(() => {
     global.chrome = { runtime: { sendMessage: jest.fn() } };

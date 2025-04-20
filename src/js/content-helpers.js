@@ -39,7 +39,6 @@ export function normalizeValue(value) {
   return value.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
-
 /**
  * Poll a test function until it returns true or a timeout is reached
  * @param {Function} testFn
@@ -55,3 +54,38 @@ export async function poll(testFn, timeout = 8000, interval = 300) {
   }
   return false;
 }
+
+// Shared state for the content script
+export const contentState = {
+  currentResident: null,
+  currentRecord: null,
+  currentModule: null,
+  currentColumn: null,
+  expectedValue: null,
+  sheetColumn: null,
+  pdfText: null,
+  pdfValue: null,
+};
+
+// Determine current page type (e.g. PDF viewer)
+export function getCurrentPageType() {
+  const url = window.location.href;
+  const isPdfViewer =
+    url.includes("pdf") ||
+    document.querySelector(
+      "iframe.pdf-viewer, .pdf-content, .pdf-container, [data-testid=\"pdf-viewer\"]"
+    ) ||
+    (document.querySelector("iframe") &&
+      document.querySelector("iframe").src &&
+      document.querySelector("iframe").src.includes("pdf")) ||
+    document.querySelector("embed[type=\"application/pdf\"]") ||
+    document.querySelector("object[type=\"application/pdf\"]");
+
+  return isPdfViewer ? "pdfViewer" : "unknown";
+}
+
+// Re-export visual helpers for testing
+import { extractPdfText, findValueInPdf } from "./pdf-utils.js";
+import { scrollToPdfText, findAndClickResident, clickNextPageButton } from "./content-ui.js";
+
+export { extractPdfText, findValueInPdf, scrollToPdfText, findAndClickResident, clickNextPageButton };

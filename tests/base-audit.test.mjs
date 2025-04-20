@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import BaseAuditType from "../src/js/audit-types/base-audit";
 
 describe("BaseAuditType", () => {
@@ -28,6 +29,7 @@ describe("BaseAuditType", () => {
   test("isFieldApplicable returns true when no condition", () => {
     expect(audit.isFieldApplicable({}, {})).toBe(true);
   });
+
 
   test("isFieldApplicable respects condition", () => {
     const cond = jest.fn().mockReturnValue(false);

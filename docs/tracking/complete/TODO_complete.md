@@ -3,6 +3,7 @@
 ## Completed Items (migrated from TODO.md)
 
 ### Codebase Review & Linting
+
 - [x] Run Prettier and ESLint (flat config, no .eslintignore, ignores dist/)
 - [x] Remove all legacy, duplicate, or obsolete files
 - [x] Complete repo structure audit and migration
@@ -13,6 +14,7 @@
 - [x] Confirm clean lint run
 
 ### Comprehensive Source File Review (2025-04-19)
+
 - [x] src/js/column-modules/A.mjs
 - [x] src/js/column-modules/AA.mjs
 - [x] src/js/column-modules/AB.mjs
@@ -69,7 +71,7 @@
 
 ---
 
-*Completed tasks migrated from TODO.md and docs/tracking/TODO.md on 2025-04-20 by Cascade. Good vibes!*
+_Completed tasks migrated from TODO.md and docs/tracking/TODO.md on 2025-04-20 by Cascade. Good vibes!_
 
 ### Additional Completed Tasks (Migrated)
 
@@ -96,4 +98,3 @@
   - Mocking LeaseAudit and RenewalAudit as ES6 classes with prototype methods.
   - Cleaning up unused eslint-disable comments and fixing quote style.
 - See `docs/tracking/AUDITCONTROLLER_TEST_FIX.md` for full rationale and details.
-

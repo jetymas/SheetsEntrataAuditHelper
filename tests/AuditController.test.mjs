@@ -2,7 +2,7 @@ import { jest } from "@jest/globals";
 
 global.fetch = jest.fn((url) => {
   // For debug visibility
-   
+
   console.log("MOCK FETCH URL:", url);
   if (typeof url === "string" && url.includes("!8:8")) {
     // Header fetch
@@ -15,7 +15,11 @@ global.fetch = jest.fn((url) => {
     // Data fetch
     return Promise.resolve({
       ok: true,
-      json: () => Promise.resolve({ headers: ["A", "B"], records: [{ _row: 1, A: "1", B: "2" }] }),
+      json: () =>
+        Promise.resolve({
+          headers: ["A", "B"],
+          records: [{ _row: 1, A: "1", B: "2" }],
+        }),
     });
   }
   // fallback for any other fetch
@@ -57,46 +61,54 @@ class MockAudit {
   constructor() {
     this.sheetName = "Lease Audit";
   }
-  async setUp() { return { success: true, tabId: 1 }; }
-  nextFields() { return ["A", "B"]; }
-  async runField() { return { match: true }; }
+  async setUp() {
+    return { success: true, tabId: 1 };
+  }
+  nextFields() {
+    return ["A", "B"];
+  }
+  async runField() {
+    return { match: true };
+  }
 }
-jest.mock("../src/js/audit-types/lease-audit", () => ({
+await jest.unstable_mockModule("../src/js/audit-types/lease-audit", () => ({
   __esModule: true,
   default: MockAudit,
 }));
-jest.mock("../src/js/audit-types/renewal-audit", () => ({
+await jest.unstable_mockModule("../src/js/audit-types/renewal-audit", () => ({
   __esModule: true,
   default: MockAudit,
 }));
 
-jest.mock("../src/js/sheets", () => {
-  const sheetsMock = {
+await jest.unstable_mockModule("../src/js/sheets", () => ({
+  __esModule: true,
+  fetchSheetData: jest.fn().mockResolvedValue({ headers: ["A", "B"], records: [{ _row: 1, A: "1", B: "2" }] }),
+  updateSheetCell: jest.fn().mockResolvedValue({}),
+  addSheetComment: jest.fn().mockResolvedValue({}),
+  default: {
+    fetchSheetData: jest.fn().mockResolvedValue({ headers: ["A", "B"], records: [{ _row: 1, A: "1", B: "2" }] }),
     updateSheetCell: jest.fn().mockResolvedValue({}),
     addSheetComment: jest.fn().mockResolvedValue({}),
-  };
-  sheetsMock.default = sheetsMock;
-  return sheetsMock;
+  },
+}));
+
+let AuditController;
+beforeAll(async () => {
+  ({ default: AuditController } = await import("../src/js/AuditController"));
 });
-
-import AuditController from "../src/js/AuditController";
-
 
 describe("AuditController", () => {
   it("starts and completes without errors", async () => {
-    const controller = AuditController;
-    await controller.start({ spreadsheetId: "sheet123", auditType: "lease" });
-    const state = controller.getState();
+    await AuditController.start({ spreadsheetId: "sheet123", auditType: "lease" });
+    const state = AuditController.getState();
     if (state.status === "error") {
-       
       console.error("AuditController error:", state.error);
     }
     expect(state.status).toBe("complete");
   }, 20000);
 
   it("handles stop request", async () => {
-    const controller = AuditController;
-    controller.stop();
-    expect(controller.getState().status).toBe("stopped");
+    AuditController.stop();
+    expect(AuditController.getState().status).toBe("stopped");
   });
 });

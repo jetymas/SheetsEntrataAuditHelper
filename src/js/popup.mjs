@@ -4,7 +4,13 @@ import columnModules from "./column-modules/index.mjs";
 import ColumnHelpers from "./column-modules/column-helpers.mjs";
 
 // Initialize popup UI after DOM is ready
-import { getPopupElements, updateStatusUI, showVerificationDialog, showError, hideError } from "./popup-ui.js";
+import {
+  getPopupElements,
+  updateStatusUI,
+  showVerificationDialog,
+  showError,
+  hideError,
+} from "./popup-ui.js";
 
 function initPopup() {
   const elements = getPopupElements();
@@ -107,7 +113,10 @@ function initPopup() {
     } catch (error) {
       console.error("Error extracting spreadsheet ID:", error);
       // Show URL format error in UI
-      showError(elements, "Invalid Google Sheet URL. Please check and try again.");
+      showError(
+        elements,
+        "Invalid Google Sheet URL. Please check and try again.",
+      );
       return;
     }
 
@@ -157,7 +166,7 @@ function initPopup() {
 
     updateStatusUI(elements, {
       message: "Audit stopped by user.",
-      status: "idle"
+      status: "idle",
     });
     hideError(elements);
     currentAuditState.status = "idle";
@@ -176,7 +185,7 @@ function initPopup() {
     // Update UI to show skipping
     updateStatusUI(elements, {
       message: "Skipping current record...",
-      status: currentAuditState.status
+      status: currentAuditState.status,
     });
     showError(elements, "Manually skipped by user");
   });

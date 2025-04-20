@@ -2,7 +2,6 @@
 const fs = require("fs");
 const glob = require("glob");
 
-
 const testFiles = glob.sync("tests/unit/column-modules/*.test.mjs");
 
 testFiles.forEach((file) => {

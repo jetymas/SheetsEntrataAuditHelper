@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import fetchMock from "jest-fetch-mock";
 import {
   getAuthToken,
@@ -33,8 +34,6 @@ describe("Sheets Helper Functions", () => {
   });
 
   test("updateSheetCell sends correct request and returns json", async () => {
-     
-    
     const mockResponse = { success: true };
     fetchMock.mockResponseOnce(JSON.stringify(mockResponse), { status: 200 });
     const res = await updateSheetCell("sid", "Sheet", "A1", "val");
@@ -53,7 +52,7 @@ describe("Sheets Helper Functions", () => {
   });
 
   test("addSheetComment posts metadata and returns json", async () => {
-    const meta = { sheets: [ { properties: { title: "Sheet", sheetId: 2 } } ] };
+    const meta = { sheets: [{ properties: { title: "Sheet", sheetId: 2 } }] };
     fetchMock.mockResponseOnce(JSON.stringify(meta), { status: 200 });
     fetchMock.mockResponseOnce(JSON.stringify({ result: true }), {
       status: 200,
@@ -83,7 +82,7 @@ describe("Sheets Helper Functions", () => {
     // First response: metadata OK with sheet
     fetchMock.mockResponseOnce(
       JSON.stringify({
-        sheets: [ { properties: { title: "Sheet", sheetId: 2 } } ],
+        sheets: [{ properties: { title: "Sheet", sheetId: 2 } }],
       }),
       { status: 200 },
     );

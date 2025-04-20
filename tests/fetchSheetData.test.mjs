@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import fetchMock from "jest-fetch-mock";
 import { fetchSheetData } from "../src/js/sheets";
 

@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import { initPopup } from "../src/js/popup.mjs";
 
 // Mock chrome.storage and chrome.runtime

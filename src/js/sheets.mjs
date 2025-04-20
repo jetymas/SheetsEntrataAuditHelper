@@ -112,7 +112,9 @@ async function addSheetComment(spreadsheetId, sheetName, cellRef, comment) {
   if (!metaRes.ok)
     throw new Error(`Failed to get sheet metadata: ${metaRes.statusText}`);
   const metaJson = await metaRes.json();
-  const sheet = metaJson.sheets.find((s) => s.properties.title === sheetName)?.properties;
+  const sheet = metaJson.sheets.find(
+    (s) => s.properties.title === sheetName,
+  )?.properties;
   if (!sheet) throw new Error(`Sheet ${sheetName} not found`);
   const sheetId = sheet.sheetId;
 

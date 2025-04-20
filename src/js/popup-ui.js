@@ -25,7 +25,16 @@ export function getPopupElements() {
  * @param {object} data - Status data
  */
 export function updateStatusUI(elements, data) {
-  const { statusText, recordInfo, fieldInfo, errorInfo, statusDiv, progressBar, startAuditButton, skipRecordButton } = elements;
+  const {
+    statusText,
+    recordInfo,
+    fieldInfo,
+    errorInfo,
+    statusDiv,
+    progressBar,
+    startAuditButton,
+    skipRecordButton,
+  } = elements;
   // Main status message
   statusText.textContent = data.message || "Processing...";
   // Record info

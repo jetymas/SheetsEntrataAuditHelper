@@ -1,3 +1,4 @@
+import { jest } from "@jest/globals";
 import { getCookie, setCookie } from "../src/js/cookieHelper";
 
 describe("cookieHelper", () => {
