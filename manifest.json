@@ -41,7 +41,7 @@
     "128": "src/images/icon128.png"
   },
   "background": {
-    "service_worker": "src/js/background.js",
+    "service_worker": "src/js/background.mjs",
     "type": "module"
   },
   "key": "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDG9FkNjrdZ7KV+ArsxGrcrLUXjqw353JMk7fZUqsQ+bP6jW+Zb0BOiu7wRHESsvQDIp1JnVIGFgAF7QsYs5rJZQ/1p5Kp0Ymr67BfOfEVfqN2fAKy28bgdxyHfUb2r+N2TWvCaO/1y+1DRBJ4LkSyHGlv6+AdlfcVWCqyAys3CcYFTu9XPtzNFK3iTNROhuZB73+d9O0bCv9eujsc3+1Vv6/qzRgju1/DAw6+r2Rt3pf7OAFoDRbPEH206QjR3AZ7NQ5mM9qWCjkKoqkrnl/3Z9csf3s5AjO7UoAN4liXkG8pbHphW1qQG9KkwTnp26dpVTRuQ9WOcqg+sNBUJmQXfAgMBAAECggEABmXaLUTvIX2qLrywv1oAFOveSP15tBTDSJc8aimZqPZBVAiDBmXRE9UcraIulS14xnsW+8qsZZohshCKJex/RL6aehrH3nlBvnL0Kwg1BOf9xHy1kSaByLdcH/3Vbx/QJEpy3UrbkiSBy07uNCoFeAzBc3chacKbI3KxbGzZJA0K2xw3ZozXkQVi4XUPEHq36271m3vvpJz99m+BKgq48mkex9A+66yGTvhsce/NL2fuAhGMG38QyImy672X8QGaKqAQ8QtmiSok9lsxCZR9XdS9GYglO4hIm83iuW0oMH+b+tfPIZd2VwxsHC75xkFaZHbV375ow8YcongswNyGOQKBgQDkD4vvybq53K8i4Oe5FSEs3+GSW5ELLi3Qiad1zV288hEyRGH62o7a9PiUt52U/gAsUlziG54ox71AIywEx/8ksORbmX9rjfntqOnx1zy0wxj8gghj5kyF9cMuXEJZX/u6skbhlHW9t5msivCOQ0aFc6LNNkrVU8ROFyqIz52fGQKBgQDfU/gz6iPREOkvRRttMLqYbkY9BsD+O0XbPb+VvPyWWYbSxCkFpZJGBUgb8VkWslxXvJ5n7RmCaNv0rJ2ar/nkblYvLcp8Ji2sdUF8A7hmQ5yePP7VST5jZMj371Y22FQ8Tk/KgqfY0009zWGSaBkUZxLKbVaeS/MB86+xZGcDtwKBgQDGNrzpK+uenq+ZIOBFfJfY6Lyk9/CYRwqKtRlWyacvETTg+44s+MgwhbmHiA7t79U2sF8KJfbQesmBdRBNF4Yp3ZScCE02ra8LYEP0bZ3Vfbu5u0qPiRn5VCDPqmAATev71/bDGMU8ntZxoFBzVQV194sH0Kg5wRRcysWtIsVcAQKBgCtkp29+6SKwRH7Y0LFwrHD9zEwDSfCcF8C3yMgRhoq4Log5cTcVqsxMLmyvgn30fhjWH3lWCoTaVxK9j4oE82s9PSXBofxpdqpxxh2Qo33LWV0twN40cxjg9mOmb3wMoKFvHfXdWTu6IuIFTBYkf+sE9BO9Fv1/CGKytMqlFZcVAoGAOErIeinq4CIalpeApfSi8/2J4nSRWeKertvDZDLGhfYMzUy9ssM8aCo+vDiw16yTwbDkdPGTO8djSVdMs8KdERRyRL79k9ja6BNtzPBLVX5JQk3mP/0gVTjKzZYwBztWI64ibQKlMv9ZaHaBoaRYP26NOge98P7TJru9ItCRlU0=",
@@ -49,7 +49,7 @@
   "content_scripts": [
     {
       "matches": ["https://*.entrata.com/*"],
-      "js": ["src/js/content.js"],
+      "js": ["src/js/content.mjs"],
       "css": ["src/css/content.css"],
       "run_at": "document_idle",
       "all_frames": true
