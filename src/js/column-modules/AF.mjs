@@ -11,7 +11,14 @@
  */
 function processAF(_rowData) {
   // TODO: implement based on spec
-  return null;
+  return {
+    success: false,
+    message: "Not implemented or not applicable.",
+    requiresUserConfirmation: false
+  };
 }
 
-export default { processAF };
+export default {
+  id: "AF",
+  run: processAF
+};

@@ -253,7 +253,7 @@ class LeaseAudit extends BaseAuditType {
         }
       });
 
-      if (!setupResult || !setupResult.success) {
+      if (!setupResult?.success) {
         console.error("Setup result unsuccessful:", setupResult);
         throw new Error(
           setupResult?.error || "Failed to set up Entrata environment",
@@ -306,7 +306,7 @@ class LeaseAudit extends BaseAuditType {
 
       // Get the tab ID from the background script
       const auditState = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: "getAuditState" }, (response) => {
+        chrome.runtime.sendMessage({ type: "getAuditState" }, (response) => {
           resolve(response);
         });
       });
@@ -404,7 +404,7 @@ class LeaseAudit extends BaseAuditType {
         ),
       ]);
 
-      if (!response || !response.success) {
+      if (!response?.success) {
         // If resident not found, log detailed error
         console.error(
           "Failed to process resident:",

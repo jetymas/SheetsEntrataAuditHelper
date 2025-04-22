@@ -58,7 +58,7 @@
 ## 5. Front-end (Popup) UI
 
 5.1. Design `popup.html` with Start/Stop buttons and progress display.
-5.2. Implement `popup.js` to send messages to background (controller).
+5.2. Implement `popup.mjs` to send messages to background (controller).
 5.3. Style UI; show error and success messages.
 5.4. Test popup interactions.
 

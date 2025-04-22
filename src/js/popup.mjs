@@ -13,7 +13,22 @@ import {
 } from "./popup-ui.js";
 
 function initPopup() {
+  console.log("[Entrata Audit] Popup loaded");
   const elements = getPopupElements();
+
+  // Listen for audit progress/status updates from content script
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === "auditStatus") {
+      updateStatusUI(elements, {
+        message: message.message,
+        progress: message.progress,
+        status: message.status,
+        currentRecord: message.currentRecord,
+        currentField: message.currentField,
+        error: message.error,
+      });
+    }
+  });
   const {
     startAuditButton,
     stopAuditButton,
@@ -32,6 +47,97 @@ function initPopup() {
     recordCount: 0,
   };
 
+  // --- Service worker keep-alive port ---
+  let keepAlivePort = null;
+
+  // Add Start Audit button handler to message background script
+  // Single audit launch per click: disable button immediately
+  startAuditButton.addEventListener("click", async () => {
+    console.log("[Entrata Audit] Attempting to start audit");
+    startAuditButton.disabled = true;
+    const spreadsheetUrl = spreadsheetUrlInput.value.trim();
+    const auditType = document.getElementById("auditType")?.value || "";
+    if (!spreadsheetUrl) {
+      showError(elements, "Please enter a Google Sheet URL");
+      startAuditButton.disabled = false;
+      return;
+    }
+    // Extract the spreadsheet ID from the URL
+    let spreadsheetId;
+    try {
+      const regex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+      const match = spreadsheetUrl.match(regex);
+      spreadsheetId = match ? match[1] : null;
+      if (!spreadsheetId) {
+        if (/^[a-zA-Z0-9-_]+$/.test(spreadsheetUrl)) {
+          spreadsheetId = spreadsheetUrl;
+        } else {
+          throw new Error("Invalid URL format");
+        }
+      }
+      console.log("Extracted spreadsheet ID:", spreadsheetId);
+    } catch (error) {
+      console.error("Error extracting spreadsheet ID:", error);
+      showError(elements, "Invalid Google Sheet URL. Please check and try again.");
+      startAuditButton.disabled = false;
+      return;
+    }
+    chrome.storage.local.set({ spreadsheetUrl: spreadsheetUrl });
+    statusDiv.classList.remove("hidden");
+    updateStatusUI(elements, { message: "Initializing audit..." });
+    progressBar.style.width = "10%";
+    recordInfo.textContent = "";
+    fieldInfo.textContent = "";
+    hideError(elements);
+    currentAuditState = {
+      status: "in_progress",
+      currentRecordIndex: 0,
+      recordCount: 0,
+    };
+    // --- Keep-alive port logic ---
+    keepAlivePort = chrome.runtime.connect({ name: "keepAlive" });
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "START_AUDIT",
+            spreadsheetUrl,
+            auditType,
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              showError(elements, chrome.runtime.lastError.message);
+              startAuditButton.disabled = false;
+              if (keepAlivePort) keepAlivePort.disconnect();
+              keepAlivePort = null;
+              reject(chrome.runtime.lastError);
+            } else if (response && response.status === "launched") {
+              updateStatusUI(elements, { message: "Audit launched in Entrata tab..." });
+              resolve();
+            } else {
+              showError(elements, "Failed to launch audit. Check Entrata tab.");
+              startAuditButton.disabled = false;
+              if (keepAlivePort) keepAlivePort.disconnect();
+              keepAlivePort = null;
+              reject(new Error("Failed to launch audit"));
+            }
+          }
+        );
+      });
+    } catch {
+      // Already handled
+    }
+  });
+
+  // Listen for keepAlive port disconnect request from background
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name === "keepAliveRelease") {
+      if (keepAlivePort) keepAlivePort.disconnect();
+      keepAlivePort = null;
+      port.disconnect();
+    }
+  });
+
   // Load saved spreadsheet URL if available
   chrome.storage.local.get(["spreadsheetUrl"], function (result) {
     if (result.spreadsheetUrl) {
@@ -43,10 +149,15 @@ function initPopup() {
 
   // Orchestrates audit flow by invoking each column module
   async function processAuditFlow() {
+    console.log("[Entrata Audit] processAuditFlow called");
     const modules = Object.values(columnModules);
+    console.log("[Entrata Audit] Loaded modules:", modules.map((m, i) => ({i, id: m?.id, hasRun: typeof m?.run === "function", type: typeof m})));
     let count = 0;
     for (const mod of modules) {
-      // Call run on module; context could include record data (placeholder here)
+      if (!mod || typeof mod.run !== "function") {
+        console.warn("[Entrata Audit] Skipping invalid module in columnModules:", mod, "Type:", typeof mod, "Keys:", Object.keys(mod || {}));
+        continue;
+      }
       try {
         const result = await mod.run(null, null, { record: {} });
         // Update progress UI
@@ -58,14 +169,11 @@ function initPopup() {
         // Handle confirmation if needed
         if (result.requiresConfirmation) {
           // Prepare prompt data from module
-          // 'row' and 'col' are not available in this context; pass null for interface consistency
           const promptData = mod.displayData(null, null, {
             result,
             record: {},
           });
-          // Navigate to Documents tab for verification
           await ColumnHelpers.navigateToPage("Documents");
-          // Show verification dialog with promptData
           showVerificationDialog(elements, promptData);
         }
       } catch (e) {
@@ -142,13 +250,21 @@ function initPopup() {
     };
 
     // Notify background to start audit, include callback so tests can verify
+    const startAuditMsg = {
+      type: "START_AUDIT",
+      spreadsheetUrl: spreadsheetId,
+      auditType: auditType,
+    };
+    console.log("[Entrata Audit][POPUP] Sending START_AUDIT message to background:", startAuditMsg);
     chrome.runtime.sendMessage(
-      {
-        action: "startAudit",
-        spreadsheetId: spreadsheetId,
-        auditType: auditType,
-      },
-      () => {},
+      startAuditMsg,
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error("[Entrata Audit][POPUP] Error from background:", chrome.runtime.lastError.message);
+        } else {
+          console.log("[Entrata Audit][POPUP] Received response from background:", response);
+        }
+      }
     );
 
     // Kick off column modules processing flow asynchronously
@@ -191,7 +307,7 @@ function initPopup() {
   });
 
   // Check audit status on popup opening
-  chrome.runtime.sendMessage({ action: "getAuditState" }, function (response) {
+  chrome.runtime.sendMessage({ type: "getAuditState" }, function (response) {
     if (response) {
       currentAuditState = {
         status: response.status,

@@ -20,17 +20,17 @@
 
 ## Related Files
 
-- `src/js/popup.js` (main logic)
-- `src/js/content.js` (field verification, dialog creation)
-- `src/js/background.js` (audit state, messaging)
+- `src/js/popup.mjs` (main logic)
+- `src/js/content.mjs` (field verification, dialog creation)
+- `src/js/background.mjs` (audit state, messaging)
 
 ---
 
 ### Tasks
 
-- [ ] Wire up `popup.js` to invoke column-modules during audit start/stop/skip actions, integrating helpers.
+- [ ] Wire up `popup.mjs` to invoke column-modules during audit start/stop/skip actions, integrating helpers.
 - [ ] Implement spreadsheet URL validation and feedback in popup (unit tests for parsing and error states).
-- [ ] Add Jest unit tests for `popup.js` logic, including button state changes and DOM updates.
+- [ ] Add Jest unit tests for `popup.mjs` logic, including button state changes and DOM updates.
 - [ ] Implement and test user confirmation dialogs in popup for columns requiring verification (e.g., AO).
 - [ ] Create E2E Puppeteer tests for popup UI flows (start audit, stop audit, skip record, confirmation dialog).
 - [ ] Update documentation and README with popup UI integration details and usage.

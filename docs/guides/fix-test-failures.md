@@ -16,10 +16,10 @@
 - Error: `require is not defined` in ESM test file
 - Tests use `require()` in `.test.mjs`, but project is ESM
 
-### 3. Integration Tests for content.js
+### 3. Integration Tests for content.mjs
 
-- `ENOENT: no such file or directory` for `src/js/content.js`
-- Path mismatch: tests expect `src/js/content.js`, actual file exists at same path but mount point may be incorrect
+- `ENOENT: no such file or directory` for `src/js/content.mjs`
+- Path mismatch: tests expect `src/js/content.mjs`, actual file exists at same path but mount point may be incorrect
 
 ### 4. E2E Tests (Puppeteer)
 

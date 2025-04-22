@@ -1,22 +1,23 @@
 import { jest } from "@jest/globals";
 
-await jest.unstable_mockModule(
-  "../src/js/column-modules/column-helpers.mjs",
-  () => ({
-    __esModule: true,
-    default: {
+let ColumnHelpers, ColumnT;
+
+beforeAll(async () => {
+  await jest.unstable_mockModule(
+    "../src/js/column-modules/column-helpers.mjs",
+    () => ({
+      __esModule: true,
+      default: {
+        extractFieldFromPdf: jest.fn(),
+        hasBlackFill: jest.fn(),
+      },
       extractFieldFromPdf: jest.fn(),
       hasBlackFill: jest.fn(),
-    },
-    extractFieldFromPdf: jest.fn(),
-    hasBlackFill: jest.fn(),
-  }),
-);
-
-const { default: ColumnHelpers } = await import(
-  "../src/js/column-modules/column-helpers.mjs"
-);
-const { default: ColumnT } = await import("../src/js/column-modules/T.mjs");
+    })
+  );
+  ({ default: ColumnHelpers } = await import("../src/js/column-modules/column-helpers.mjs"));
+  ({ default: ColumnT } = await import("../src/js/column-modules/T.mjs"));
+});
 
 describe("ColumnT", () => {
   beforeEach(() => {

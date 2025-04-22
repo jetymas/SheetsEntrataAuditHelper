@@ -1,7 +1,8 @@
 export default {
   // Ensure project root is parent of config folder
   rootDir: ".",
-  testEnvironment: "jsdom",
+  // Default to jsdom for unit tests, use puppeteer for E2E
+  testEnvironment: process.env.PUPPETEER_TEST ? "jest-environment-puppeteer" : "jsdom",
   setupFilesAfterEnv: ["<rootDir>/config/jest.setup.mjs"],
   moduleFileExtensions: ["js", "json", "mjs"],
   testMatch: [
@@ -9,6 +10,7 @@ export default {
     "**/tests/**/*.test.mjs",
     "<rootDir>/src/js/__tests__/**/*.test.js",
     "<rootDir>/src/js/__tests__/**/*.test.mjs",
+    "<rootDir>/src/js/__tests__/**/*.puppeteer.test.js",
   ],
   // Exclude E2E and integration tests until setup is complete
   testPathIgnorePatterns: [
@@ -30,21 +32,12 @@ export default {
       "<rootDir>/src/js/column-modules/$1.mjs",
   },
   coveragePathIgnorePatterns: [
-    "/content.js$",
-    "/background.js$",
-    "/popup.js$",
-    "/background-worker.js$",
     "/column-modules/",
     "/audit-types/",
-    "/AuditController.js$",
   ],
   collectCoverageFrom: [
     "src/js/**/*.js",
     "!src/js/content-helpers.js",
-    "!src/js/content.js",
-    "!src/js/background.js",
-    "!src/js/popup.js",
-    "!src/js/background-worker.js",
     "!src/js/column-modules/**",
     "!src/js/audit-types/**",
     "!src/js/AuditController.js",

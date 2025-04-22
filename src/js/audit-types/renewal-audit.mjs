@@ -62,7 +62,7 @@ class RenewalAudit extends BaseAuditType {
 
       // Sort the residents by name (first name + last name)
       await chrome.tabs.sendMessage(activeTab.id, {
-        action: "setupAudit",
+        type: "setupAudit",
         auditType: "renewal",
       });
 
@@ -122,7 +122,7 @@ class RenewalAudit extends BaseAuditType {
         );
       });
 
-      if (!response || !response.success) {
+      if (!response?.success) {
         // If resident not found, move to next record
         this.currentRecordIndex++;
         return this.findNext();

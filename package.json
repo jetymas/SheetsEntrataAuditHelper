@@ -3,10 +3,11 @@
   "type": "module",
   "version": "1.0.0",
   "description": "Chrome extension to streamline lease audits for Entrata property management system",
-  "main": "src/js/background.js",
+  "main": "src/js/background.mjs",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "tsconfig": "echo tsconfig loaded"
+    "tsconfig": "echo tsconfig loaded",
+    "build": "npx esbuild src/js/popup.mjs --bundle --outfile=dist/popup.bundle.js --format=iife --sourcemap --target=chrome113 && npx esbuild src/js/background.mjs --bundle --outfile=dist/background.bundle.js --format=esm --sourcemap --target=chrome113 && npx esbuild src/js/content.mjs --bundle --outfile=dist/content.bundle.js --format=esm --sourcemap --target=chrome113"
   },
   "keywords": [
     "entrata",
@@ -25,7 +26,9 @@
     "glob": "^11.0.1",
     "globals": "^16.0.0",
     "jest": "^29.7.0",
+    "jest-environment-puppeteer": "^11.0.0",
     "jest-fetch-mock": "^3.0.3",
+    "jest-puppeteer": "^11.0.0",
     "jsdom": "^21.1.0",
     "puppeteer": "^20.0.0",
     "recast": "^0.23.11",

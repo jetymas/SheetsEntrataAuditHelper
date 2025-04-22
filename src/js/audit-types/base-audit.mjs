@@ -96,12 +96,12 @@ class BaseAuditType {
         if (!this.columnModuleCache[columnLetter]) {
           try {
             console.log(`Loading column module ${columnLetter}...`);
-            const module = await import(`../column-modules/${columnLetter}.js`);
+            const module = await import(`../column-modules/${columnLetter}.mjs`);
             this.columnModuleCache[columnLetter] = module.default;
             console.log(`Successfully loaded column module ${columnLetter}`);
           } catch (error) {
             console.warn(
-              `Column module ${columnLetter}.js not found or error:`,
+              `Column module ${columnLetter}.mjs not found or error:`,
               error,
             );
             // Update status with the error

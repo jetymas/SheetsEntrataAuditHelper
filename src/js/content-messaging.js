@@ -8,13 +8,22 @@
 export function registerContentMessaging(handlers) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message && message.action && handlers[message.action]) {
-      // Call the handler and pass message, sender, sendResponse
-      return handlers[message.action](message, sender, sendResponse);
+      const result = handlers[message.action](message, sender, sendResponse);
+      // If the handler returns a Promise, handle async and keep port open
+      if (result instanceof Promise) {
+        result.then(res => sendResponse(res)).catch(err => sendResponse({ error: err?.message || String(err) }));
+        return true;
+      }
+      // If the handler returns true (manual sendResponse), propagate to keep port open
+      if (result === true) return true;
+      // For synchronous handlers, return value as before (usually false)
+      return false;
     }
-    // Return false to indicate no async response
     return false;
   });
 }
+
+
 
 /**
  * Send a message to the background script and return a promise for the response.

@@ -11,7 +11,14 @@
  */
 function processAG(_rowData) {
   // TODO: implement based on spec
-  return null;
+  return {
+    success: false,
+    message: "Not implemented or not applicable.",
+    requiresUserConfirmation: false
+  };
 }
 
-export default { processAG };
+export default {
+  id: "AG",
+  run: processAG
+};

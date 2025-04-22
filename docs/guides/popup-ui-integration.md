@@ -1,6 +1,6 @@
 # Popup UI Integration Plan
 
-This document outlines the integration of column modules and audit helpers into the `popup.js` UI logic.
+This document outlines the integration of column modules and audit helpers into the `popup.mjs` UI logic.
 
 ## Objectives
 
@@ -10,14 +10,14 @@ This document outlines the integration of column modules and audit helpers into 
 
 ## Components
 
-- **popup.js**: Main UI script, entry point via `initPopup()`.
-- **Column Modules** (`src/js/column-modules/*.js`): Exports functions like `processColumnA(record)`, etc.
+- **popup.mjs**: Main UI script, entry point via `initPopup()`.
+- **Column Modules** (`src/js/column-modules/*.mjs`): Exports functions like `processColumnA(record)`, etc.
 - **Helpers** (`src/js/column-modules/column-helpers.js`): Shared utilities (e.g., PDF parsing, verification dialogs).
 
 ## Integration Steps
 
 1. **Import Modules and Helpers**
-   - In `popup.js`, require or import a module index (e.g., `const modules = require('../column-modules');`).
+   - In `popup.mjs`, require or import a module index (e.g., `const modules = require('../column-modules');`).
 2. **Audit Start Handler**
    - After extracting `spreadsheetId` and sending `startAudit` to background, also initialize column workflow:
      ```js

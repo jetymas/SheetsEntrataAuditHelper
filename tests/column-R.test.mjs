@@ -1,23 +1,24 @@
 // ESM-compatible mocking for Jest
 import { jest } from "@jest/globals";
 
-await jest.unstable_mockModule(
-  "../src/js/column-modules/column-helpers.mjs",
-  () => ({
-    __esModule: true,
-    default: {
+let ColumnHelpers, ColumnR;
+
+beforeAll(async () => {
+  await jest.unstable_mockModule(
+    "../src/js/column-modules/column-helpers.mjs",
+    () => ({
+      __esModule: true,
+      default: {
+        extractFieldFromPdf: jest.fn(),
+        hasBlackFill: jest.fn(),
+      },
       extractFieldFromPdf: jest.fn(),
       hasBlackFill: jest.fn(),
-    },
-    extractFieldFromPdf: jest.fn(),
-    hasBlackFill: jest.fn(),
-  }),
-);
-
-const { default: ColumnHelpers } = await import(
-  "../src/js/column-modules/column-helpers.mjs"
-);
-const { default: ColumnR } = await import("../src/js/column-modules/R.mjs");
+    })
+  );
+  ({ default: ColumnHelpers } = await import("../src/js/column-modules/column-helpers.mjs"));
+  ({ default: ColumnR } = await import("../src/js/column-modules/R.mjs"));
+});
 
 describe("ColumnR", () => {
   beforeEach(() => {

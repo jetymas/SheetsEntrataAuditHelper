@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import ColumnE from "../../src/js/column-modules/E.js";
+import ColumnE from "../../src/js/column-modules/E.mjs";
 import ColumnHelpers from "../../src/js/column-modules/column-helpers.js";
 
 // Reset helpers before each test

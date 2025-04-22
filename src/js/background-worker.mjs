@@ -1,11 +1,11 @@
-// Background worker - minimal wrapper to load background.js
+// Background worker - minimal wrapper to load background.mjs
 // This is needed because service workers require imports to be properly resolved
 // and Chrome extension service workers have specific constraints
 
-// Global variable to track if background.js has been loaded
+// Global variable to track if background.mjs has been loaded
 let backgroundLoaded = false;
 
-// Set up a message queue for messages received before background.js loads
+// Set up a message queue for messages received before background.mjs loads
 const messageQueue = [];
 
 // Import all modules dynamically
@@ -13,9 +13,9 @@ const importBackgroundJS = async () => {
   try {
     console.log("Background worker starting...");
 
-    // Import main background.js with absolute path to ensure proper loading
+    // Import main background.mjs with absolute path to ensure proper loading
     // Chrome extension imports need to be relative to the extension root
-    await import("/src/js/background.js");
+    await import("./background.mjs");
 
     console.log("Background modules loaded successfully");
     backgroundLoaded = true;
@@ -29,7 +29,7 @@ const importBackgroundJS = async () => {
     // Try again with relative path as fallback
     try {
       console.log("Trying fallback import path...");
-      await import("./background.js");
+      await import("./background.mjs");
       console.log("Fallback import successful");
       backgroundLoaded = true;
       processQueuedMessages();
@@ -40,13 +40,13 @@ const importBackgroundJS = async () => {
   }
 };
 
-// Process any messages that were queued while background.js was loading
+// Process any messages that were queued while background.mjs was loading
 function processQueuedMessages() {
   console.log(`Processing ${messageQueue.length} queued messages`);
   while (messageQueue.length > 0) {
     const { message, sender: _sender, sendResponse } = messageQueue.shift();
     // Re-dispatch the message through the regular chrome.runtime.onMessage listeners
-    // This will be caught by the handler in background.js
+    // This will be caught by the handler in background.mjs
     try {
       console.log("Reprocessing queued message:", message.action);
       // This approach directly calls any listeners registered with chrome.runtime.onMessage
@@ -105,10 +105,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // If background.js is still loading, queue messages for later processing
+  // If background.mjs is still loading, queue messages for later processing
   if (!backgroundLoaded) {
     console.log(
-      `Background.js not loaded yet, queuing message: ${message.action}`,
+      `background.mjs not loaded yet, queuing message: ${message.action}`,
     );
 
     // For certain critical messages, provide an immediate response
@@ -121,14 +121,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    // Queue the message for processing once background.js loads
+    // Queue the message for processing once background.mjs loads
     messageQueue.push({ message, sender, sendResponse });
 
     // Return true to keep the message channel open
     return true;
   }
 
-  // If background.js is loaded, let it handle the message
-  // We don't return true here because the main listener in background.js needs to handle it
+  // If background.mjs is loaded, let it handle the message
+  // We don't return true here because the main listener in background.mjs needs to handle it
   return false;
 });

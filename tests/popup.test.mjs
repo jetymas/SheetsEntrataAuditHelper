@@ -7,6 +7,15 @@ global.chrome = {
   runtime: {
     sendMessage: jest.fn((msg, cb) => cb && cb({})),
     onMessage: { addListener: jest.fn() },
+    onConnect: {
+      addListener: jest.fn(),
+    },
+    connect: jest.fn(() => ({
+      onDisconnect: { addListener: jest.fn() },
+      postMessage: jest.fn(),
+      disconnect: jest.fn(),
+    })),
+
   },
 };
 
@@ -42,14 +51,15 @@ describe("popup initPopup", () => {
       "https://docs.google.com/spreadsheets/d/TEST_ID/edit";
     initPopup();
     const startBtn = document.getElementById("startAudit");
-    await startBtn.click();
+    startBtn.click();
     expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
       spreadsheetUrl: expect.any(String),
     });
     expect(global.chrome.runtime.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "startAudit",
-        spreadsheetId: "TEST_ID",
+        type: "START_AUDIT",
+        spreadsheetUrl: expect.stringContaining("TEST_ID"),
+        auditType: expect.any(String),
       }),
       expect.any(Function),
     );

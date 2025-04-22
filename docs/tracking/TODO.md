@@ -2,8 +2,26 @@
 
 ## Active Tasks (Migrated from Root-level TODO.md)
 
+- [ ] **Ensure Content Script Loads Correctly**: 
+    - Verify that `dist/content.bundle.js` is referenced in `manifest.json` under `content_scripts`.
+    - Confirm content script is injected on Entrata pages (check DevTools > Sources > Content Scripts).
+    - Debug and resolve handshake or injection issues (see `docs/tracking/CONTENT_HANDSHAKE_FAILURE.md`).
+    - Test with Chrome extension reloaded and hard refresh.
+
+- [ ] **Integrate Entrata Filtering Logic into Content Script**:
+    - Import and invoke `applyEntrataResidentFilters` from `src/js/entrata-filter-automation.js` within the content script.
+    - Trigger filter automation in response to extension UI or message events.
+    - Validate DOM selectors and update as needed for Entrata UI.
+    - Write/expand E2E tests in `src/js/__tests__/entrata-filter-automation.puppeteer.test.js`.
+    - Document integration approach in `docs/tracking/SORTING_AND_FILTERING_ALGORITHMS.md`.
+
+- [ ] **Entrata Residents Filtering Automation**: Implement and document automated filter selection for the Entrata residents page (see `src/js/entrata-filter-automation.js`).
+    - Reference canonical selectors in `docs/webpages/Entrata page 2 - residents list/Entrata page 2 - residents.html`.
+    - Validate with Puppeteer E2E test: `src/js/__tests__/entrata-filter-automation.puppeteer.test.js`.
+    - Update documentation: `docs/tracking/SORTING_AND_FILTERING_ALGORITHMS.md`.
+
 - [ ] **Review and refactor helpers/modules**: Ensure DRYness, clarity, and JSDoc coverage. Update or add tests as needed.
-- [ ] **Write E2E tests for content script & background flows**: Cover scenarios in content.js and background.js via Puppeteer.
+- [ ] **Write E2E tests for content script & background flows**: Cover scenarios in content.mjs and background.mjs via Puppeteer.
 
 ## Codebase Review & Linting
 

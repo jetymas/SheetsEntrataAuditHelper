@@ -24,7 +24,7 @@ export async function verifyField(column, module, expectedValue, sheetColumn) {
   // Make sure we're on the PDF viewer page
   if (getCurrentPageType() !== "pdfViewer") {
     chrome.runtime.sendMessage({
-      action: "fieldVerified",
+      type: "fieldVerified",
       result: {
         action: "skip",
         comment: "Not on PDF viewer page",
@@ -86,7 +86,7 @@ export async function verifyField(column, module, expectedValue, sheetColumn) {
 
   // Otherwise, auto-complete verification and send result
   chrome.runtime.sendMessage({
-    action: "fieldVerified",
+    type: "fieldVerified",
     result: {
       action: result.match ? "confirm" : "flag",
       comment: "",

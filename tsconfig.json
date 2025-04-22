@@ -15,6 +15,8 @@
     "src/js/sheets.mjs",
     "src/js/content.mjs",
     "src/js/audit-types/renewal-audit.mjs",
-    "src/js/audit-types/lease-audit.mjs"
+    "src/js/audit-types/lease-audit.mjs",
+    "src/**/*.mjs",
+"tests/**/*.mjs"
   ]
 }

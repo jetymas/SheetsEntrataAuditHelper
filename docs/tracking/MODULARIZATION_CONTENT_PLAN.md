@@ -25,6 +25,13 @@
 
 *Last updated: 2025-04-20 by Cascade AI*
 
+### [2025-04-21] Lease Audit Filtering Modularization
+- Resident filtering and sorting logic for Lease Audit is now fully modular.
+- Helper: `filterRecordsForLeaseAudit` in `src/js/content-helpers.js`.
+- Used by the content script `setupAudit` handler.
+- Jest test: `src/js/__tests__/content-helpers.filterRecordsForLeaseAudit.test.js` (all tests passing).
+- ESM/Jest/Babel config verified for robust testing.
+
 ## Rationale
 
 - `content.mjs` is very large (~42KB) and likely contains mixed concerns (UI, messaging, business logic, PDF/text extraction).

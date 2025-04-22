@@ -22,11 +22,11 @@ export function normalizeValue(value) {
   if (value.includes("/") || value.includes("-")) {
     try {
       // Remove any non-numeric/slash characters
-      const cleanValue = value.replace(/[^\d\/\-]/g, "");
+      const cleanValue = value.replace(/[^\d/-]/g, "");
 
       // Try to parse as date
       const date = new Date(cleanValue);
-      if (!isNaN(date.getTime())) {
+      if (!isNaN(date?.getTime())) {
         // Return MM/DD/YYYY format for consistency
         return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
       }
@@ -75,14 +75,41 @@ export function getCurrentPageType() {
     document.querySelector(
       "iframe.pdf-viewer, .pdf-content, .pdf-container, [data-testid=\"pdf-viewer\"]"
     ) ||
-    (document.querySelector("iframe") &&
-      document.querySelector("iframe").src &&
-      document.querySelector("iframe").src.includes("pdf")) ||
+    document.querySelector("iframe")?.src?.includes("pdf") ||
     document.querySelector("embed[type=\"application/pdf\"]") ||
     document.querySelector("object[type=\"application/pdf\"]");
 
   return isPdfViewer ? "pdfViewer" : "unknown";
 }
+
+// Lease Audit filtering logic for residents (modular, testable)
+/**
+ * Filters and sorts resident records for Lease Audit ("New" leases)
+ * @param {Array<Object>} records - Array of resident records
+ * @returns {Array<Object>} - Filtered and sorted records
+ */
+// Google Sheets: Filtering for Lease Audit ("New" leases)
+export function filterRecordsForGoogleSheets(records) {
+  return (records || []).filter((record) => record["Lease Type"] === "New");
+}
+
+// Google Sheets: Sorting by last name, then first name (ascending)
+export function sortRecordsForGoogleSheets(records) {
+  return (records || []).slice().sort((a, b) => {
+    const lastA = (a["Last Name"] || "").toLowerCase();
+    const lastB = (b["Last Name"] || "").toLowerCase();
+    if (lastA !== lastB) return lastA.localeCompare(lastB);
+    const firstA = (a["First Name"] || "").toLowerCase();
+    const firstB = (b["First Name"] || "").toLowerCase();
+    return firstA.localeCompare(firstB);
+  });
+}
+
+// DEPRECATED: filterRecordsForLeaseAudit (use filterRecordsForGoogleSheets)
+export function filterRecordsForLeaseAudit(records) {
+  return filterRecordsForGoogleSheets(records);
+}
+
 
 // Re-export visual helpers for testing
 import { extractPdfText, findValueInPdf } from "./pdf-utils.js";

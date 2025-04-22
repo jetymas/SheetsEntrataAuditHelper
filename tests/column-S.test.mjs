@@ -1,20 +1,21 @@
 import { jest } from "@jest/globals";
 
-await jest.unstable_mockModule(
-  "../src/js/column-modules/column-helpers.mjs",
-  () => ({
-    __esModule: true,
-    default: {
-      hasBlackFill: jest.fn(),
-    },
-    hasBlackFill: jest.fn(),
-  }),
-);
+let ColumnHelpers, ColumnS;
 
-const { default: ColumnHelpers } = await import(
-  "../src/js/column-modules/column-helpers.mjs"
-);
-const { default: ColumnS } = await import("../src/js/column-modules/S.mjs");
+beforeAll(async () => {
+  await jest.unstable_mockModule(
+    "../src/js/column-modules/column-helpers.mjs",
+    () => ({
+      __esModule: true,
+      default: {
+        hasBlackFill: jest.fn(),
+      },
+      hasBlackFill: jest.fn(),
+    })
+  );
+  ({ default: ColumnHelpers } = await import("../src/js/column-modules/column-helpers.mjs"));
+  ({ default: ColumnS } = await import("../src/js/column-modules/S.mjs"));
+});
 
 describe("ColumnS", () => {
   beforeEach(() => {

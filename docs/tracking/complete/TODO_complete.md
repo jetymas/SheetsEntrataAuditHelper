@@ -83,7 +83,7 @@ _Completed tasks migrated from TODO.md and docs/tracking/TODO.md on 2025-04-20 b
 - [x] **Implement remaining column modules (R–AO) via TDD**: All columns R–AO are implemented and tested. See notes/column-modules/list.md for tracking.
 - [x] **Integrate helpers into Chrome extension (content script)**: All column modules and helpers are now dynamically loaded and invoked in the content script. User confirmation workflow for AO and similar columns is functional. See notes/todo.md for details.
 - [x] **Integrate helpers into popup UI**: Connect column modules and helpers to popup UI, including user confirmation flows. See notes/popup-ui.md for progress.
-  - _Completed_: Wiring popup.js, unit tests, and confirmation dialogs.
+  - _Completed_: Wiring popup.mjs, unit tests, and confirmation dialogs.
 - [x] **Add E2E tests with Puppeteer**: Validate user flows in the extension. Track Puppeteer test files and coverage here. (e.g., `tests/e2e/audit.e2e.test.js` passing)
 - [x] **Update project documentation**: Keep notes and TODOs current. Add/expand documentation for new helpers/modules.
 - [x] **Documentation Migration and Repo Cleanup**

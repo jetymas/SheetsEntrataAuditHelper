@@ -2,7 +2,7 @@
 const esbuild = require("esbuild");
 
 esbuild.buildSync({
-  entryPoints: ["src/js/content.js"],
+  entryPoints: ["src/js/content.mjs"],
   bundle: true,
   outfile: "dist/content.bundle.js",
   format: "iife", // classic script for injection
